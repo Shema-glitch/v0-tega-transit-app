@@ -3,246 +3,515 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================================
+   TEGA — HIGH CONTRAST LIGHT DESIGN SYSTEM
+   Inspired by Uber's implementation-first approach:
+   - color.text.primary = #000000 (max contrast)
+   - color.surface.muted = #ffffff
+   - color.surface.raised = #f3f3f3
+   - Visible in direct sunlight, WCAG 2.2 AA
+   ============================================================ */
+
 :root {
-  /* Tega Dark Transit Theme - Default */
-  --background: oklch(0.12 0.01 250);
-  --foreground: oklch(0.97 0 0);
-  --card: oklch(0.16 0.01 250);
-  --card-foreground: oklch(0.97 0 0);
-  --popover: oklch(0.14 0.01 250);
-  --popover-foreground: oklch(0.97 0 0);
+  /* ── TRANSIT LIGHT THEME ── */
+  --background:        #ffffff;
+  --foreground:        #1e212d; /* color.text.secondary */
+  --card:              #f5f6f8;
+  --card-foreground:   #1e212d;
+  --popover:           #ffffff;
+  --popover-foreground:#1e212d;
+
+  /* ── Brand — Tega Transit Teal ── */
+  --primary:           #00a896;
+  --primary-foreground:#ffffff;
+
+  /* ── Secondary / Interactive ── */
+  --secondary:         #e2e4e8;
+  --secondary-foreground:#1e212d;
   
-  /* Primary - Transit Teal */
-  --primary: oklch(0.75 0.14 180);
-  --primary-foreground: oklch(0.15 0.01 250);
+  --muted:             #e2e4e8;
+  --muted-foreground:  #5e7a82; /* color.text.inverse */
+
+  --accent:            #e2e4e8;
+  --accent-foreground: #1e212d;
+
+  --destructive:       #dc2626;
+  --destructive-foreground:#ffffff;
+
+  --border:            #e2e4e8;
+  --input:             #e2e4e8;
+  --ring:              #1e212d;
+
+  /* ── Confidence (ETA trust system) ── */
+  --confidence-high:   #16a34a;
+  --confidence-medium: #d97706;
+  --confidence-low:    #dc2626;
+
+  /* ── Layout ── */
+  --sidebar-desktop-width: 440px;
+  --sidebar-tablet-width:  360px;
+
+  /* ── Semantic Geometry System ── */
+  --radius-surface:  20px; /* Cards, main blocks */
+  --radius-input:    16px; /* Search bars, inputs, toggles */
+  --radius-floating: 18px; /* FABs, floating controls */
+  --radius-modal:    24px; /* Bottom sheets, large overlays */
+  --radius-chip:     9999px; /* Badges, pill chips ONLY */
+
+  /* Legacy utility tokens to be migrated */
+  --radius-xs:  8px;
+  --radius-sm:  12px;
+  --radius-md:  20px;
+  --radius-lg:  24px;
+  --radius:     16px;
+
+  /* ── Shadows ── */
+  --shadow-1: rgba(0,0,0,0.16) 0px 4px 16px 0px;
+  --shadow-2: rgba(0,0,0,0.10) 0px 2px 8px 0px;
+  --shadow-panel: 0 0 0 1px var(--border), 0 8px 32px rgba(0,0,0,0.12);
   
-  /* Secondary - Soft Gray */
-  --secondary: oklch(0.22 0.01 250);
-  --secondary-foreground: oklch(0.85 0 0);
-  
-  /* Muted */
-  --muted: oklch(0.20 0.01 250);
-  --muted-foreground: oklch(0.65 0 0);
-  
-  /* Accent - Soft Glow */
-  --accent: oklch(0.30 0.02 250);
-  --accent-foreground: oklch(0.97 0 0);
-  
-  /* Confidence Colors */
-  --confidence-high: oklch(0.72 0.15 155);
-  --confidence-medium: oklch(0.75 0.14 85);
-  --confidence-low: oklch(0.65 0.18 25);
-  
-  /* Transit Glow */
-  --transit-glow: oklch(0.75 0.14 180 / 0.3);
-  --transit-route: oklch(0.65 0.12 180 / 0.6);
-  
-  --destructive: oklch(0.60 0.20 25);
-  --destructive-foreground: oklch(0.97 0 0);
-  --border: oklch(0.25 0.01 250);
-  --input: oklch(0.22 0.01 250);
-  --ring: oklch(0.75 0.14 180);
-  
-  --radius: 1rem;
+  --motion-instant: 200ms;
 }
 
 .dark {
-  --background: oklch(0.12 0.01 250);
-  --foreground: oklch(0.97 0 0);
-  --card: oklch(0.16 0.01 250);
-  --card-foreground: oklch(0.97 0 0);
-  --popover: oklch(0.14 0.01 250);
-  --popover-foreground: oklch(0.97 0 0);
-  --primary: oklch(0.75 0.14 180);
-  --primary-foreground: oklch(0.15 0.01 250);
-  --secondary: oklch(0.22 0.01 250);
-  --secondary-foreground: oklch(0.85 0 0);
-  --muted: oklch(0.20 0.01 250);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.30 0.02 250);
-  --accent-foreground: oklch(0.97 0 0);
-  --destructive: oklch(0.60 0.20 25);
-  --destructive-foreground: oklch(0.97 0 0);
-  --border: oklch(0.25 0.01 250);
-  --input: oklch(0.22 0.01 250);
-  --ring: oklch(0.75 0.14 180);
+  /* ── TRANSIT DARK THEME ── */
+  --background:        #000000;
+  --foreground:        #ffffff;
+  --card:              #1e212d;
+  --card-foreground:   #ffffff;
+  --popover:           #1e212d;
+  --popover-foreground:#ffffff;
+
+  --primary:           #00a896;
+  --primary-foreground:#ffffff;
+
+  --secondary:         #2d3246;
+  --secondary-foreground:#ffffff;
+  
+  --muted:             #2d3246;
+  --muted-foreground:  #5e7a82;
+
+  --accent:            #2d3246;
+  --accent-foreground: #ffffff;
+
+  --destructive:       #dc2626;
+  --destructive-foreground:#ffffff;
+
+  --border:            #3a4055;
+  --input:             #3a4055;
+  --ring:              #ffffff;
 }
 
 @theme inline {
-  --font-sans: 'Inter', 'Geist', system-ui, sans-serif;
-  --font-mono: 'Geist Mono', monospace;
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-confidence-high: var(--confidence-high);
-  --color-confidence-medium: var(--confidence-medium);
-  --color-confidence-low: var(--confidence-low);
-  --color-transit-glow: var(--transit-glow);
-  --color-transit-route: var(--transit-route);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 16px);
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-background:          var(--background);
+  --color-foreground:          var(--foreground);
+  --color-card:                var(--card);
+  --color-card-foreground:     var(--card-foreground);
+  --color-popover:             var(--popover);
+  --color-popover-foreground:  var(--popover-foreground);
+  --color-primary:             var(--primary);
+  --color-primary-foreground:  var(--primary-foreground);
+  --color-secondary:           var(--secondary);
+  --color-secondary-foreground:var(--secondary-foreground);
+  --color-muted:               var(--muted);
+  --color-muted-foreground:    var(--muted-foreground);
+  --color-accent:              var(--accent);
+  --color-accent-foreground:   var(--accent-foreground);
+  --color-destructive:         var(--destructive);
+  --color-destructive-foreground:var(--destructive-foreground);
+  --color-border:              var(--border);
+  --color-input:               var(--input);
+  --color-ring:                var(--ring);
+  --color-confidence-high:     var(--confidence-high);
+  --color-confidence-medium:   var(--confidence-medium);
+  --color-confidence-low:      var(--confidence-low);
+
+  --radius-surface:  var(--radius-surface);
+  --radius-input:    var(--radius-input);
+  --radius-floating: var(--radius-floating);
+  --radius-modal:    var(--radius-modal);
+  --radius-chip:     var(--radius-chip);
+
+  --radius-sm:  var(--radius-xs);
+  --radius-md:  var(--radius-sm);
+  --radius-lg:  var(--radius-md);
+  --radius-xl:  var(--radius-lg);
 }
+
+/* ============================================================
+   BASE
+   ============================================================ */
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    font-size: 16px; /* Uber: font.size.base = 16px */
+  }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 400;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'ss01';
   }
 }
 
-/* Custom scrollbar for bottom sheet */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+/* ============================================================
+   TYPOGRAPHY — VISIBILITY-FIRST
+   ETA and destination MUST be readable at arm's length.
+   ============================================================ */
+
+/* ETA — oversized, max weight, black */
+.eta-number {
+  font-size: clamp(2rem, 5vw, 2.5rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  line-height: 1;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+/* Destination label — bold, large */
+.destination-label {
+  font-size: clamp(1.125rem, 3vw, 1.375rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+  line-height: 1.2;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: oklch(0.35 0.01 250);
-  border-radius: 2px;
+/* Section label — Uber uppercase small caps */
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground); /* #767676 on white = 4.5:1 ✅ */
 }
 
-/* Shimmer animation for skeletons */
+/* Brand wordmark — must be unmistakable */
+.brand-wordmark {
+  font-size: 1.375rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: var(--foreground);
+  line-height: 1;
+}
+
+/* ============================================================
+   PANEL
+   ============================================================ */
+
+/* Side panel header — white surface, top teal strip for brand */
+.panel-header {
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+/* 4px teal top strip — transit line identifier, brand color */
+.panel-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--primary);
+}
+
+/* Legacy alias */
+.panel-header-gradient {
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+
+/* Base card — white, bordered, solid */
+.card-base {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm); /* 12px */
+  transition: box-shadow var(--motion-instant) ease, border-color var(--motion-instant) ease;
+}
+
+/* ETA card desktop hover — lift with shadow + black border ring */
+.eta-card-desktop {
+  cursor: pointer;
+  transition:
+    box-shadow var(--motion-instant) ease,
+    border-color var(--motion-instant) ease;
+}
+.eta-card-desktop:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: #000000;
+}
+
+/* ============================================================
+   BUTTONS — Uber patterns
+   ============================================================ */
+
+/* Primary CTA — solid black (Uber standard) */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-lg); /* pill = 9999px */
+  background: #000000;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  transition: opacity var(--motion-instant) ease;
+  cursor: pointer;
+  border: none;
+  min-width: 120px;
+}
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary:active { opacity: 0.75; }
+.btn-primary:disabled { opacity: 0.38; cursor: not-allowed; }
+
+/* Primary teal variant */
+.btn-teal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  padding: 0 24px;
+  border-radius: var(--radius-lg);
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  transition: opacity var(--motion-instant) ease;
+  cursor: pointer;
+  border: none;
+}
+.btn-teal:hover { opacity: 0.88; }
+.btn-teal:active { opacity: 0.75; }
+
+/* ============================================================
+   LIVE STATUS DOT
+   ============================================================ */
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--confidence-high);
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4);
+  animation: live-pulse 2.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes live-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.4); }
+  55%      { box-shadow: 0 0 0 5px rgba(22,163,74,0); }
+}
+
+/* ============================================================
+   MAP OVERLAYS
+   ============================================================ */
+
+/* Bottom-of-map scrim — dark enough to read white text over streets map */
+.map-bottom-fade {
+  background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.4) 100%);
+  pointer-events: none;
+}
+
+/* Map control buttons — white with black border (visible on any map) */
+.map-control-pill {
+  background: #ffffff;
+  border: 1.5px solid #e5e5e5;
+  border-radius: 9999px;
+  box-shadow: var(--shadow-1);
+}
+
+/* Floating card on map */
+.map-floating-card {
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  box-shadow: var(--shadow-1);
+}
+
+/* ============================================================
+   GLASS — LIGHT VARIANT (NOT dark blur)
+   ============================================================ */
+
+.glass {
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* ============================================================
+   SKELETON / SHIMMER
+   ============================================================ */
+
 @keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
 
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
-    oklch(0.20 0.01 250) 0%,
-    oklch(0.28 0.01 250) 50%,
-    oklch(0.20 0.01 250) 100%
+    #f3f3f3 0%,
+    #e8e8e8 50%,
+    #f3f3f3 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.6s ease-in-out infinite;
 }
 
-/* Pulse animation for location indicator */
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+.custom-scrollbar::-webkit-scrollbar { width: 3px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d1d1;
+  border-radius: 2px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* ============================================================
+   LOCATION PULSE
+   ============================================================ */
+
 @keyframes location-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
+  0%,100% { transform: scale(1); opacity: 1; }
+  50%     { transform: scale(1.5); opacity: 0; }
 }
+.location-pulse { animation: location-pulse 2s ease-in-out infinite; }
 
-.location-pulse {
-  animation: location-pulse 2s ease-in-out infinite;
-}
+/* ============================================================
+   BUS MARKER
+   ============================================================ */
 
-/* Smooth bus movement */
 .bus-marker {
-  transition: transform 2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: transform 1.8s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-/* Glass morphism effect */
-.glass {
-  background: oklch(0.16 0.01 250 / 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
+/* ============================================================
+   SAFE AREA
+   ============================================================ */
 
-/* Safe area padding for mobile */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+  .safe-bottom     { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-bottom-pad { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
 }
 
-/* Mapbox overrides */
-.mapboxgl-canvas {
-  outline: none;
-}
+/* ============================================================
+   MAPBOX OVERRIDES
+   ============================================================ */
 
-.mapboxgl-ctrl-attrib {
-  display: none !important;
-}
+.mapboxgl-canvas { outline: none; }
+.mapboxgl-ctrl-attrib { display: none !important; }
+.mapboxgl-ctrl-logo   { display: none !important; }
 
-.mapboxgl-ctrl-logo {
-  display: none !important;
-}
+/* ============================================================
+   ACCESSIBILITY
+   ============================================================ */
 
-/* Focus styles for accessibility */
 :focus-visible {
-  outline: 2px solid oklch(0.75 0.14 180);
+  outline: 2px solid #000000;
   outline-offset: 2px;
 }
 
-/* Reduced motion support */
+.touch-target    { min-height: 44px; min-width: 44px; }
+.touch-target-lg { min-height: 48px; min-width: 48px; }
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  background: #000000;
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+  font-weight: 700;
+  z-index: 100;
+  transition: top 0.2s;
+}
+.skip-link:focus { top: 0; }
+
+/* ============================================================
+   ONBOARDING — LIGHT THEME
+   ============================================================ */
+
+/* Desktop left panel — pure white canvas */
+.onboarding-bg-desktop {
+  background: #f3f3f3;
+}
+
+/* Map grid texture on desktop onboarding — subtle dark lines on white */
+.onboarding-map-grid {
+  background-image:
+    linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Tablet visual area — off-white tinted */
+.onboarding-visual-gradient {
+  background: #f3f3f3;
+}
+
+/* ============================================================
+   ROUTE LINE (RouteCard desktop)
+   ============================================================ */
+
+.route-line-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
 @media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
+  *, ::before, ::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  
-  .bus-marker {
-    transition: none;
-  }
+  .bus-marker  { transition: none; }
+  .live-dot    { animation: none; }
 }
 
-/* High contrast mode support */
+/* ============================================================
+   HIGH CONTRAST MODE
+   ============================================================ */
+
 @media (prefers-contrast: high) {
   :root {
-    --border: oklch(0.45 0.01 250);
-    --muted-foreground: oklch(0.80 0 0);
+    --border:           #000000;
+    --muted-foreground: #000000;
   }
-}
-
-/* Touch target sizing */
-.touch-target {
-  min-height: 44px;
-  min-width: 44px;
-}
-
-/* Skip to content link for accessibility */
-.skip-link {
-  position: absolute;
-  top: -100%;
-  left: 0;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  padding: 0.5rem 1rem;
-  z-index: 100;
-  transition: top 0.3s;
-}
-
-.skip-link:focus {
-  top: 0;
+  .card-base,
+  .eta-card-desktop {
+    border-color: #000000;
+    border-width: 2px;
+  }
 }

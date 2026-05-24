@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { RefreshCw, MapPin, Clock, ChevronLeft } from 'lucide-react'
+import { ArrowClockwise, MapPin, Clock, CaretLeft } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 import { Arrival, BusStop, Bus, ViewMode } from '@/lib/types'
 import { 
@@ -214,10 +214,7 @@ function HomeContent({
           disabled={isRefreshing}
           className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-50"
         >
-          <RefreshCw className={cn(
-            'h-5 w-5 text-foreground',
-            isRefreshing && 'animate-spin'
-          )} />
+          <ArrowClockwise className={cn('h-5 w-5 text-foreground', isRefreshing && 'animate-spin')} weight="bold" />
         </motion.button>
       </div>
 
@@ -321,7 +318,7 @@ function StopDetailContent({ stop, arrivals, onBack }: StopDetailContentProps) {
           onClick={onBack}
           className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center hover:bg-accent transition-colors"
         >
-          <ChevronLeft className="h-5 w-5 text-foreground" />
+          <CaretLeft className="h-6 w-6 text-foreground" weight="bold" />
         </motion.button>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground text-balance">{stop.name}</h1>

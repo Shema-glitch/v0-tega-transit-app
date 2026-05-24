@@ -114,11 +114,9 @@ export function BottomSheet({
       ref={containerRef}
       style={{ y, top: 0, bottom: 'auto', height: `${maxHeight}vh` }}
       className={cn(
-        'fixed left-0 right-0 z-50',
-        'bg-background/95 backdrop-blur-xl',
-        'rounded-t-3xl shadow-2xl shadow-black/50',
-        'border-t border-border/50',
-        'touch-none',
+        'fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border/50 shadow-[0_-8px_32px_rgba(0,0,0,0.12)]',
+        'rounded-t-modal',
+        'touch-none flex flex-col',
         className
       )}
     >
@@ -131,7 +129,7 @@ export function BottomSheet({
       >
         <div className={cn(
           'w-12 h-1.5 rounded-full transition-colors',
-          isDragging ? 'bg-primary' : 'bg-muted-foreground/40'
+          isDragging ? 'bg-black/60' : 'bg-black/20'
         )} />
       </motion.div>
 

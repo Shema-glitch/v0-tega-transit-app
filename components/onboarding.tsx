@@ -2,10 +2,24 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MapPin, Clock, Navigation, ChevronRight, Check, Bus, Sparkles } from 'lucide-react'
+import { MapPin, Clock, NavigationArrow, CaretRight, Check, Bus, Sparkle, ArrowRight } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
+// ─── Responsive hook ───────────────────────────────────────────────────────
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false)
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    setMatches(media.matches)
+    const listener = () => setMatches(media.matches)
+    media.addEventListener('change', listener)
+    return () => media.removeEventListener('change', listener)
+  }, [query])
+  return matches
+}
+
+// ─── Types ─────────────────────────────────────────────────────────────────
 interface OnboardingProps {
   onComplete: () => void
 }
@@ -14,44 +28,59 @@ interface OnboardingStep {
   id: string
   title: string
   description: string
+  eyebrow: string
   icon: React.ReactNode
   visual: React.ReactNode
 }
 
-export function Onboarding({ onComplete }: OnboardingProps) {
-  const [currentStep, setCurrentStep] = useState(0)
-  const [isExiting, setIsExiting] = useState(false)
-
-  const steps: OnboardingStep[] = [
+// ─── Step definitions ──────────────────────────────────────────────────────
+function useSteps(): OnboardingStep[] {
+  return [
     {
       id: 'welcome',
-      title: 'Welcome to Tega',
-      description: 'Your trusted companion for navigating Kigali\'s bus network with confidence.',
-      icon: <Bus className="h-6 w-6" />,
+      eyebrow: 'Welcome',
+      title: 'Navigate Kigali with confidence',
+      description: 'Tega gives you real-time visibility into Kigali\'s bus network — so you spend less time waiting and more time moving.',
+      icon: <Bus className="h-5 w-5" />,
       visual: <WelcomeVisual />,
     },
     {
       id: 'eta',
-      title: 'Know When to Leave',
-      description: 'See realistic arrival windows, not false countdowns. We show you honest ETAs so you can plan better.',
-      icon: <Clock className="h-6 w-6" />,
+      eyebrow: 'Smart ETAs',
+      title: 'Honest arrival windows, not false promises',
+      description: 'We show confidence-based time ranges instead of precise countdowns that are often wrong. Know when to leave, not just when to hope.',
+      icon: <Clock className="h-5 w-5" />,
       visual: <ETAVisual />,
     },
     {
       id: 'nearby',
-      title: 'Find Nearby Stops',
-      description: 'Discover bus stops around you with walking times. Tap any stop to see all arriving buses.',
-      icon: <MapPin className="h-6 w-6" />,
+      eyebrow: 'Nearby Stops',
+      title: 'Every stop within reach, mapped',
+      description: 'Discover bus stops near you with walking times calculated from your exact position. Tap any stop to see all arriving buses.',
+      icon: <MapPin className="h-5 w-5" />,
       visual: <NearbyVisual />,
     },
     {
       id: 'location',
-      title: 'Enable Location',
-      description: 'Allow location access to see the closest stops and real-time bus positions near you.',
-      icon: <Navigation className="h-6 w-6" />,
+      eyebrow: 'Location Access',
+      title: 'Your position makes it personal',
+      description: 'Allow location access to automatically surface the closest stops and live bus positions around you.',
+      icon: <NavigationArrow className="h-5 w-5" weight="fill" />,
       visual: <LocationVisual />,
     },
   ]
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROOT — branches to device-specific onboarding
+// ═══════════════════════════════════════════════════════════════════════════
+export function Onboarding({ onComplete }: OnboardingProps) {
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const isTablet  = useMediaQuery('(min-width: 768px)')
+
+  const [currentStep, setCurrentStep] = useState(0)
+  const [isExiting, setIsExiting] = useState(false)
+  const steps = useSteps()
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -63,37 +92,244 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   const handleComplete = () => {
     setIsExiting(true)
-    // Store that user has completed onboarding
     localStorage.setItem('tega-onboarding-complete', 'true')
-    setTimeout(() => {
-      onComplete()
-    }, 500)
+    setTimeout(() => onComplete(), 450)
   }
 
   const handleSkip = () => {
     localStorage.setItem('tega-onboarding-complete', 'true')
     setIsExiting(true)
-    setTimeout(() => {
-      onComplete()
-    }, 500)
+    setTimeout(() => onComplete(), 450)
   }
 
   const isLastStep = currentStep === steps.length - 1
+
+  const shared = {
+    steps,
+    currentStep,
+    setCurrentStep,
+    isLastStep,
+    isExiting,
+    onNext: handleNext,
+    onSkip: handleSkip,
+  }
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: isExiting ? 0 : 1 }}
-      transition={{ duration: 0.5 }}
-      className="fixed inset-0 z-50 bg-background flex flex-col"
+      transition={{ duration: 0.45 }}
+      className="fixed inset-0 z-50"
       role="dialog"
       aria-modal="true"
       aria-label="Welcome to Tega onboarding"
     >
-      {/* Skip button */}
-      <div className="absolute top-4 right-4 z-10">
+      {isDesktop ? (
+        <DesktopOnboarding {...shared} />
+      ) : isTablet ? (
+        <TabletOnboarding {...shared} />
+      ) : (
+        <MobileOnboarding {...shared} />
+      )}
+    </motion.div>
+  )
+}
+
+// ─── Shared props ──────────────────────────────────────────────────────────
+interface OnboardingLayoutProps {
+  steps: OnboardingStep[]
+  currentStep: number
+  setCurrentStep: (i: number) => void
+  isLastStep: boolean
+  isExiting: boolean
+  onNext: () => void
+  onSkip: () => void
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DESKTOP ONBOARDING — Cinematic split-pane, map-native
+// Left: immersive animated visual with map-grid backdrop
+// Right: structured content panel with constrained CTA
+// ═══════════════════════════════════════════════════════════════════════════
+function DesktopOnboarding({ steps, currentStep, setCurrentStep, isLastStep, onNext, onSkip }: OnboardingLayoutProps) {
+  const step = steps[currentStep]
+
+  return (
+    <div className="h-full w-full flex onboarding-bg-desktop">
+
+      {/* ── LEFT: Immersive visual panel ── */}
+      <div className="relative flex-1 flex items-center justify-center overflow-hidden">
+        {/* Map-grid texture */}
+        <div className="absolute inset-0 onboarding-map-grid opacity-60" />
+
+        {/* Radial ambient glow that shifts per step */}
+        <motion.div
+          key={`glow-${currentStep}`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.8 }}
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: `radial-gradient(ellipse 70% 60% at 50% 50%, oklch(0.75 0.14 180 / 0.07) 0%, transparent 70%)`,
+          }}
+        />
+
+        {/* Corner decoration — step number */}
+        <div className="absolute top-8 left-8 flex items-center gap-2.5">
+          <div className="h-9 w-9 rounded-surface bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
+            <Bus className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <span className="text-xl font-bold text-foreground tracking-tight">Tega</span>
+        </div>
+
+        {/* Skip — top right of visual panel */}
         <button
-          onClick={handleSkip}
+          onClick={onSkip}
+          className="absolute top-8 right-8 text-sm text-muted-foreground/70 hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
+          aria-label="Skip onboarding"
+        >
+          Skip
+        </button>
+
+        {/* Step progress — bottom left */}
+        <div className="absolute bottom-8 left-8 flex items-center gap-1.5">
+          {steps.map((s, i) => (
+            <button
+              key={s.id}
+              onClick={() => setCurrentStep(i)}
+              aria-label={`Go to step ${i + 1}: ${s.title}`}
+              className={cn(
+                'h-1 rounded-full transition-all duration-400',
+                i === currentStep ? 'w-8 bg-primary' : i < currentStep ? 'w-4 bg-primary/50' : 'w-4 bg-white/15'
+              )}
+            />
+          ))}
+        </div>
+
+        {/* ── Large visual ── */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step.id}
+            initial={{ opacity: 0, scale: 0.92, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 1.04, y: -16 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+            className="relative z-10 flex items-center justify-center"
+            style={{ transform: 'scale(1.35)' }}
+          >
+            {step.visual}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* ── RIGHT: Content panel ── */}
+      <div
+        className="flex flex-col justify-center shrink-0 h-full overflow-y-auto"
+        style={{
+          width: '420px',
+          background: 'oklch(0.13 0.01 250)',
+          borderLeft: '1px solid oklch(0.22 0.01 250 / 0.8)',
+        }}
+      >
+        <div className="px-10 py-12 flex flex-col gap-8 h-full justify-center">
+
+          {/* Eyebrow + icon */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`header-${currentStep}`}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.35 }}
+              className="space-y-5"
+            >
+              {/* Step badge */}
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-primary/12 border border-primary/20 flex items-center justify-center text-primary">
+                  {step.icon}
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-widest text-primary/80">
+                  {step.eyebrow}
+                </span>
+              </div>
+
+              {/* Title */}
+              <h1 className="text-3xl font-bold text-foreground leading-tight text-balance">
+                {step.title}
+              </h1>
+
+              {/* Description */}
+              <p className="text-base text-muted-foreground leading-relaxed">
+                {step.description}
+              </p>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* ── CTA area ── */}
+          <div className="space-y-4">
+            {/* Step counter */}
+            <p className="text-xs text-muted-foreground/50 font-medium">
+              {currentStep + 1} / {steps.length}
+            </p>
+
+            {/* Primary CTA — contained, NOT full-width */}
+            <motion.button
+              whileHover={{ scale: 1.02, y: -1 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={onNext}
+              className="flex items-center gap-2.5 px-8 py-3.5 rounded-surface bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background"
+              aria-label={isLastStep ? 'Get started' : 'Continue to next step'}
+            >
+              {isLastStep ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Get Started
+                </>
+              ) : (
+                <>
+                  Continue
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </motion.button>
+
+            {/* Skip link */}
+            {!isLastStep && (
+              <button
+                onClick={onSkip}
+                className="text-sm text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                Skip introduction
+              </button>
+            )}
+          </div>
+
+          {/* Bottom tagline */}
+          <p className="text-xs text-muted-foreground/30 mt-auto pt-8">
+            Real-time Kigali transit · 8 routes · 28 stops
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TABLET ONBOARDING — Spacious, immersive, centered
+// Visual takes generous top space, content below with breathing room
+// Button constrained — not full-width
+// ═══════════════════════════════════════════════════════════════════════════
+function TabletOnboarding({ steps, currentStep, setCurrentStep, isLastStep, onNext, onSkip }: OnboardingLayoutProps) {
+  const step = steps[currentStep]
+
+  return (
+    <div className="h-full w-full flex flex-col bg-background">
+
+      {/* Skip */}
+      <div className="absolute top-6 right-6 z-10">
+        <button
+          onClick={onSkip}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg hover:bg-secondary"
           aria-label="Skip onboarding"
         >
@@ -101,111 +337,248 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Visual area */}
-        <div className="flex-1 relative overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={steps[currentStep].id}
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              transition={{ duration: 0.4, ease: 'easeInOut' }}
-              className="absolute inset-0 flex items-center justify-center p-8"
-            >
-              {steps[currentStep].visual}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+      {/* Visual area — top 55% */}
+      <div
+        className="relative overflow-hidden flex items-center justify-center onboarding-visual-gradient"
+        style={{ flex: '0 0 55%' }}
+      >
+        {/* Subtle grid */}
+        <div className="absolute inset-0 onboarding-map-grid opacity-40" />
 
-        {/* Text content */}
-        <div className="px-6 pb-6 pt-4">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step.id}
+            initial={{ opacity: 0, y: 20, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.96 }}
+            transition={{ duration: 0.45, ease: [0.25, 0.1, 0.25, 1] }}
+            className="relative z-10 flex items-center justify-center p-10"
+            style={{ transform: 'scale(1.1)' }}
+          >
+            {step.visual}
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Bottom fade */}
+        <div
+          className="absolute bottom-0 left-0 right-0 pointer-events-none"
+          style={{
+            height: '80px',
+            background: 'linear-gradient(to bottom, transparent, oklch(0.12 0.01 250))',
+          }}
+        />
+      </div>
+
+      {/* Content area — bottom 45%, centered */}
+      <div className="flex-1 flex flex-col items-center justify-center px-8 pb-8 pt-6">
+        <div className="w-full max-w-lg space-y-6">
+
+          {/* Step badge */}
           <AnimatePresence mode="wait">
             <motion.div
-              key={`text-${currentStep}`}
-              initial={{ opacity: 0, y: 20 }}
+              key={`content-${currentStep}`}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="text-center mb-8"
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.35 }}
+              className="space-y-3 text-center"
             >
+              {/* Icon badge */}
               <motion.div
-                initial={{ scale: 0.8 }}
+                initial={{ scale: 0.85 }}
                 animate={{ scale: 1 }}
-                className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 text-primary mb-4"
+                className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary mx-auto"
               >
-                {steps[currentStep].icon}
+                {step.icon}
               </motion.div>
-              <h1 className="text-2xl font-bold text-foreground mb-3 text-balance">
-                {steps[currentStep].title}
+
+              <h1 className="text-2xl font-bold text-foreground text-balance leading-snug">
+                {step.title}
               </h1>
-              <p className="text-muted-foreground text-balance max-w-xs mx-auto">
-                {steps[currentStep].description}
+              <p className="text-muted-foreground text-balance max-w-sm mx-auto leading-relaxed">
+                {step.description}
               </p>
             </motion.div>
           </AnimatePresence>
 
           {/* Progress dots */}
-          <div 
-            className="flex items-center justify-center gap-2 mb-6"
+          <div
+            className="flex items-center justify-center gap-2"
             role="tablist"
             aria-label="Onboarding progress"
           >
-            {steps.map((step, index) => (
+            {steps.map((s, i) => (
               <button
-                key={step.id}
-                onClick={() => setCurrentStep(index)}
+                key={s.id}
+                onClick={() => setCurrentStep(i)}
                 className={cn(
                   'h-2 rounded-full transition-all duration-300',
-                  index === currentStep
-                    ? 'w-8 bg-primary'
-                    : index < currentStep
-                    ? 'w-2 bg-primary/60'
-                    : 'w-2 bg-muted'
+                  i === currentStep ? 'w-8 bg-primary' : i < currentStep ? 'w-2 bg-primary/50' : 'w-2 bg-muted'
                 )}
                 role="tab"
-                aria-selected={index === currentStep}
-                aria-label={`Step ${index + 1}: ${step.title}`}
+                aria-selected={i === currentStep}
+                aria-label={`Step ${i + 1}: ${s.title}`}
               />
             ))}
           </div>
 
-          {/* Action button */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Button
-              onClick={handleNext}
-              size="lg"
-              className="w-full h-14 text-base font-semibold rounded-2xl"
+          {/* CTA — NOT full-width on tablet */}
+          <div className="flex flex-col items-center gap-3">
+            <motion.button
+              whileHover={{ scale: 1.03, y: -1 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={onNext}
+              className="inline-flex items-center gap-2.5 px-10 py-3.5 rounded-surface bg-primary text-primary-foreground font-semibold text-base hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 focus:outline-none focus:ring-2 focus:ring-primary"
+              aria-label={isLastStep ? 'Get started' : 'Continue'}
             >
               {isLastStep ? (
                 <>
-                  <Check className="h-5 w-5 mr-2" />
+                  <Check className="h-5 w-5" />
                   Get Started
                 </>
               ) : (
                 <>
                   Continue
-                  <ChevronRight className="h-5 w-5 ml-2" />
+                  <CaretRight className="h-5 w-5" weight="bold" />
                 </>
               )}
-            </Button>
-          </motion.div>
+            </motion.button>
+
+            {!isLastStep && (
+              <button
+                onClick={onSkip}
+                className="text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+              >
+                Skip
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }
 
-// Visual components for each step
+// ═══════════════════════════════════════════════════════════════════════════
+// MOBILE ONBOARDING — Thumb-first, full-width CTA, commuter-optimized
+// ═══════════════════════════════════════════════════════════════════════════
+function MobileOnboarding({ steps, currentStep, setCurrentStep, isLastStep, onNext, onSkip }: OnboardingLayoutProps) {
+  const step = steps[currentStep]
+
+  return (
+    <div className="h-full w-full flex flex-col bg-background">
+
+      {/* Skip */}
+      <div className="absolute top-4 right-4 z-10">
+        <button
+          onClick={onSkip}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg hover:bg-secondary"
+          aria-label="Skip onboarding"
+        >
+          Skip
+        </button>
+      </div>
+
+      {/* Visual — flexible top area */}
+      <div className="flex-1 relative overflow-hidden flex items-center justify-center p-8">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step.id}
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ duration: 0.4, ease: 'easeInOut' }}
+            className="absolute inset-0 flex items-center justify-center p-8"
+          >
+            {step.visual}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Text + controls — bottom */}
+      <div className="px-6 pb-6 pt-4 shrink-0">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`text-${currentStep}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="text-center mb-7"
+          >
+            <motion.div
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary mb-4"
+            >
+              {step.icon}
+            </motion.div>
+            <h1 className="text-2xl font-bold text-foreground mb-3 text-balance">
+              {step.title}
+            </h1>
+            <p className="text-muted-foreground text-balance max-w-xs mx-auto text-sm leading-relaxed">
+              {step.description}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Progress dots */}
+        <div
+          className="flex items-center justify-center gap-2 mb-6"
+          role="tablist"
+          aria-label="Onboarding progress"
+        >
+          {steps.map((s, i) => (
+            <button
+              key={s.id}
+              onClick={() => setCurrentStep(i)}
+              className={cn(
+                'h-2 rounded-full transition-all duration-300',
+                i === currentStep ? 'w-8 bg-primary' : i < currentStep ? 'w-2 bg-primary/60' : 'w-2 bg-muted'
+              )}
+              role="tab"
+              aria-selected={i === currentStep}
+              aria-label={`Step ${i + 1}: ${s.title}`}
+            />
+          ))}
+        </div>
+
+        {/* Full-width CTA — thumb reachable, feels native */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Button
+            onClick={onNext}
+            size="lg"
+            className="w-full h-14 text-base font-semibold rounded-surface"
+          >
+            {isLastStep ? (
+              <>
+                <Check className="h-5 w-5 mr-2" />
+                Get Started
+              </>
+            ) : (
+              <>
+                Continue
+                <CaretRight className="h-5 w-5 ml-2" weight="bold" />
+              </>
+            )}
+          </Button>
+        </motion.div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUAL COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════
 
 function WelcomeVisual() {
   return (
-    <div className="relative w-full max-w-[280px] aspect-square">
+    <div className="relative w-full max-w-sm mx-auto aspect-square">
       {/* Animated rings */}
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
@@ -237,7 +610,7 @@ function WelcomeVisual() {
         transition={{ type: 'spring', stiffness: 200, delay: 0.3 }}
         className="absolute inset-0 flex items-center justify-center"
       >
-        <div className="h-24 w-24 rounded-3xl bg-primary shadow-lg shadow-primary/40 flex items-center justify-center">
+        <div className="h-24 w-24 rounded-modal bg-primary shadow-lg shadow-primary/40 flex items-center justify-center">
           <Bus className="h-12 w-12 text-primary-foreground" />
         </div>
       </motion.div>
@@ -268,8 +641,7 @@ function WelcomeVisual() {
 
 function ETAVisual() {
   return (
-    <div className="w-full max-w-[300px]">
-      {/* Mock ETA cards */}
+    <div className="w-full max-w-sm mx-auto">
       <div className="space-y-3">
         {[
           { route: '101', eta: '2–4 min', confidence: 'high', destination: 'Kimironko' },
@@ -281,11 +653,11 @@ function ETAVisual() {
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 + index * 0.15, type: 'spring', stiffness: 100 }}
-            className="bg-card rounded-2xl p-4 border border-border shadow-sm"
+            className="bg-card rounded-surface p-4 border border-border shadow-sm"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold">
+                <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
                   {bus.route}
                 </div>
                 <div>
@@ -309,14 +681,13 @@ function ETAVisual() {
         ))}
       </div>
 
-      {/* Highlight annotation */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8 }}
         className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground"
       >
-        <Sparkles className="h-4 w-4 text-primary" />
+        <Sparkle className="h-4 w-4 text-primary" weight="fill" />
         <span>Realistic time ranges, not false promises</span>
       </motion.div>
     </div>
@@ -325,14 +696,13 @@ function ETAVisual() {
 
 function NearbyVisual() {
   return (
-    <div className="relative w-full max-w-[280px] aspect-square">
+    <div className="relative w-full max-w-sm mx-auto aspect-square">
       {/* Map-like background */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="absolute inset-0 rounded-3xl bg-muted/30 overflow-hidden"
+        className="absolute inset-0 rounded-modal bg-muted/30 overflow-hidden"
       >
-        {/* Grid lines */}
         <svg className="absolute inset-0 w-full h-full opacity-20">
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
             <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-muted-foreground" />
@@ -370,10 +740,7 @@ function NearbyVisual() {
           initial={{ opacity: 0, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.5 + i * 0.1, type: 'spring' }}
-          style={{ 
-            left: `calc(50% + ${stop.x}px)`, 
-            top: `calc(50% + ${stop.y}px)` 
-          }}
+          style={{ left: `calc(50% + ${stop.x}px)`, top: `calc(50% + ${stop.y}px)` }}
           className="absolute -translate-x-1/2 -translate-y-1/2"
         >
           <div className="flex flex-col items-center">
@@ -387,7 +754,7 @@ function NearbyVisual() {
         </motion.div>
       ))}
 
-      {/* Distance circles */}
+      {/* Distance circle */}
       <motion.div
         initial={{ opacity: 0, scale: 0.5 }}
         animate={{ opacity: 0.15, scale: 1 }}
@@ -409,19 +776,17 @@ function LocationVisual() {
         className="relative"
       >
         {/* Phone mockup */}
-        <div className="relative mx-auto w-48 h-96 bg-card rounded-[2.5rem] border-4 border-border shadow-xl overflow-hidden">
-          {/* Screen content */}
-          <div className="absolute inset-4 rounded-[1.5rem] bg-background overflow-hidden">
-            {/* Map-like background */}
+        <div className="relative mx-auto w-48 h-96 bg-card rounded-modal border-4 border-border shadow-xl overflow-hidden">
+          <div className="absolute inset-4 rounded-surface bg-background overflow-hidden">
             <div className="absolute inset-0 bg-muted/30">
               <div className="absolute inset-0 opacity-30">
                 {[...Array(6)].map((_, i) => (
                   <div
                     key={i}
                     className="absolute h-px bg-muted-foreground/20"
-                    style={{ 
-                      top: `${20 + i * 15}%`, 
-                      left: '10%', 
+                    style={{
+                      top: `${20 + i * 15}%`,
+                      left: '10%',
                       right: '10%',
                       transform: `rotate(${i % 2 ? 30 : -30}deg)`,
                     }}
@@ -430,7 +795,6 @@ function LocationVisual() {
               </div>
             </div>
 
-            {/* Center marker */}
             <motion.div
               animate={{ y: isGranted ? 0 : [0, -10, 0] }}
               transition={{ duration: 1.5, repeat: isGranted ? 0 : Infinity }}
@@ -453,7 +817,6 @@ function LocationVisual() {
             </motion.div>
           </div>
 
-          {/* Permission dialog */}
           <AnimatePresence>
             {!isGranted && (
               <motion.div
@@ -462,7 +825,7 @@ function LocationVisual() {
                 exit={{ opacity: 0, y: 20 }}
                 className="absolute bottom-0 left-0 right-0 p-3"
               >
-                <div className="bg-card rounded-2xl p-3 shadow-lg border border-border">
+                <div className="bg-card rounded-surface p-3 shadow-lg border border-border">
                   <p className="text-xs text-center text-muted-foreground mb-2">
                     Allow Tega to access your location?
                   </p>
@@ -477,7 +840,6 @@ function LocationVisual() {
             )}
           </AnimatePresence>
 
-          {/* Success state */}
           <AnimatePresence>
             {isGranted && (
               <motion.div
@@ -500,7 +862,7 @@ function LocationVisual() {
   )
 }
 
-// Hook to check if user needs onboarding
+// ─── Onboarding hook ───────────────────────────────────────────────────────
 export function useOnboarding() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [isChecked, setIsChecked] = useState(false)

@@ -197,6 +197,34 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
   return R * c // Distance in meters
 }
 
+// Spawn fake buses for newly searched stops that don't have mock routes
+export function spawnDynamicBusesForStop(stop: BusStop): Bus[] {
+  const newBuses: Bus[] = []
+  
+  // Create 2 inbound buses for this stop
+  for (let i = 0; i < 2; i++) {
+    const route = kigaliRoutes[Math.floor(Math.random() * kigaliRoutes.length)]
+    const etaMinutes = i === 0 ? Math.floor(Math.random() * 5) + 1 : Math.floor(Math.random() * 10) + 6
+    
+    newBuses.push({
+      id: `dyn-bus-${stop.id}-${i}-${Date.now()}`,
+      routeId: route.id,
+      routeName: route.name,
+      destination: route.destinations[route.destinations.length - 1],
+      currentPosition: {
+        latitude: stop.latitude + (Math.random() - 0.5) * 0.01,
+        longitude: stop.longitude + (Math.random() - 0.5) * 0.01,
+      },
+      heading: Math.floor(Math.random() * 360),
+      eta: generateETA(etaMinutes, 'medium'),
+      stopId: stop.id,
+      lastUpdated: new Date(),
+    })
+  }
+
+  return newBuses
+}
+
 // Helper: Calculate walking time (avg 1.4 m/s walking speed)
 export function calculateWalkingTime(meters: number): number {
   return Math.round(meters / 84) // ~1.4 m/s = 84 m/min
@@ -204,12 +232,15 @@ export function calculateWalkingTime(meters: number): number {
 
 // Get nearby stops sorted by distance from user location
 export function getNearbyStopsFromLocation(
+  stops: BusStop[],
   userLat: number,
   userLng: number,
   maxDistance: number = 2000, // 2km default radius
   limit: number = 10
 ): BusStop[] {
-  const stopsWithDistance = kigaliStops.map((stop) => {
+  if (!stops || stops.length === 0) return []
+
+  const stopsWithDistance = stops.map((stop) => {
     const distance = calculateDistance(userLat, userLng, stop.latitude, stop.longitude)
     const walkingTime = calculateWalkingTime(distance)
     return {
@@ -294,7 +325,7 @@ export function generateBusesForRoutes(): Bus[] {
       const etaMinutes = 2 + Math.floor(Math.random() * 15)
       
       // Find nearest stop
-      const nearbyStops = getNearbyStopsFromLocation(coord[1], coord[0], 1000, 1)
+      const nearbyStops = getNearbyStopsFromLocation(kigaliStops, coord[1], coord[0], 1000, 1)
       const nearestStop = nearbyStops[0]
 
       buses.push({

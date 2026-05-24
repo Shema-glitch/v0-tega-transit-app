@@ -18,7 +18,7 @@ export function ETACardSkeleton() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="bg-card rounded-2xl p-4 space-y-3"
+      className="bg-card rounded-xl p-4 space-y-3 border border-border"
     >
       <div className="flex items-start justify-between">
         <div className="space-y-2">
@@ -58,11 +58,11 @@ export function NearbyStopRowSkeleton() {
   return (
     <div className="flex items-center gap-3 p-3">
       <Skeleton className="h-10 w-10 rounded-full" />
-      <div className="flex-1 space-y-2">
+      <div className="space-y-2 flex-1">
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-3 w-20" />
       </div>
-      <Skeleton className="h-4 w-16" />
+      <Skeleton className="h-6 w-12 rounded-full" />
     </div>
   )
 }
@@ -106,7 +106,7 @@ export function BottomSheetSkeleton() {
 
 export function MapSkeleton() {
   return (
-    <div className="absolute inset-0 bg-background flex items-center justify-center">
+    <div className="absolute inset-0 bg-white flex items-center justify-center">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Get nearby stops
-  const nearbyStops = getNearbyStopsFromLocation(userLat, userLng, maxRadius, maxLimit)
+  const nearbyStops = getNearbyStopsFromLocation(kigaliStops, userLat, userLng, maxRadius, maxLimit)
 
   return NextResponse.json({
     stops: nearbyStops,

@@ -13,3 +13,10 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
+
+# Security & Sensitive Documents
+.env
+*.pdf
+*Settings page.md
+.agents/
+skills-lock.json

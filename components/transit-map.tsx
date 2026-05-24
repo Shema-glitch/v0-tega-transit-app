@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { GoogleMap, useJsApiLoader, Marker, Polyline, OverlayView } from '@react-google-maps/api'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bus, MapPin, Navigation } from 'lucide-react'
+import { Bus, MapPin, NavigationArrow } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 import { Bus as BusType, BusStop, RouteGeometry } from '@/lib/types'
 import { KIGALI_CENTER } from '@/lib/mock-data'
@@ -212,7 +212,7 @@ export function TransitMap({
           onClick={centerOnUser}
           className="h-12 w-12 rounded-full bg-card/90 backdrop-blur-sm shadow-lg flex items-center justify-center hover:bg-accent transition-colors"
         >
-          <Navigation className="h-5 w-5 text-primary" />
+          <NavigationArrow weight="fill" className="h-6 w-6 text-blue-500" />
         </motion.button>
       </div>
     </div>
