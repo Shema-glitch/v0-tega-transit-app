@@ -181,3 +181,68 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* Mapbox overrides */
+.mapboxgl-canvas {
+  outline: none;
+}
+
+.mapboxgl-ctrl-attrib {
+  display: none !important;
+}
+
+.mapboxgl-ctrl-logo {
+  display: none !important;
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid oklch(0.75 0.14 180);
+  outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .bus-marker {
+    transition: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: oklch(0.45 0.01 250);
+    --muted-foreground: oklch(0.80 0 0);
+  }
+}
+
+/* Touch target sizing */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Skip to content link for accessibility */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  padding: 0.5rem 1rem;
+  z-index: 100;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
