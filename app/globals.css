@@ -1,0 +1,183 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Tega Dark Transit Theme - Default */
+  --background: oklch(0.12 0.01 250);
+  --foreground: oklch(0.97 0 0);
+  --card: oklch(0.16 0.01 250);
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.14 0.01 250);
+  --popover-foreground: oklch(0.97 0 0);
+  
+  /* Primary - Transit Teal */
+  --primary: oklch(0.75 0.14 180);
+  --primary-foreground: oklch(0.15 0.01 250);
+  
+  /* Secondary - Soft Gray */
+  --secondary: oklch(0.22 0.01 250);
+  --secondary-foreground: oklch(0.85 0 0);
+  
+  /* Muted */
+  --muted: oklch(0.20 0.01 250);
+  --muted-foreground: oklch(0.65 0 0);
+  
+  /* Accent - Soft Glow */
+  --accent: oklch(0.30 0.02 250);
+  --accent-foreground: oklch(0.97 0 0);
+  
+  /* Confidence Colors */
+  --confidence-high: oklch(0.72 0.15 155);
+  --confidence-medium: oklch(0.75 0.14 85);
+  --confidence-low: oklch(0.65 0.18 25);
+  
+  /* Transit Glow */
+  --transit-glow: oklch(0.75 0.14 180 / 0.3);
+  --transit-route: oklch(0.65 0.12 180 / 0.6);
+  
+  --destructive: oklch(0.60 0.20 25);
+  --destructive-foreground: oklch(0.97 0 0);
+  --border: oklch(0.25 0.01 250);
+  --input: oklch(0.22 0.01 250);
+  --ring: oklch(0.75 0.14 180);
+  
+  --radius: 1rem;
+}
+
+.dark {
+  --background: oklch(0.12 0.01 250);
+  --foreground: oklch(0.97 0 0);
+  --card: oklch(0.16 0.01 250);
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.14 0.01 250);
+  --popover-foreground: oklch(0.97 0 0);
+  --primary: oklch(0.75 0.14 180);
+  --primary-foreground: oklch(0.15 0.01 250);
+  --secondary: oklch(0.22 0.01 250);
+  --secondary-foreground: oklch(0.85 0 0);
+  --muted: oklch(0.20 0.01 250);
+  --muted-foreground: oklch(0.65 0 0);
+  --accent: oklch(0.30 0.02 250);
+  --accent-foreground: oklch(0.97 0 0);
+  --destructive: oklch(0.60 0.20 25);
+  --destructive-foreground: oklch(0.97 0 0);
+  --border: oklch(0.25 0.01 250);
+  --input: oklch(0.22 0.01 250);
+  --ring: oklch(0.75 0.14 180);
+}
+
+@theme inline {
+  --font-sans: 'Inter', 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-confidence-high: var(--confidence-high);
+  --color-confidence-medium: var(--confidence-medium);
+  --color-confidence-low: var(--confidence-low);
+  --color-transit-glow: var(--transit-glow);
+  --color-transit-route: var(--transit-route);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 16px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar for bottom sheet */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.35 0.01 250);
+  border-radius: 2px;
+}
+
+/* Shimmer animation for skeletons */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.20 0.01 250) 0%,
+    oklch(0.28 0.01 250) 50%,
+    oklch(0.20 0.01 250) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Pulse animation for location indicator */
+@keyframes location-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.location-pulse {
+  animation: location-pulse 2s ease-in-out infinite;
+}
+
+/* Smooth bus movement */
+.bus-marker {
+  transition: transform 2s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* Glass morphism effect */
+.glass {
+  background: oklch(0.16 0.01 250 / 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Safe area padding for mobile */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
