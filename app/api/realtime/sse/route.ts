@@ -8,6 +8,14 @@ import { truncateGeo } from '@/lib/api/compression'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  // Connection limiting to prevent OOM
+  if (TelemetryService.activeSSEConnections >= 100) {
+    return new Response(JSON.stringify({ error: 'Too Many Connections' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    })
+  }
+
   const searchParams = request.nextUrl.searchParams
   const userLat = parseFloat(searchParams.get('lat') || '0')
   const userLng = parseFloat(searchParams.get('lng') || '0')
