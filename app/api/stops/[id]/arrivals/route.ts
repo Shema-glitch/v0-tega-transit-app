@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { EtaEngine } from '@/lib/api/eta.engine'
 import { CacheService } from '@/lib/api/cache.service'
 import { ArrivalSchema } from '@/lib/api/validation'
+import { LiveVehicleStore } from '@/lib/api/live-store'
+import { kigaliStops, calculateDistance } from '@/lib/kigali-gtfs'
 
 export async function GET(
   request: NextRequest,
@@ -14,14 +16,28 @@ export async function GET(
       return NextResponse.json({ error: 'Stop ID required' }, { status: 400 })
     }
 
-    // In a real production system, this queries the spatial DB to find vehicles
-    // where `ST_DWithin(vehicle.location, stop.location, 5000)` and moving towards the stop.
-    // For now, we simulate dynamic arrivals.
-    
+    const stop = kigaliStops.find(s => s.id === stopId)
+    if (!stop) {
+      return NextResponse.json({ error: 'Stop not found' }, { status: 404 })
+    }
+
+    // Process live crowdsourced buses
+    const liveBuses = LiveVehicleStore.getVehicles()
+    const liveArrivals = liveBuses.map((bus, i) => {
+      const dist = calculateDistance(bus.lat, bus.lng, stop.latitude, stop.longitude)
+      const rawArrival = EtaEngine.formatArrival(bus.vehicleId, bus.routeId, stopId, dist)
+      return ArrivalSchema.parse({
+        ...rawArrival,
+        id: `arrival-live-${Date.now()}-${i}`,
+        routeName: `Route ${bus.routeId.replace('route-', '')}`,
+        destination: 'Unknown'
+      })
+    })
+
     const mockDistances = [800, 2400, 5600] // meters
     const mockRoutes = ['route-101', 'route-102', 'route-104']
 
-    const arrivals = mockDistances.map((dist, i) => {
+    const staticArrivals = mockDistances.map((dist, i) => {
       const rawArrival = EtaEngine.formatArrival(`dyn-bus-${i}`, mockRoutes[i], stopId, dist)
       // Enhance with additional metadata needed by ArrivalSchema
       return ArrivalSchema.parse({
@@ -31,6 +47,8 @@ export async function GET(
         destination: i % 2 === 0 ? 'Downtown' : 'Remera'
       })
     })
+    
+    const arrivals = [...liveArrivals, ...staticArrivals].sort((a, b) => a.etaMin - b.etaMin)
 
     return NextResponse.json(
       { 

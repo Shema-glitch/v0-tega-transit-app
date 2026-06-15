@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { kigaliRoutes, calculateDistance } from '@/lib/kigali-gtfs'
 import { TelemetryService } from '@/lib/api/telemetry.service'
 import { Vehicle } from '@/lib/api/validation'
-
+import { LiveVehicleStore } from '@/lib/api/live-store'
 import { truncateGeo } from '@/lib/api/compression'
 
 export const dynamic = 'force-dynamic'
@@ -44,11 +44,24 @@ export async function GET(request: NextRequest) {
       kigaliRoutes.forEach((route, i) => {
         const vehicleId = `bus-${route.id}-active`
         
-        // Mock realtime movement for simulation purposes, truncated for bandwidth
-        const newLat = truncateGeo(-1.9536 + (Math.random() - 0.5) * 0.05, 5)
-        const newLng = truncateGeo(30.0605 + (Math.random() - 0.5) * 0.05, 5)
-        const newSpeed = Math.floor(Math.random() * 45) + 15
-        const newBearing = Math.floor(Math.random() * 360)
+        let newLat, newLng, newSpeed, newBearing;
+        
+        // Check if there is a live crowdsourced ping for this route
+        const liveBuses = LiveVehicleStore.getVehicles().filter(v => v.routeId === route.id)
+        if (liveBuses.length > 0) {
+          // Use crowdsourced data directly
+          const liveBus = liveBuses[0]
+          newLat = truncateGeo(liveBus.lat, 5)
+          newLng = truncateGeo(liveBus.lng, 5)
+          newSpeed = liveBus.speedKmh
+          newBearing = liveBus.heading || 0
+        } else {
+          // Mock realtime movement for simulation purposes
+          newLat = truncateGeo(-1.9536 + (Math.random() - 0.5) * 0.05, 5)
+          newLng = truncateGeo(30.0605 + (Math.random() - 0.5) * 0.05, 5)
+          newSpeed = Math.floor(Math.random() * 45) + 15
+          newBearing = Math.floor(Math.random() * 360)
+        }
 
         // Check if vehicle is inside user's requested region
         const distanceToUser = (userLat && userLng) 
@@ -65,7 +78,7 @@ export async function GET(request: NextRequest) {
           lng: newLng,
           brg: newBearing,
           spd: newSpeed,
-          occupancy: i % 3 === 0 ? 'full' : 'standing_room_only',
+          occupancy: liveBuses.length > 0 ? 'full' : (i % 3 === 0 ? 'full' : 'standing_room_only'),
         }
 
         const prevState = clientVehicleState.get(vehicleId)

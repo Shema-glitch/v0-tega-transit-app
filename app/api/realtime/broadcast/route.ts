@@ -1,0 +1,47 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { LiveVehicleStore } from '@/lib/api/live-store'
+import { z } from 'zod'
+
+const PingSchema = z.object({
+  vehicle_id: z.string(),
+  route_id: z.string(),
+  client_id: z.string(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  speed_kmh: z.number().min(0),
+  heading: z.number().optional(),
+  timestamp: z.string().datetime().optional()
+})
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const parsed = PingSchema.safeParse(body)
+    
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid payload', details: parsed.error.format() }, { status: 400 })
+    }
+    
+    const data = parsed.data
+    
+    // Validate speed (reject impossible speeds > 120 km/h to prevent spoofing)
+    if (data.speed_kmh > 120) {
+      return NextResponse.json({ error: 'Speed anomaly detected. Ping rejected.' }, { status: 422 })
+    }
+
+    LiveVehicleStore.ingest({
+      vehicleId: data.vehicle_id,
+      routeId: data.route_id,
+      clientId: data.client_id,
+      lat: data.latitude,
+      lng: data.longitude,
+      speedKmh: data.speed_kmh,
+      heading: data.heading || 0
+    })
+
+    return NextResponse.json({ success: true, status: 'Ingested' })
+  } catch (error) {
+    console.error('Broadcast API Error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}

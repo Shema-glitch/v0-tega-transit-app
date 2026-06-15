@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { BusStop } from '@/lib/types'
+import { getRoutesForStop } from '@/lib/kigali-gtfs'
 
 export class SpatialService {
   /**
@@ -68,13 +69,17 @@ export class SpatialService {
 
     if (error) throw error
     
-    return (data || []).map(s => ({
-      id: s.stop_id,
-      name: s.stop_name,
-      latitude: s.stop_lat,
-      longitude: s.stop_lon,
-      walkingDistance: 0,
-      walkingMeters: 0,
-    }))
+    return (data || []).map(s => {
+      const intersectingRoutes = getRoutesForStop(s.stop_id).map(r => r.name)
+      return {
+        id: s.stop_id,
+        name: s.stop_name,
+        latitude: s.stop_lat,
+        longitude: s.stop_lon,
+        walkingDistance: 0,
+        walkingMeters: 0,
+        routes: intersectingRoutes
+      } as any // Cast to any to allow dynamic routes appending
+    })
   }
 }
