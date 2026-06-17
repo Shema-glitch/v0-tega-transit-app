@@ -1,68 +1,233 @@
+/**
+ * GET /api/stops/{stop_id}/arrivals
+ *
+ * Returns upcoming arrivals for a given stop.
+ *
+ * Rules:
+ *  - {stop_id} is treated as a string (GTFS stop_ids are TEXT in the schema)
+ *    but the path also handles numeric IDs produced by the GTFS feed.
+ *  - If the stop does NOT exist in the Supabase `stops` table → 404.
+ *  - If the stop exists but there are no scheduled stop_times → 200 {"arrivals": []}.
+ *  - CORS is fully open so the React frontend is never blocked.
+ *
+ * Arrival data comes from the GTFS `stop_times` ⟶ `trips` ⟶ `routes` join.
+ * Because GTFS scheduled times are static text (e.g. "08:30:00"), the engine
+ * converts them relative to the current local time and filters to the next
+ * 90 minutes of departures. Real-time crowdsourced data (if any live buses
+ * are in the LiveVehicleStore) is merged in and sorted by ETA.
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
+import { getSupabaseServer } from '@/lib/supabase-server'
 import { EtaEngine } from '@/lib/api/eta.engine'
 import { CacheService } from '@/lib/api/cache.service'
-import { ArrivalSchema } from '@/lib/api/validation'
 import { LiveVehicleStore } from '@/lib/api/live-store'
-import { kigaliStops, calculateDistance } from '@/lib/kigali-gtfs'
+import { calculateDistance } from '@/lib/kigali-gtfs'
+
+// ─── CORS headers (applied to every response) ─────────────────────────────────
+const CORS: HeadersInit = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Parse a GTFS "HH:MM:SS" arrival_time string into minutes past midnight.
+ * GTFS allows times like "25:00:00" for after-midnight services.
+ */
+function gtfsTimeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** Current minutes past midnight in the server's local timezone. */
+function nowMinutes(): number {
+  const now = new Date()
+  return now.getHours() * 60 + now.getMinutes()
+}
+
+// ─── route handler ────────────────────────────────────────────────────────────
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params
+  const stopId = resolvedParams.id
+
+  if (!stopId || stopId.trim() === '') {
+    return NextResponse.json(
+      { error: 'Stop ID required' },
+      { status: 400, headers: CORS }
+    )
+  }
+
   try {
-    const resolvedParams = await params
-    const stopId = resolvedParams.id
-    if (!stopId) {
-      return NextResponse.json({ error: 'Stop ID required' }, { status: 400 })
+    const supabase = getSupabaseServer()
+
+    // ── 1. Verify the stop exists ──────────────────────────────────────────────
+    const { data: stopRow, error: stopErr } = await supabase
+      .from('stops')
+      .select('stop_id, stop_name, stop_lat, stop_lon')
+      .eq('stop_id', stopId)
+      .maybeSingle()
+
+    if (stopErr) {
+      console.error('[arrivals] Stop lookup error:', stopErr)
+      return NextResponse.json(
+        { error: 'Database error', details: stopErr.message },
+        { status: 500, headers: CORS }
+      )
     }
 
-    const stop = kigaliStops.find(s => s.id === stopId)
-    if (!stop) {
-      return NextResponse.json({ error: 'Stop not found' }, { status: 404 })
+    // Stop does not exist in the database → genuine 404
+    if (!stopRow) {
+      return NextResponse.json(
+        { error: `Stop '${stopId}' not found` },
+        { status: 404, headers: CORS }
+      )
     }
 
-    // Process live crowdsourced buses
+    const stopLat = stopRow.stop_lat as number
+    const stopLon = stopRow.stop_lon as number
+
+    // ── 2. Merge live crowdsourced vehicles ────────────────────────────────────
     const liveBuses = LiveVehicleStore.getVehicles()
     const liveArrivals = liveBuses.map((bus, i) => {
-      const dist = calculateDistance(bus.lat, bus.lng, stop.latitude, stop.longitude)
-      const rawArrival = EtaEngine.formatArrival(bus.vehicleId, bus.routeId, stopId, dist)
-      return ArrivalSchema.parse({
-        ...rawArrival,
+      const dist = calculateDistance(bus.lat, bus.lng, stopLat, stopLon)
+      const window = EtaEngine.calculateWindow({ distanceMeters: dist })
+      return {
         id: `arrival-live-${Date.now()}-${i}`,
-        routeName: `Route ${bus.routeId.replace('route-', '')}`,
-        destination: 'Unknown'
-      })
+        vehicleId: bus.vehicleId,
+        routeId: bus.routeId,
+        routeName: `Route ${bus.routeId.replace(/^route-/i, '')}`,
+        destination: 'Live',
+        stopId,
+        etaMin: window.etaMin,
+        etaMax: window.etaMax,
+        confidence: window.confidence,
+        delaySeconds: 0,
+        source: 'live' as const,
+      }
     })
 
-    const mockDistances = [800, 2400, 5600] // meters
-    const mockRoutes = ['route-101', 'route-102', 'route-104']
+    // ── 3. Fetch scheduled stop_times from Supabase ────────────────────────────
+    const LOOKAHEAD_MIN = 90 // show arrivals in the next 90 minutes
+    const currentMin = nowMinutes()
 
-    const staticArrivals = mockDistances.map((dist, i) => {
-      const rawArrival = EtaEngine.formatArrival(`dyn-bus-${i}`, mockRoutes[i], stopId, dist)
-      // Enhance with additional metadata needed by ArrivalSchema
-      return ArrivalSchema.parse({
-        ...rawArrival,
-        id: `arrival-${Date.now()}-${i}`,
-        routeName: `Route ${mockRoutes[i].replace('route-', '')}`,
-        destination: i % 2 === 0 ? 'Downtown' : 'Remera'
+    const { data: stRows, error: stErr } = await supabase
+      .from('stop_times')
+      .select(
+        `
+        arrival_time,
+        departure_time,
+        trip_id,
+        trips!inner (
+          route_id,
+          trip_headsign,
+          routes!inner (
+            route_short_name,
+            route_long_name,
+            route_color
+          )
+        )
+      `
+      )
+      .eq('stop_id', stopId)
+      .order('arrival_time', { ascending: true })
+      .limit(200) // guard against massive result sets
+
+    if (stErr) {
+      console.error('[arrivals] stop_times query error:', stErr)
+      // Graceful degradation: if the join fails, fall through to live-only
+    }
+
+    const scheduleArrivals: typeof liveArrivals = []
+
+    for (const row of stRows ?? []) {
+      if (!row.arrival_time) continue
+
+      const arrMin = gtfsTimeToMinutes(row.arrival_time)
+      const minutesAway = arrMin - currentMin
+
+      // Filter to arrivals within our lookahead window
+      // Also handle GTFS after-midnight services by checking +24h wrap
+      const adjustedMinutes =
+        minutesAway < -30
+          ? minutesAway + 24 * 60 // next-day wrap
+          : minutesAway
+
+      if (adjustedMinutes < 0 || adjustedMinutes > LOOKAHEAD_MIN) continue
+
+      const trip = Array.isArray(row.trips) ? row.trips[0] : row.trips
+      if (!trip) continue
+      const route = Array.isArray(trip.routes) ? trip.routes[0] : trip.routes
+
+      const routeId = trip.route_id ?? 'unknown'
+      const routeShortName =
+        route?.route_short_name ?? trip.route_id ?? 'Bus'
+      const headsign = trip.trip_headsign ?? route?.route_long_name ?? 'Unknown'
+
+      // Spread of 1–3 min for schedule-based confidence
+      const spread = adjustedMinutes < 5 ? 1 : adjustedMinutes < 15 ? 2 : 3
+      const confidence =
+        adjustedMinutes < 5 ? 'high' : adjustedMinutes < 15 ? 'medium' : 'low'
+
+      scheduleArrivals.push({
+        id: `arrival-sched-${row.trip_id}-${stopId}`,
+        vehicleId: `trip-${row.trip_id}`,
+        routeId,
+        routeName: `Route ${routeShortName}`,
+        destination: headsign,
+        stopId,
+        etaMin: Math.max(0, Math.floor(adjustedMinutes - spread / 2)),
+        etaMax: Math.ceil(adjustedMinutes + spread / 2),
+        confidence: confidence as 'low' | 'medium' | 'high',
+        delaySeconds: 0,
+        source: 'schedule' as const,
       })
-    })
-    
-    const arrivals = [...liveArrivals, ...staticArrivals].sort((a, b) => a.etaMin - b.etaMin)
+    }
 
+    // ── 4. Merge + sort ────────────────────────────────────────────────────────
+    // Live arrivals take precedence; schedules fill the rest
+    const arrivals = [...liveArrivals, ...scheduleArrivals].sort(
+      (a, b) => a.etaMin - b.etaMin
+    )
+
+    // ── 5. Respond ─────────────────────────────────────────────────────────────
+    // Valid stop with no arrivals → 200 + empty array (NOT 404)
     return NextResponse.json(
-      { 
+      {
         stopId,
         arrivals,
         metadata: {
           timestamp: new Date().toISOString(),
-          engine: 'eta_v2_predictive'
-        }
+          engine: 'eta_v2_predictive',
+          stopName: stopRow.stop_name,
+        },
       },
-      { headers: CacheService.liveHeaders() }
+      {
+        status: 200,
+        headers: {
+          ...CORS,
+          ...(CacheService.liveHeaders() as Record<string, string>),
+        },
+      }
     )
-  } catch (error) {
-    console.error('Arrivals API Error:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  } catch (err) {
+    console.error('[GET /api/stops/[id]/arrivals] Unexpected error:', err)
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500, headers: CORS }
+    )
   }
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: CORS,
+  })
 }
