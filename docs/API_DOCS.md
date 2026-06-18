@@ -395,6 +395,22 @@ useEffect(() => {
 }
 ```
 
+**Payload (incident alert)**
+Pushed whenever an active incident overlaps with your `radius`.
+```json
+{
+  "type": "incident:alert",
+  "incidents": [
+    {
+      "vehicleId": "bus-101",
+      "routeId": "route-101",
+      "incidentType": "route_changed",
+      "message": "Alert — Bus route-101 reported route changed."
+    }
+  ]
+}
+```
+
 > **Connection Limit:** The server caps active SSE connections at 100. If this limit is reached, the API returns `503 Service Unavailable`. Implement a 5-second retry with exponential backoff.
 
 ---
@@ -425,6 +441,32 @@ useEffect(() => {
 **Success Response**
 ```json
 { "success": true, "status": "Ingested" }
+```
+
+---
+
+#### `POST /api/incidents/report`
+**Purpose:** The Pinger Incident System Ingestion endpoint. Allows an onboard passenger to report an active incident (traffic, detour, skip stop) to the network.
+
+**Frontend Use:** Call this when a user taps one of the incident buttons in the "I'm on this Bus" UI.
+
+**Request Body**
+```json
+{
+  "vehicle_id": "bus-101",
+  "route_id": "route-101",
+  "client_id": "uuid-v4-of-this-device",
+  "incident_type": "route_changed", 
+  "latitude": -1.9441,
+  "longitude": 30.0619,
+  "destination_stop_id": "stop-gatenga" 
+}
+```
+*Note: `incident_type` must be exactly `"route_changed"`, `"traffic_delay"`, or `"skip_stop"`.*
+
+**Success Response**
+```json
+{ "success": true, "status": "Incident Reported" }
 ```
 
 ---
