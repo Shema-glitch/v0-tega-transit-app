@@ -124,6 +124,29 @@ export async function GET(request: NextRequest) {
         // Telemetry
         TelemetryService.recordSSEMessage(encoded.byteLength)
       }
+
+      // Check for active incidents and broadcast if they are nearby
+      const allIncidents = LiveVehicleStore.getIncidents()
+      const relevantIncidents = allIncidents.filter(inc => {
+        const distanceToUser = (userLat && userLng) 
+          ? calculateDistance(userLat, userLng, inc.lat, inc.lng) 
+          : 0
+        return distanceToUser <= radius
+      })
+
+      if (relevantIncidents.length > 0) {
+        // Format incident message
+        const incidentPayload = relevantIncidents.map(inc => ({
+          vehicleId: inc.vehicleId,
+          routeId: inc.routeId,
+          incidentType: inc.incidentType,
+          message: `Alert — Bus ${inc.routeId} reported ${inc.incidentType.replace('_', ' ')}.`
+        }))
+        const payload = JSON.stringify({ type: 'incident:alert', incidents: incidentPayload })
+        const encoded = encoder.encode(`event: message\ndata: ${payload}\n\n`)
+        writer.write(encoded)
+        TelemetryService.recordSSEMessage(encoded.byteLength)
+      }
     } catch (error) {
       console.error(`[SSE] Broadcast error for ${clientId}:`, error)
     }

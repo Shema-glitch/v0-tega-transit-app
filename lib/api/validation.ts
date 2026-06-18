@@ -60,3 +60,16 @@ export type Arrival = z.infer<typeof ArrivalSchema>
 export type Vehicle = z.infer<typeof VehicleSchema>
 export type SystemStatus = z.infer<typeof SystemStatusSchema>
 export type SearchSuggestQuery = z.infer<typeof SearchSuggestSchema>
+
+// Incident Validation
+export const IncidentSchema = z.object({
+  vehicle_id: z.string(),
+  route_id: z.string(),
+  client_id: z.string(),
+  incident_type: z.enum(['route_changed', 'traffic_delay', 'skip_stop']),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  destination_stop_id: z.string().optional()
+})
+
+export type IncidentReport = z.infer<typeof IncidentSchema>

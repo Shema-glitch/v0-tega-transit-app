@@ -15,8 +15,20 @@ export interface DiagnosticStatus {
   lastPingTime?: string;
 }
 
+export interface ActiveIncident {
+  vehicleId: string;
+  routeId: string;
+  clientId: string;
+  incidentType: string;
+  lat: number;
+  lng: number;
+  destinationStopId?: string;
+  reportedAt: number;
+}
+
 class Store {
   private vehicles: Map<string, LiveVehicle> = new Map();
+  private incidents: Map<string, ActiveIncident> = new Map();
 
   ingest(ping: Omit<LiveVehicle, 'lastPing'>) {
     this.vehicles.set(ping.vehicleId, {
@@ -28,6 +40,18 @@ class Store {
   getVehicles(): LiveVehicle[] {
     this.cleanup(); // Clean before returning
     return Array.from(this.vehicles.values());
+  }
+
+  reportIncident(incident: Omit<ActiveIncident, 'reportedAt'>) {
+    this.incidents.set(incident.vehicleId, {
+      ...incident,
+      reportedAt: Date.now()
+    });
+  }
+
+  getIncidents(): ActiveIncident[] {
+    this.cleanup();
+    return Array.from(this.incidents.values());
   }
 
   getDiagnostics(): Record<string, DiagnosticStatus> {
@@ -52,6 +76,11 @@ class Store {
     for (const [id, v] of this.vehicles.entries()) {
       if (now - v.lastPing > 300_000) { // 5 minutes completely dead, remove from store
         this.vehicles.delete(id);
+      }
+    }
+    for (const [id, inc] of this.incidents.entries()) {
+      if (now - inc.reportedAt > 900_000) { // 15 minutes expiry for incidents
+        this.incidents.delete(id);
       }
     }
   }
