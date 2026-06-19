@@ -102,11 +102,20 @@ export async function GET(request: NextRequest) {
         }))
         .filter((s) => s._distM <= radius)
         .sort((a, b) => a._distM - b._distM)
-        .slice(0, limit)
-        .map(({ _distM, ...s }) => s)
-    } else {
-      stops = stops.slice(0, limit)
     }
+
+    // Spatial deduplication (50m threshold) combined with limit slicing
+    const deduped: typeof stops = []
+    for (const stop of stops) {
+      if (deduped.length >= limit) break
+      const isDuplicate = deduped.some(
+        (existing) => haversineMeters(existing.lat, existing.lon, stop.lat, stop.lon) < 50
+      )
+      if (!isDuplicate) {
+        deduped.push(stop)
+      }
+    }
+    stops = deduped
 
     return NextResponse.json(stops, {
       status: 200,

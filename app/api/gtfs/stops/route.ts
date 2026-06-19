@@ -5,6 +5,17 @@ import fs from 'fs'
 import path from 'path'
 import { parse } from 'csv-parse/sync'
 
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q')
@@ -38,7 +49,7 @@ export async function GET(request: Request) {
             )
           }
           
-          const stops: BusStop[] = filtered.slice(0, 50).map((stop: any) => ({
+          const mappedStops: BusStop[] = filtered.map((stop: any) => ({
             id: stop.stop_id,
             name: stop.stop_name,
             latitude: parseFloat(stop.stop_lat),
@@ -46,6 +57,17 @@ export async function GET(request: Request) {
             walkingDistance: Math.floor(Math.random() * 10) + 1,
             walkingMeters: Math.floor(Math.random() * 800) + 50,
           }))
+
+          const stops: BusStop[] = []
+          for (const s of mappedStops) {
+            if (stops.length >= 50) break
+            const isDup = stops.some(
+              (existing) => haversineMeters(existing.latitude, existing.longitude, s.latitude, s.longitude) < 50
+            )
+            if (!isDup) {
+              stops.push(s)
+            }
+          }
           
           return NextResponse.json({ stops })
         }
@@ -62,7 +84,7 @@ export async function GET(request: Request) {
     }
 
     // Map GTFS stops to our app's BusStop interface
-    const stops: BusStop[] = data.map((stop: any) => ({
+    const mappedStops: BusStop[] = data.map((stop: any) => ({
       id: stop.stop_id,
       name: stop.stop_name,
       latitude: stop.stop_lat,
@@ -71,6 +93,17 @@ export async function GET(request: Request) {
       walkingDistance: Math.floor(Math.random() * 10) + 1,
       walkingMeters: Math.floor(Math.random() * 800) + 50,
     }))
+
+    const stops: BusStop[] = []
+    for (const s of mappedStops) {
+      if (stops.length >= 50) break
+      const isDup = stops.some(
+        (existing) => haversineMeters(existing.latitude, existing.longitude, s.latitude, s.longitude) < 50
+      )
+      if (!isDup) {
+        stops.push(s)
+      }
+    }
 
     return NextResponse.json({ stops })
   } catch (err) {
