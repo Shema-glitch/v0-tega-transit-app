@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { BusStop } from '@/lib/types'
 import fs from 'fs'
 import path from 'path'
 import { parse } from 'csv-parse/sync'
@@ -16,94 +15,106 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+/**
+ * Spatial deduplication: keeps the first stop within 50m of any already-kept stop.
+ * Also builds a mapping from duplicate stop_ids to the primary stop_id.
+ */
+function deduplicateStops(stops: { id: string; name: string; lat: number; lon: number }[]) {
+  const primary: typeof stops = []
+  const idMapping: Record<string, string> = {}
+
+  for (const stop of stops) {
+    const dup = primary.find(
+      (p) => haversineMeters(p.lat, p.lon, stop.lat, stop.lon) < 50
+    )
+    if (dup) {
+      idMapping[stop.id] = dup.id
+    } else {
+      primary.push(stop)
+      idMapping[stop.id] = stop.id
+    }
+  }
+
+  return { primary, idMapping }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q')
 
   try {
     let query = supabase.from('stops').select('*')
-    
-    // Simple search functionality
+
     if (q) {
       query = query.ilike('stop_name', `%${q}%`)
     }
 
-    // Limit to 50 for performance if no search
-    query = query.limit(50)
+    query = query.limit(500) // Fetch more before dedup
 
     const { data, error } = await query
 
     if (error) {
       console.warn('Supabase stops fetch failed, falling back to local GTFS CSV:', error.message)
-      
+
       try {
         const filePath = path.join(process.cwd(), 'kigali_gtfs', 'stops.txt')
         if (fs.existsSync(filePath)) {
           const fileContent = fs.readFileSync(filePath, 'utf-8')
           const records = parse(fileContent, { columns: true, skip_empty_lines: true })
-          
+
           let filtered = records
           if (q) {
-            filtered = records.filter((r: any) => 
+            filtered = records.filter((r: any) =>
               r.stop_name.toLowerCase().includes(q.toLowerCase())
             )
           }
-          
-          const mappedStops: BusStop[] = filtered.map((stop: any) => ({
-            id: stop.stop_id,
-            name: stop.stop_name,
-            latitude: parseFloat(stop.stop_lat),
-            longitude: parseFloat(stop.stop_lon),
-            walkingDistance: Math.floor(Math.random() * 10) + 1,
-            walkingMeters: Math.floor(Math.random() * 800) + 50,
+
+          const rawStops = filtered
+            .map((stop: any) => ({
+              id: String(stop.stop_id),
+              name: stop.stop_name ?? '',
+              lat: parseFloat(stop.stop_lat),
+              lon: parseFloat(stop.stop_lon),
+            }))
+            .filter((s: any) => !isNaN(s.lat) && !isNaN(s.lon))
+
+          const { primary } = deduplicateStops(rawStops)
+          const stops = primary.slice(0, 50).map((s) => ({
+            id: s.id,
+            name: s.name,
+            latitude: s.lat,
+            longitude: s.lon,
           }))
 
-          const stops: BusStop[] = []
-          for (const s of mappedStops) {
-            if (stops.length >= 50) break
-            const isDup = stops.some(
-              (existing) => haversineMeters(existing.latitude, existing.longitude, s.latitude, s.longitude) < 50
-            )
-            if (!isDup) {
-              stops.push(s)
-            }
-          }
-          
           return NextResponse.json({ stops })
         }
       } catch (fsError) {
         console.error('Local CSV fallback failed:', fsError)
       }
-      
+
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // If data is null/empty because tables aren't populated, return an empty array
     if (!data || data.length === 0) {
       return NextResponse.json({ stops: [] })
     }
 
-    // Map GTFS stops to our app's BusStop interface
-    const mappedStops: BusStop[] = data.map((stop: any) => ({
-      id: stop.stop_id,
-      name: stop.stop_name,
-      latitude: stop.stop_lat,
-      longitude: stop.stop_lon,
-      // Calculate a dummy walking distance for the prototype if we don't have user loc
-      walkingDistance: Math.floor(Math.random() * 10) + 1,
-      walkingMeters: Math.floor(Math.random() * 800) + 50,
-    }))
+    const rawStops = data
+      .map((stop: any) => ({
+        id: String(stop.stop_id),
+        name: stop.stop_name ?? '',
+        lat: parseFloat(stop.stop_lat),
+        lon: parseFloat(stop.stop_lon),
+      }))
+      .filter((s: any) => !isNaN(s.lat) && !isNaN(s.lon))
 
-    const stops: BusStop[] = []
-    for (const s of mappedStops) {
-      if (stops.length >= 50) break
-      const isDup = stops.some(
-        (existing) => haversineMeters(existing.latitude, existing.longitude, s.latitude, s.longitude) < 50
-      )
-      if (!isDup) {
-        stops.push(s)
-      }
-    }
+    const { primary } = deduplicateStops(rawStops)
+    const stops = primary.slice(0, 50).map((s) => ({
+      id: s.id,
+      name: s.name,
+      latitude: s.lat,
+      longitude: s.lon,
+    }))
 
     return NextResponse.json({ stops })
   } catch (err) {
