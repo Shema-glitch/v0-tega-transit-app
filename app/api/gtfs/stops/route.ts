@@ -16,19 +16,41 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
 }
 
 /**
+ * Name validation: reject garbage / meaningless stop names.
+ */
+function isValidStopName(name: string): boolean {
+  if (!name || name === 'Unknown Stop') return false
+  const clean = name.trim()
+  if (clean.length <= 1) return false
+  // Pure number or alphanumeric code like "X12" or "3B"
+  if (/^[A-Za-z]?\d+[A-Za-z]?$/.test(clean)) return false
+  // Whitespace or punctuation only
+  if (/^[\s\-_.]+$/.test(clean)) return false
+  // Common test / placeholder names
+  if (/^(test|temp|null|undefined|todo|fixme|n\/a)$/i.test(clean)) return false
+  return true
+}
+
+/**
  * Spatial deduplication: keeps the first stop within 50m of any already-kept stop.
- * Also builds a mapping from duplicate stop_ids to the primary stop_id.
+ * Prefers the stop with the longer name when duplicates are found.
  */
 function deduplicateStops(stops: { id: string; name: string; lat: number; lon: number }[]) {
   const primary: typeof stops = []
   const idMapping: Record<string, string> = {}
 
   for (const stop of stops) {
-    const dup = primary.find(
+    const dupIdx = primary.findIndex(
       (p) => haversineMeters(p.lat, p.lon, stop.lat, stop.lon) < 50
     )
-    if (dup) {
-      idMapping[stop.id] = dup.id
+    if (dupIdx !== -1) {
+      // Keep the one with the longer name
+      if (stop.name.length > primary[dupIdx].name.length) {
+        const oldId = primary[dupIdx].id
+        primary[dupIdx] = stop
+        idMapping[oldId] = stop.id
+      }
+      idMapping[stop.id] = primary[dupIdx].id
     } else {
       primary.push(stop)
       idMapping[stop.id] = stop.id
@@ -76,14 +98,14 @@ export async function GET(request: Request) {
               lat: parseFloat(stop.stop_lat),
               lon: parseFloat(stop.stop_lon),
             }))
-            .filter((s: any) => !isNaN(s.lat) && !isNaN(s.lon))
+            .filter((s: any) => !isNaN(s.lat) && !isNaN(s.lon) && isValidStopName(s.name))
 
           const { primary } = deduplicateStops(rawStops)
           const stops = primary.slice(0, 50).map((s) => ({
             id: s.id,
             name: s.name,
-            latitude: s.lat,
-            longitude: s.lon,
+            lat: s.lat,
+            lon: s.lon,
           }))
 
           return NextResponse.json({ stops })
@@ -106,14 +128,14 @@ export async function GET(request: Request) {
         lat: parseFloat(stop.stop_lat),
         lon: parseFloat(stop.stop_lon),
       }))
-      .filter((s: any) => !isNaN(s.lat) && !isNaN(s.lon))
+      .filter((s: any) => !isNaN(s.lat) && !isNaN(s.lon) && isValidStopName(s.name))
 
     const { primary } = deduplicateStops(rawStops)
     const stops = primary.slice(0, 50).map((s) => ({
       id: s.id,
       name: s.name,
-      latitude: s.lat,
-      longitude: s.lon,
+      lat: s.lat,
+      lon: s.lon,
     }))
 
     return NextResponse.json({ stops })
