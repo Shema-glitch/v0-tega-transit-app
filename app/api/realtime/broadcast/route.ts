@@ -10,7 +10,12 @@ const PingSchema = z.object({
   longitude: z.number().min(-180).max(180),
   speed_kmh: z.number().min(0),
   heading: z.number().optional(),
-  timestamp: z.string().datetime().optional()
+  timestamp: z.string().datetime().optional(),
+  // Broadcaster-submitted vehicle info
+  plate: z.string().max(20).optional(),
+  occupancy: z.enum(['empty', 'seats', 'standing', 'packed']).optional(),
+  operator: z.string().max(50).optional(),
+  driver: z.string().max(50).optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -36,7 +41,11 @@ export async function POST(request: NextRequest) {
       lat: data.latitude,
       lng: data.longitude,
       speedKmh: data.speed_kmh,
-      heading: data.heading || 0
+      heading: data.heading || 0,
+      plate: data.plate,
+      occupancy: data.occupancy,
+      operator: data.operator,
+      driver: data.driver,
     })
 
     return NextResponse.json({ success: true, status: 'Ingested' })

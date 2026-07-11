@@ -32,6 +32,9 @@ export async function GET(request: NextRequest) {
   // State map to track previous payloads for delta calculation
   const clientVehicleState = new Map<string, Vehicle>()
 
+  // Track which routes this client is viewing (for viewer counts)
+  const clientViewingRoutes = new Set<string>()
+
   // Send initial connection success event
   writer.write(encoder.encode('event: connected\ndata: {"status": "streaming_deltas"}\n\n'))
 
@@ -110,6 +113,18 @@ export async function GET(request: NextRequest) {
           if (!prevState) {
             deltaPayload.routeId = route.id
             deltaPayload.occupancy = nextState.occupancy
+            
+            // Track viewer for this route
+            clientViewingRoutes.add(route.id)
+            LiveVehicleStore.addViewer(route.id, clientId)
+            // Include broadcaster-submitted vehicle info if available
+            const liveBus = liveBuses[0]
+            if (liveBus) {
+              if (liveBus.plate) deltaPayload.plate = liveBus.plate
+              if (liveBus.occupancy) deltaPayload.occupancy = liveBus.occupancy
+              if (liveBus.operator) deltaPayload.operator = liveBus.operator
+              if (liveBus.driver) deltaPayload.driver = liveBus.driver
+            }
           }
           
           updates.push(deltaPayload)
@@ -120,9 +135,17 @@ export async function GET(request: NextRequest) {
         const payload = JSON.stringify({ type: 'vehicle:update', vehicles: updates })
         const encoded = encoder.encode(`event: message\ndata: ${payload}\n\n`)
         writer.write(encoded)
-        
+
         // Telemetry
         TelemetryService.recordSSEMessage(encoded.byteLength)
+      }
+
+      // Send viewer counts for all routes with active broadcasters
+      const viewerCounts = LiveVehicleStore.getAllViewerCounts()
+      if (Object.keys(viewerCounts).length > 0) {
+        const viewerPayload = JSON.stringify({ type: 'viewer:counts', counts: viewerCounts })
+        const encoded = encoder.encode(`event: message\ndata: ${viewerPayload}\n\n`)
+        writer.write(encoded)
       }
 
       // Check for active incidents and broadcast if they are nearby
@@ -158,10 +181,14 @@ export async function GET(request: NextRequest) {
   // For this simulation, we use a single fast loop but filter by delta.
   const intervalId = setInterval(broadcastDeltas, 2000)
 
-  // Handle client disconnect
+  // Handle client disconnect — clean up viewer tracking
   request.signal.addEventListener('abort', () => {
     console.log(`[SSE] Client disconnected: ${clientId}`)
     clearInterval(intervalId)
+    // Remove this client from all route viewer counts
+    for (const routeId of clientViewingRoutes) {
+      LiveVehicleStore.removeViewer(routeId, clientId)
+    }
     TelemetryService.clientDisconnected()
     writer.close().catch(() => {})
   })

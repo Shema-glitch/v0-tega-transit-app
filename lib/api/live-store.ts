@@ -7,6 +7,11 @@ export interface LiveVehicle {
   speedKmh: number;
   lastPing: number; // timestamp
   heading?: number;
+  // Broadcaster-submitted vehicle info
+  plate?: string;
+  occupancy?: string;
+  operator?: string;
+  driver?: string;
 }
 
 export interface DiagnosticStatus {
@@ -29,12 +34,41 @@ export interface ActiveIncident {
 class Store {
   private vehicles: Map<string, LiveVehicle> = new Map();
   private incidents: Map<string, ActiveIncident> = new Map();
+  private viewers: Map<string, Set<string>> = new Map(); // routeId → Set of clientId
 
   ingest(ping: Omit<LiveVehicle, 'lastPing'>) {
     this.vehicles.set(ping.vehicleId, {
       ...ping,
       lastPing: Date.now()
     });
+  }
+
+  // Viewer tracking: a client is "viewing" a route when their SSE is connected
+  addViewer(routeId: string, clientId: string) {
+    if (!this.viewers.has(routeId)) {
+      this.viewers.set(routeId, new Set());
+    }
+    this.viewers.get(routeId)!.add(clientId);
+  }
+
+  removeViewer(routeId: string, clientId: string) {
+    const set = this.viewers.get(routeId);
+    if (set) {
+      set.delete(clientId);
+      if (set.size === 0) this.viewers.delete(routeId);
+    }
+  }
+
+  getViewerCount(routeId: string): number {
+    return this.viewers.get(routeId)?.size || 0;
+  }
+
+  getAllViewerCounts(): Record<string, number> {
+    const counts: Record<string, number> = {};
+    for (const [routeId, set] of this.viewers.entries()) {
+      counts[routeId] = set.size;
+    }
+    return counts;
   }
 
   getVehicles(): LiveVehicle[] {
