@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateBusesForRoutes, kigaliStops, kigaliRoutes, getRoutesForStop } from '@/lib/kigali-gtfs'
 
+/**
+ * DEPRECATED — demo endpoint backed entirely by simulated data.
+ * Use GET /api/stops/{id}/arrivals for real schedule + live arrivals.
+ * Kept (with a Deprecation header) so existing clients don't break.
+ */
+const DEPRECATION_HEADERS = {
+  'Deprecation': 'true',
+  'Link': '</api/stops/{id}/arrivals>; rel="successor-version"',
+  'X-Data-Source': 'simulation',
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const stopId = searchParams.get('stopId')
@@ -43,7 +54,7 @@ export async function GET(request: NextRequest) {
       stop,
       routes,
       total: arrivals.length,
-    })
+    }, { headers: DEPRECATION_HEADERS })
   }
 
   // Return all buses with their arrivals
@@ -64,5 +75,5 @@ export async function GET(request: NextRequest) {
     buses,
     total: arrivals.length,
     timestamp: new Date().toISOString(),
-  })
+  }, { headers: DEPRECATION_HEADERS })
 }

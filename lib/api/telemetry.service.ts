@@ -46,3 +46,17 @@ class TelemetryTracker {
 
 // Export as a singleton
 export const TelemetryService = new TelemetryTracker()
+
+/**
+ * Wrap a route handler body to record real request latency into
+ * TelemetryService, so /api/status's averageApiLatencyMs reflects actual
+ * traffic instead of always reading 0 (docs/BACKEND_HANDOFF.md #13).
+ */
+export async function withLatencyTracking<T>(fn: () => Promise<T>): Promise<T> {
+  const start = performance.now()
+  try {
+    return await fn()
+  } finally {
+    TelemetryService.recordLatency(Math.round(performance.now() - start))
+  }
+}

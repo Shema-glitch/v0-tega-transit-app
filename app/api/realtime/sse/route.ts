@@ -1,15 +1,40 @@
+/**
+ * GET /api/realtime/sse
+ *
+ * Server-Sent Events stream of vehicle position deltas, viewer counts, and
+ * nearby incident alerts.
+ *
+ * Vehicle state comes from the shared realtime hub (one simulation/ingest
+ * loop per process, regardless of client count). This handler only does the
+ * per-client work: region filtering, delta compression against the client's
+ * last-known state, and viewer tracking.
+ *
+ * Wire protocol (unchanged):
+ *   event: connected  → {"status": "streaming_deltas"}
+ *   event: message    → { type: 'vehicle:update', vehicles: Partial<Vehicle>[] }
+ *   event: message    → { type: 'viewer:counts', counts: Record<routeId, number> }
+ *   event: message    → { type: 'incident:alert', incidents: [...] }
+ */
+
 import { NextRequest } from 'next/server'
-import { kigaliRoutes, calculateDistance } from '@/lib/kigali-gtfs'
+import { haversineMeters } from '@/lib/api/geo'
 import { TelemetryService } from '@/lib/api/telemetry.service'
 import { Vehicle } from '@/lib/api/validation'
 import { LiveVehicleStore } from '@/lib/api/live-store'
-import { truncateGeo } from '@/lib/api/compression'
+import { realtimeHub, HubVehicle } from '@/lib/api/realtime-hub'
 
 export const dynamic = 'force-dynamic'
 
+const MAX_CONNECTIONS = 100
+// Kigali city center — used when a client omits lat/lng so the stream isn't
+// silently empty forever (docs/BACKEND_HANDOFF.md #5).
+const DEFAULT_LAT = -1.9536
+const DEFAULT_LNG = 30.0605
+const DEFAULT_RADIUS = 15000
+
 export async function GET(request: NextRequest) {
   // Connection limiting to prevent OOM
-  if (TelemetryService.activeSSEConnections >= 100) {
+  if (TelemetryService.activeSSEConnections >= MAX_CONNECTIONS) {
     return new Response(JSON.stringify({ error: 'Too Many Connections' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
@@ -17,9 +42,11 @@ export async function GET(request: NextRequest) {
   }
 
   const searchParams = request.nextUrl.searchParams
-  const userLat = parseFloat(searchParams.get('lat') || '0')
-  const userLng = parseFloat(searchParams.get('lng') || '0')
-  const radius = parseFloat(searchParams.get('radius') || '2000')
+  const rawLat = parseFloat(searchParams.get('lat') || '')
+  const rawLng = parseFloat(searchParams.get('lng') || '')
+  const userLat = Number.isFinite(rawLat) ? rawLat : DEFAULT_LAT
+  const userLng = Number.isFinite(rawLng) ? rawLng : DEFAULT_LNG
+  const radius = parseFloat(searchParams.get('radius') || String(DEFAULT_RADIUS))
 
   const encoder = new TextEncoder()
   const stream = new TransformStream()
@@ -29,163 +56,123 @@ export async function GET(request: NextRequest) {
   console.log(`[SSE] Client connected: ${clientId} | Region: [${userLat}, ${userLng}] | Radius: ${radius}m`)
   TelemetryService.clientConnected()
 
-  // State map to track previous payloads for delta calculation
+  // Per-client state for delta calculation
   const clientVehicleState = new Map<string, Vehicle>()
-
-  // Track which routes this client is viewing (for viewer counts)
+  // Routes this client is viewing (for viewer counts)
   const clientViewingRoutes = new Set<string>()
 
-  // Send initial connection success event
   writer.write(encoder.encode('event: connected\ndata: {"status": "streaming_deltas"}\n\n'))
 
-  // Helper function to broadcast only what has changed
-  const broadcastDeltas = () => {
+  const send = (payload: object) => {
+    const encoded = encoder.encode(`event: message\ndata: ${JSON.stringify(payload)}\n\n`)
+    writer.write(encoded)
+    TelemetryService.recordSSEMessage(encoded.byteLength)
+  }
+
+  // Called by the hub on every shared tick
+  const onTick = (vehicles: HubVehicle[]) => {
     try {
       const updates: Partial<Vehicle>[] = []
-      
-      // Simulate moving buses around the city
-      kigaliRoutes.forEach((route, i) => {
-        const vehicleId = `bus-${route.id}-active`
-        
-        let newLat, newLng, newSpeed, newBearing;
-        
-        // Check if there is a live crowdsourced ping for this route
-        const liveBuses = LiveVehicleStore.getVehicles().filter(v => v.routeId === route.id)
-        if (liveBuses.length > 0) {
-          // Use crowdsourced data directly
-          const liveBus = liveBuses[0]
-          newLat = truncateGeo(liveBus.lat, 5)
-          newLng = truncateGeo(liveBus.lng, 5)
-          newSpeed = liveBus.speedKmh
-          newBearing = liveBus.heading || 0
-        } else {
-          // Mock realtime movement for simulation purposes
-          newLat = truncateGeo(-1.9536 + (Math.random() - 0.5) * 0.05, 5)
-          newLng = truncateGeo(30.0605 + (Math.random() - 0.5) * 0.05, 5)
-          newSpeed = Math.floor(Math.random() * 45) + 15
-          newBearing = Math.floor(Math.random() * 360)
-        }
 
-        // Check if vehicle is inside user's requested region
-        const distanceToUser = (userLat && userLng) 
-          ? calculateDistance(userLat, userLng, newLat, newLng) 
-          : 0
-          
-        const isNearby = distanceToUser <= radius
-
-        // Create the new full vehicle state internally
+      for (const v of vehicles) {
         const nextState: Vehicle = {
-          id: vehicleId,
-          routeId: route.id,
-          lat: newLat,
-          lng: newLng,
-          brg: newBearing,
-          spd: newSpeed,
-          occupancy: liveBuses.length > 0 ? 'full' : (i % 3 === 0 ? 'full' : 'standing_room_only'),
+          id: v.id,
+          routeId: v.routeId,
+          lat: v.lat,
+          lng: v.lng,
+          brg: v.brg,
+          spd: v.spd,
+          occupancy: v.occupancy,
         }
 
-        const prevState = clientVehicleState.get(vehicleId)
+        const prevState = clientVehicleState.get(v.id)
         let hasSignificantChange = false
 
         if (!prevState) {
           hasSignificantChange = true
         } else {
-          // Delta logic: Only send if moved significantly, or speed/bearing changed drastically
-          const movedMeters = calculateDistance(prevState.lat, prevState.lng, newLat, newLng)
-          if (movedMeters > 5 || Math.abs(prevState.brg - newBearing) > 5) {
+          // Delta logic: only send if moved significantly or bearing changed drastically
+          const movedMeters = haversineMeters(prevState.lat, prevState.lng, v.lat, v.lng)
+          if (movedMeters > 5 || Math.abs((prevState.brg ?? 0) - v.brg) > 5) {
             hasSignificantChange = true
           }
         }
 
-        if (hasSignificantChange) {
-          clientVehicleState.set(vehicleId, nextState)
-          
-          // Only send essential deltas over the wire (omit static fields)
-          const deltaPayload: Partial<Vehicle> = {
-            id: vehicleId,
-            lat: newLat,
-            lng: newLng,
-            brg: newBearing,
-            spd: newSpeed
-          }
-          
-          // Include static fields ONLY on the first broadcast to this client
-          if (!prevState) {
-            deltaPayload.routeId = route.id
-            deltaPayload.occupancy = nextState.occupancy
-            
-            // Track viewer for this route
-            clientViewingRoutes.add(route.id)
-            LiveVehicleStore.addViewer(route.id, clientId)
-            // Include broadcaster-submitted vehicle info if available
-            const liveBus = liveBuses[0]
-            if (liveBus) {
-              if (liveBus.plate) deltaPayload.plate = liveBus.plate
-              if (liveBus.occupancy) deltaPayload.occupancy = liveBus.occupancy
-              if (liveBus.operator) deltaPayload.operator = liveBus.operator
-              if (liveBus.driver) deltaPayload.driver = liveBus.driver
-            }
-          }
-          
-          updates.push(deltaPayload)
+        if (!hasSignificantChange) continue
+        clientVehicleState.set(v.id, nextState)
+
+        // Only send essential deltas over the wire (omit static fields)
+        const deltaPayload: Partial<Vehicle> = {
+          id: v.id,
+          lat: v.lat,
+          lng: v.lng,
+          brg: v.brg,
+          spd: v.spd,
         }
-      })
+
+        // Include static fields ONLY on the first broadcast to this client
+        if (!prevState) {
+          deltaPayload.routeId = v.routeId
+          deltaPayload.occupancy = v.occupancy
+
+          // Track viewer for this route
+          clientViewingRoutes.add(v.routeId)
+          LiveVehicleStore.addViewer(v.routeId, clientId)
+
+          // Broadcaster-submitted vehicle info if available
+          if (v.plate) deltaPayload.plate = v.plate
+          if (v.operator) deltaPayload.operator = v.operator
+          if (v.driver) deltaPayload.driver = v.driver
+        }
+
+        updates.push(deltaPayload)
+      }
 
       if (updates.length > 0) {
-        const payload = JSON.stringify({ type: 'vehicle:update', vehicles: updates })
-        const encoded = encoder.encode(`event: message\ndata: ${payload}\n\n`)
-        writer.write(encoded)
-
-        // Telemetry
-        TelemetryService.recordSSEMessage(encoded.byteLength)
+        send({ type: 'vehicle:update', vehicles: updates })
       }
 
-      // Send viewer counts for all routes with active broadcasters
+      // Viewer counts for all routes with active viewers.
+      // `viewers` is the shape the frontend actually listens for; `counts` is
+      // kept for back-compat with anything relying on the original shape.
       const viewerCounts = LiveVehicleStore.getAllViewerCounts()
       if (Object.keys(viewerCounts).length > 0) {
-        const viewerPayload = JSON.stringify({ type: 'viewer:counts', counts: viewerCounts })
-        const encoded = encoder.encode(`event: message\ndata: ${viewerPayload}\n\n`)
-        writer.write(encoded)
+        send({ type: 'viewer:counts', counts: viewerCounts, viewers: viewerCounts })
       }
 
-      // Check for active incidents and broadcast if they are nearby
-      const allIncidents = LiveVehicleStore.getIncidents()
-      const relevantIncidents = allIncidents.filter(inc => {
-        const distanceToUser = (userLat && userLng) 
-          ? calculateDistance(userLat, userLng, inc.lat, inc.lng) 
-          : 0
-        return distanceToUser <= radius
+      // Active incidents within the client's region.
+      // Incidents without coordinates (e.g. "missing_stop" reports) have no
+      // location to filter by, so they're always included.
+      const relevantIncidents = LiveVehicleStore.getIncidents().filter((inc) => {
+        if (inc.lat === undefined || inc.lng === undefined) return true
+        return haversineMeters(userLat, userLng, inc.lat, inc.lng) <= radius
       })
 
       if (relevantIncidents.length > 0) {
-        // Format incident message
-        const incidentPayload = relevantIncidents.map(inc => ({
-          vehicleId: inc.vehicleId,
-          routeId: inc.routeId,
-          incidentType: inc.incidentType,
-          message: `Alert — Bus ${inc.routeId} reported ${inc.incidentType.replace('_', ' ')}.`
-        }))
-        const payload = JSON.stringify({ type: 'incident:alert', incidents: incidentPayload })
-        const encoded = encoder.encode(`event: message\ndata: ${payload}\n\n`)
-        writer.write(encoded)
-        TelemetryService.recordSSEMessage(encoded.byteLength)
+        send({
+          type: 'incident:alert',
+          incidents: relevantIncidents.map((inc) => ({
+            vehicleId: inc.vehicleId,
+            routeId: inc.routeId,
+            incidentType: inc.incidentType,
+            description: inc.description,
+            message: inc.routeId
+              ? `Alert — Bus ${inc.routeId} reported ${inc.incidentType.replace('_', ' ')}.`
+              : `Alert — ${inc.incidentType.replace('_', ' ')} reported.`,
+          })),
+        })
       }
     } catch (error) {
       console.error(`[SSE] Broadcast error for ${clientId}:`, error)
     }
   }
 
-  // Dual-Loop Priority Architecture
-  // 1. High Priority (2 seconds): We normally only process nearby vehicles in a real DB
-  // 2. Low Priority (10 seconds): distant vehicles. 
-  // For this simulation, we use a single fast loop but filter by delta.
-  const intervalId = setInterval(broadcastDeltas, 2000)
+  const unsubscribe = realtimeHub.subscribe(onTick)
 
-  // Handle client disconnect — clean up viewer tracking
+  // Handle client disconnect — clean up viewer tracking and hub subscription
   request.signal.addEventListener('abort', () => {
     console.log(`[SSE] Client disconnected: ${clientId}`)
-    clearInterval(intervalId)
-    // Remove this client from all route viewer counts
+    unsubscribe()
     for (const routeId of clientViewingRoutes) {
       LiveVehicleStore.removeViewer(routeId, clientId)
     }

@@ -9,7 +9,5 @@ services:
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
-        sync: false
       - key: NEXT_SUPABASE_CONNECTION_STRING
         sync: false

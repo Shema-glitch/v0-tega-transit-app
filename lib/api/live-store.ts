@@ -21,12 +21,14 @@ export interface DiagnosticStatus {
 }
 
 export interface ActiveIncident {
-  vehicleId: string;
-  routeId: string;
+  id: string;
+  vehicleId?: string;
+  routeId?: string;
   clientId: string;
   incidentType: string;
-  lat: number;
-  lng: number;
+  description?: string;
+  lat?: number;
+  lng?: number;
   destinationStopId?: string;
   reportedAt: number;
 }
@@ -77,7 +79,10 @@ class Store {
   }
 
   reportIncident(incident: Omit<ActiveIncident, 'reportedAt'>) {
-    this.incidents.set(incident.vehicleId, {
+    // Keyed by the caller-supplied id (vehicle_id when present, otherwise a
+    // generated id) so incidents without a vehicle — e.g. "missing_stop" —
+    // don't collide with each other under the same map key.
+    this.incidents.set(incident.id, {
       ...incident,
       reportedAt: Date.now()
     });
@@ -120,4 +125,17 @@ class Store {
   }
 }
 
-export const LiveVehicleStore = new Store();
+// globalThis singleton — Next.js can bundle this module separately per route,
+// which would give the broadcast ingest and the SSE reader DIFFERENT stores.
+// Pinning the instance on globalThis guarantees one shared store per process.
+// NOTE: still per-process memory. For multi-instance/serverless deployments
+// this must move to Redis or Supabase Realtime (see docs/architecture notes).
+const STORE_KEY = Symbol.for('tega.live-vehicle-store');
+type GlobalWithStore = typeof globalThis & { [STORE_KEY]?: Store };
+
+const g = globalThis as GlobalWithStore;
+if (!g[STORE_KEY]) {
+  g[STORE_KEY] = new Store();
+}
+
+export const LiveVehicleStore: Store = g[STORE_KEY]!;

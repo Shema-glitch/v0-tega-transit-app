@@ -1,19 +1,32 @@
+/**
+ * GET /api/gtfs/stops?q=<name>&limit=<n>&offset=<n>
+ *
+ * Returns deduplicated, name-validated stops, optionally filtered by
+ * (case-insensitive) name substring, with real pagination.
+ *
+ * Query parameters (all optional):
+ *   q       – string  Case-insensitive name substring filter
+ *   limit   – int     Max results per page (default 200, max 2000)
+ *   offset  – int     Pagination offset (default 0)
+ *
+ * Response: { stops: [...], total, limit, offset }
+ * `total` is the full matching count BEFORE pagination — previously this
+ * endpoint silently truncated to 50 results with no way to see or fetch the
+ * rest (docs/BACKEND_HANDOFF.md #1).
+ *
+ * Primary source: the shared in-memory stops cache (one Supabase fetch per
+ * hour instead of a full-table query per request). Fallback: local GTFS CSV.
+ */
+
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 import fs from 'fs'
 import path from 'path'
 import { parse } from 'csv-parse/sync'
+import { getCanonicalStops } from '@/lib/api/stops-cache'
+import { CacheService } from '@/lib/api/cache.service'
 
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000
-  const toRad = (d: number) => (d * Math.PI) / 180
-  const dLat = toRad(lat2 - lat1)
-  const dLon = toRad(lon2 - lon1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
+const DEFAULT_LIMIT = 200
+const MAX_LIMIT = 2000
 
 /**
  * Name validation: reject garbage / meaningless stop names.
@@ -31,116 +44,69 @@ function isValidStopName(name: string): boolean {
   return true
 }
 
-/**
- * Spatial deduplication: keeps the first stop within 50m of any already-kept stop.
- * Prefers the stop with the longer name when duplicates are found.
- */
-function deduplicateStops(stops: { id: string; name: string; lat: number; lon: number }[]) {
-  const primary: typeof stops = []
-  const idMapping: Record<string, string> = {}
+function parsePaging(searchParams: URLSearchParams) {
+  const rawLimit = parseInt(searchParams.get('limit') ?? '', 10)
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : DEFAULT_LIMIT
 
-  for (const stop of stops) {
-    const dupIdx = primary.findIndex(
-      (p) => haversineMeters(p.lat, p.lon, stop.lat, stop.lon) < 50
-    )
-    if (dupIdx !== -1) {
-      // Keep the one with the longer name
-      if (stop.name.length > primary[dupIdx].name.length) {
-        const oldId = primary[dupIdx].id
-        primary[dupIdx] = stop
-        idMapping[oldId] = stop.id
-      }
-      idMapping[stop.id] = primary[dupIdx].id
-    } else {
-      primary.push(stop)
-      idMapping[stop.id] = stop.id
-    }
-  }
+  const rawOffset = parseInt(searchParams.get('offset') ?? '', 10)
+  const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0
 
-  return { primary, idMapping }
+  return { limit, offset }
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const q = searchParams.get('q')
+  const q = searchParams.get('q')?.toLowerCase() ?? null
+  const { limit, offset } = parsePaging(searchParams)
 
   try {
-    let query = supabase.from('stops').select('*')
+    // Canonical stops are already spatially deduplicated at cache-refresh time
+    const canonical = await getCanonicalStops()
 
-    if (q) {
-      query = query.ilike('stop_name', `%${q}%`)
-    }
+    const matching = canonical
+      .filter((s) => isValidStopName(s.name))
+      .filter((s) => (q ? s.name.toLowerCase().includes(q) : true))
 
-    query = query.limit(500) // Fetch more before dedup
+    const stops = matching
+      .slice(offset, offset + limit)
+      .map((s) => ({ id: s.id, name: s.name, lat: s.lat, lon: s.lon }))
 
-    const { data, error } = await query
-
-    if (error) {
-      console.warn('Supabase stops fetch failed, falling back to local GTFS CSV:', error.message)
-
-      try {
-        const filePath = path.join(process.cwd(), 'kigali_gtfs', 'stops.txt')
-        if (fs.existsSync(filePath)) {
-          const fileContent = fs.readFileSync(filePath, 'utf-8')
-          const records = parse(fileContent, { columns: true, skip_empty_lines: true })
-
-          let filtered = records
-          if (q) {
-            filtered = records.filter((r: any) =>
-              r.stop_name.toLowerCase().includes(q.toLowerCase())
-            )
-          }
-
-          const rawStops = filtered
-            .map((stop: any) => ({
-              id: String(stop.stop_id),
-              name: stop.stop_name ?? '',
-              lat: parseFloat(stop.stop_lat),
-              lon: parseFloat(stop.stop_lon),
-            }))
-            .filter((s: any) => !isNaN(s.lat) && !isNaN(s.lon) && isValidStopName(s.name))
-
-          const { primary } = deduplicateStops(rawStops)
-          const stops = primary.slice(0, 50).map((s) => ({
-            id: s.id,
-            name: s.name,
-            lat: s.lat,
-            lon: s.lon,
-          }))
-
-          return NextResponse.json({ stops })
-        }
-      } catch (fsError) {
-        console.error('Local CSV fallback failed:', fsError)
-      }
-
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    if (!data || data.length === 0) {
-      return NextResponse.json({ stops: [] })
-    }
-
-    const rawStops = data
-      .map((stop: any) => ({
-        id: String(stop.stop_id),
-        name: stop.stop_name ?? '',
-        lat: parseFloat(stop.stop_lat),
-        lon: parseFloat(stop.stop_lon),
-      }))
-      .filter((s: any) => !isNaN(s.lat) && !isNaN(s.lon) && isValidStopName(s.name))
-
-    const { primary } = deduplicateStops(rawStops)
-    const stops = primary.slice(0, 50).map((s) => ({
-      id: s.id,
-      name: s.name,
-      lat: s.lat,
-      lon: s.lon,
-    }))
-
-    return NextResponse.json({ stops })
+    return NextResponse.json(
+      { stops, total: matching.length, limit, offset },
+      { headers: CacheService.suggestionHeaders() }
+    )
   } catch (err) {
-    console.error('Unexpected API error:', err)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    console.warn('Stops cache unavailable, falling back to local GTFS CSV:', err)
+
+    try {
+      const filePath = path.join(process.cwd(), 'kigali_gtfs', 'stops.txt')
+      if (fs.existsSync(filePath)) {
+        const fileContent = fs.readFileSync(filePath, 'utf-8')
+        const records = parse(fileContent, { columns: true, skip_empty_lines: true })
+
+        const matching = records
+          .map((stop: any) => ({
+            id: String(stop.stop_id),
+            name: (stop.stop_name as string) ?? '',
+            lat: parseFloat(stop.stop_lat),
+            lon: parseFloat(stop.stop_lon),
+          }))
+          .filter(
+            (s: any) =>
+              !isNaN(s.lat) &&
+              !isNaN(s.lon) &&
+              isValidStopName(s.name) &&
+              (q ? s.name.toLowerCase().includes(q) : true)
+          )
+
+        const stops = matching.slice(offset, offset + limit)
+
+        return NextResponse.json({ stops, total: matching.length, limit, offset })
+      }
+    } catch (fsError) {
+      console.error('Local CSV fallback failed:', fsError)
+    }
+
+    return NextResponse.json({ error: 'Stop data unavailable' }, { status: 500 })
   }
 }

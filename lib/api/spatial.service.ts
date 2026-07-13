@@ -1,18 +1,16 @@
 import { supabase } from '@/lib/supabase'
 import { BusStop } from '@/lib/types'
-import { getRoutesForStop } from '@/lib/kigali-gtfs'
+import { haversineMeters, walkingMinutes } from './geo'
+import { getCanonicalStops } from './stops-cache'
+import { getRoutesServingStop } from './gtfs-parser'
 
 export class SpatialService {
   /**
-   * Fetch nearby stops using PostGIS ST_DWithin and ST_Distance
-   * This is heavily optimized at the database layer rather than in-memory.
+   * Fetch nearby stops using the PostGIS `get_nearby_stops` RPC
+   * (see scripts/enable_postgis.mjs). Falls back to the in-memory stops
+   * cache with a proper haversine scan when the RPC isn't deployed.
    */
   static async getNearbyStops(lat: number, lng: number, radiusMeters: number, limit: number): Promise<BusStop[]> {
-    // Calling a custom Postgres RPC function that uses ST_DWithin
-    // If the RPC isn't created yet, we fallback to a bounding box filter using PostGIS directly in standard queries if supported
-    // But since Supabase requires RPC for raw PostGIS functions, we assume `get_nearby_stops` exists.
-    // As a graceful degradation for the prototype, if RPC fails, we fallback.
-    
     try {
       const { data, error } = await supabase.rpc('get_nearby_stops', {
         user_lat: lat,
@@ -30,35 +28,35 @@ export class SpatialService {
         name: stop.stop_name,
         latitude: stop.lat,
         longitude: stop.lon,
-        walkingDistance: Math.ceil(stop.distance_meters / 84), // 1.4 m/s
+        walkingDistance: walkingMinutes(stop.distance_meters),
         walkingMeters: Math.round(stop.distance_meters)
       }))
     } catch (error) {
-      console.warn('PostGIS RPC failed. Graceful degradation to standard query:', error)
-      
-      // Fallback if the SQL RPC isn't deployed yet
-      const { data: stops } = await supabase.from('stops').select('*').limit(100)
-      if (!stops) return []
+      console.warn('PostGIS RPC failed. Falling back to in-memory stops cache:', error)
 
-      // In-memory fallback
-      return stops.map(s => {
-        const dx = s.stop_lon - lng
-        const dy = s.stop_lat - lat
-        const dist = Math.sqrt(dx*dx + dy*dy) * 111320 // Approx degrees to meters
-        return {
-          id: s.stop_id,
-          name: s.stop_name,
-          latitude: s.stop_lat,
-          longitude: s.stop_lon,
-          walkingMeters: dist,
-          walkingDistance: Math.ceil(dist / 84)
-        }
-      }).sort((a, b) => a.walkingMeters - b.walkingMeters).slice(0, limit)
+      const stops = await getCanonicalStops()
+      return stops
+        .map((s) => {
+          const dist = haversineMeters(lat, lng, s.lat, s.lon)
+          return {
+            id: s.id,
+            name: s.name,
+            latitude: s.lat,
+            longitude: s.lon,
+            walkingMeters: Math.round(dist),
+            walkingDistance: walkingMinutes(dist),
+          }
+        })
+        .filter((s) => s.walkingMeters <= radiusMeters)
+        .sort((a, b) => a.walkingMeters - b.walkingMeters)
+        .slice(0, limit)
     }
   }
 
   /**
-   * Search stops by name using PostGIS/pg_trgm for fuzzy matching
+   * Search stops by name. Route badges come from the real GTFS
+   * stop_times → trips → routes index (previously this decorated results
+   * with a hardcoded mock mapping that never matched real stop IDs).
    */
   static async searchStops(query: string, limit: number = 5): Promise<BusStop[]> {
     const { data, error } = await supabase
@@ -68,18 +66,25 @@ export class SpatialService {
       .limit(limit)
 
     if (error) throw error
-    
-    return (data || []).map(s => {
-      const intersectingRoutes = getRoutesForStop(s.stop_id).map(r => r.name)
-      return {
-        id: s.stop_id,
-        name: s.stop_name,
-        latitude: s.stop_lat,
-        longitude: s.stop_lon,
-        walkingDistance: 0,
-        walkingMeters: 0,
-        routes: intersectingRoutes
-      } as any // Cast to any to allow dynamic routes appending
-    })
+
+    return Promise.all(
+      (data || []).map(async (s) => {
+        let routeNumbers: string[] = []
+        try {
+          routeNumbers = (await getRoutesServingStop(String(s.stop_id))).map((r) => r.number)
+        } catch {
+          // GTFS files unavailable — suggestions still work, just without route badges
+        }
+        return {
+          id: s.stop_id,
+          name: s.stop_name,
+          latitude: s.stop_lat,
+          longitude: s.stop_lon,
+          walkingDistance: 0,
+          walkingMeters: 0,
+          routes: routeNumbers,
+        } as any // routes is an extension of the BusStop shape
+      })
+    )
   }
 }

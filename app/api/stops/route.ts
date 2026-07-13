@@ -13,29 +13,16 @@
  *   [{ id, name, lat, lon }, ...]
  *
  * Always returns HTTP 200. An empty array means no stops matched.
+ *
+ * Stop data is served from the shared in-memory cache (lib/api/stops-cache)
+ * instead of hitting Supabase on every request.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServer } from '@/lib/supabase-server'
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-/** Haversine distance in metres between two WGS-84 coordinates. */
-function haversineMeters(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6_371_000 // Earth radius in metres
-  const toRad = (d: number) => (d * Math.PI) / 180
-  const dLat = toRad(lat2 - lat1)
-  const dLon = toRad(lon2 - lon1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
+import { getCanonicalStops } from '@/lib/api/stops-cache'
+import { haversineMeters } from '@/lib/api/geo'
+import { CORS, corsPreflight } from '@/lib/api/cors'
+import { withLatencyTracking } from '@/lib/api/telemetry.service'
 
 function parseFloatOrNull(v: string | null): number | null {
   if (v === null) return null
@@ -50,16 +37,11 @@ function clampInt(raw: string | null, defaultVal: number, max: number): number {
   return Math.min(n, max)
 }
 
-// ─── route handler ────────────────────────────────────────────────────────────
-
 export async function GET(request: NextRequest) {
-  // ── CORS preflight (belt-and-suspenders on top of next.config.mjs) ──────────
-  const corsHeaders: HeadersInit = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  }
+  return withLatencyTracking(() => handleGet(request))
+}
 
+async function handleGet(request: NextRequest) {
   const sp = request.nextUrl.searchParams
   const userLat = parseFloatOrNull(sp.get('lat'))
   const userLng = parseFloatOrNull(sp.get('lng'))
@@ -67,31 +49,8 @@ export async function GET(request: NextRequest) {
   const limit = clampInt(sp.get('limit'), 50, 200)
 
   try {
-    const supabase = getSupabaseServer()
-
-    // Fetch all stops from Supabase (the table is not large enough to paginate
-    // in most GTFS feeds; for very large feeds add a server-side bounding box).
-    const { data: rows, error } = await supabase
-      .from('stops')
-      .select('stop_id, stop_name, stop_lat, stop_lon')
-      .not('stop_lat', 'is', null)
-      .not('stop_lon', 'is', null)
-
-    if (error) {
-      console.error('[GET /api/stops] Supabase error:', error)
-      return NextResponse.json(
-        { error: 'Database error', details: error.message },
-        { status: 500, headers: corsHeaders }
-      )
-    }
-
-    // Normalise to the shape the frontend expects
-    let stops = (rows ?? []).map((r) => ({
-      id: String(r.stop_id),
-      name: r.stop_name ?? '',
-      lat: r.stop_lat as number,
-      lon: r.stop_lon as number,
-    }))
+    // Canonical list is already spatially deduplicated at cache-refresh time
+    let stops = (await getCanonicalStops()).map((s) => ({ ...s }))
 
     // Optional proximity filter + sort
     if (userLat !== null && userLng !== null) {
@@ -104,23 +63,10 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => a._distM - b._distM)
     }
 
-    // Spatial deduplication (50m threshold) combined with limit slicing
-    const deduped: typeof stops = []
-    for (const stop of stops) {
-      if (deduped.length >= limit) break
-      const isDuplicate = deduped.some(
-        (existing) => haversineMeters(existing.lat, existing.lon, stop.lat, stop.lon) < 50
-      )
-      if (!isDuplicate) {
-        deduped.push(stop)
-      }
-    }
-    stops = deduped
-
-    return NextResponse.json(stops, {
+    return NextResponse.json(stops.slice(0, limit), {
       status: 200,
       headers: {
-        ...corsHeaders,
+        ...CORS,
         // Semi-static: re-validate once an hour, serve stale for 24 h
         'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
       },
@@ -129,19 +75,11 @@ export async function GET(request: NextRequest) {
     console.error('[GET /api/stops] Unexpected error:', err)
     return NextResponse.json(
       { error: 'Internal Server Error' },
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: CORS }
     )
   }
 }
 
-// Allow browsers to preflight
 export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  })
+  return corsPreflight()
 }

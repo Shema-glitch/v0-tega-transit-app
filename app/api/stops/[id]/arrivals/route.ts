@@ -22,27 +22,12 @@ import { getSupabaseServer } from '@/lib/supabase-server'
 import { EtaEngine } from '@/lib/api/eta.engine'
 import { CacheService } from '@/lib/api/cache.service'
 import { LiveVehicleStore } from '@/lib/api/live-store'
-import { calculateDistance } from '@/lib/kigali-gtfs'
-
-// ─── CORS headers (applied to every response) ─────────────────────────────────
-const CORS: HeadersInit = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
+import { haversineMeters } from '@/lib/api/geo'
+import { findStopIdsNear } from '@/lib/api/stops-cache'
+import { CORS, corsPreflight } from '@/lib/api/cors'
+import { withLatencyTracking } from '@/lib/api/telemetry.service'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000
-  const toRad = (d: number) => (d * Math.PI) / 180
-  const dLat = toRad(lat2 - lat1)
-  const dLon = toRad(lon2 - lon1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
 
 /**
  * Parse a GTFS "HH:MM:SS" arrival_time string into minutes past midnight.
@@ -62,6 +47,13 @@ function nowMinutes(): number {
 // ─── route handler ────────────────────────────────────────────────────────────
 
 export async function GET(
+  request: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  return withLatencyTracking(() => handleGet(request, ctx))
+}
+
+async function handleGet(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -107,7 +99,7 @@ export async function GET(
     // ── 2. Merge live crowdsourced vehicles ────────────────────────────────────
     const liveBuses = LiveVehicleStore.getVehicles()
     const liveArrivals = liveBuses.map((bus, i) => {
-      const dist = calculateDistance(bus.lat, bus.lng, stopLat, stopLon)
+      const dist = haversineMeters(bus.lat, bus.lng, stopLat, stopLon)
       const window = EtaEngine.calculateWindow({ distanceMeters: dist })
       return {
         id: `arrival-live-${Date.now()}-${i}`,
@@ -120,7 +112,7 @@ export async function GET(
         etaMax: window.etaMax,
         confidence: window.confidence,
         delaySeconds: 0,
-        source: 'live' as const,
+        source: 'live' as 'live' | 'schedule',
       }
     })
 
@@ -128,18 +120,14 @@ export async function GET(
     const LOOKAHEAD_MIN = 90 // show arrivals in the next 90 minutes
     const currentMin = nowMinutes()
 
-    // Fetch all stops within 50m to capture fragmented schedules
-    const { data: nearbyStops, error: nearbyErr } = await supabase
-      .from('stops')
-      .select('stop_id, stop_lat, stop_lon')
-      .not('stop_lat', 'is', null)
-      .not('stop_lon', 'is', null)
-
+    // Resolve all stops within 50m (from the in-memory cache) to capture
+    // fragmented schedules split across duplicate stop records.
     let nearbyStopIds = [stopId]
-    if (!nearbyErr && nearbyStops) {
-      nearbyStopIds = nearbyStops
-        .filter(s => haversineMeters(stopLat, stopLon, s.stop_lat as number, s.stop_lon as number) < 50)
-        .map(s => String(s.stop_id))
+    try {
+      const ids = await findStopIdsNear(stopLat, stopLon, 50)
+      if (ids.length > 0) nearbyStopIds = ids
+    } catch (err) {
+      console.warn('[arrivals] stops cache unavailable, using exact stop only:', err)
     }
 
     const { data: stRows, error: stErr } = await supabase
@@ -251,8 +239,5 @@ export async function GET(
 }
 
 export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: CORS,
-  })
+  return corsPreflight()
 }

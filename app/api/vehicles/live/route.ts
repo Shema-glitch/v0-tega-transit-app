@@ -1,35 +1,49 @@
+/**
+ * GET /api/vehicles/live
+ *
+ * Current vehicle positions from the shared realtime hub — the same state
+ * the SSE stream broadcasts, so REST polls and the stream never disagree.
+ * Crowdsourced broadcaster pings take precedence; simulation fills the rest.
+ */
+
 import { NextResponse } from 'next/server'
 import { VehicleSchema } from '@/lib/api/validation'
 import { CacheService } from '@/lib/api/cache.service'
-import { kigaliRoutes } from '@/lib/kigali-gtfs' // Simulated fallback data
+import { realtimeHub } from '@/lib/api/realtime-hub'
+import { withLatencyTracking } from '@/lib/api/telemetry.service'
 
-import { truncateGeo } from '@/lib/api/compression'
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  return withLatencyTracking(handleGet)
+}
+
+async function handleGet() {
   try {
-    const liveVehicles = kigaliRoutes.map((route, i) => {
-      return {
-        id: `bus-${route.id}-active`,
-        routeId: route.id,
-        lat: truncateGeo(-1.9536 + (Math.random() - 0.5) * 0.05, 5),
-        lng: truncateGeo(30.0605 + (Math.random() - 0.5) * 0.05, 5),
-        brg: Math.floor(Math.random() * 360),
-        spd: Math.floor(Math.random() * 45) + 15,
-        occupancy: i % 3 === 0 ? 'full' : 'standing_room_only',
-      }
-    })
+    const snapshot = realtimeHub.getSnapshot()
+    const hasLive = snapshot.some((v) => v.live)
 
     // Validate through Zod
-    const validated = liveVehicles.map(v => VehicleSchema.parse(v))
+    const validated = snapshot.map((v) =>
+      VehicleSchema.parse({
+        id: v.id,
+        routeId: v.routeId,
+        lat: v.lat,
+        lng: v.lng,
+        brg: v.brg,
+        spd: v.spd,
+        occupancy: v.occupancy,
+      })
+    )
 
     return NextResponse.json(
-      { 
+      {
         vehicles: validated,
         metadata: {
           timestamp: new Date().toISOString(),
           freshness: 'live',
-          source: 'simulation_engine'
-        }
+          source: hasLive ? 'crowdsourced_and_simulation' : 'simulation_engine',
+        },
       },
       { headers: CacheService.liveHeaders() }
     )

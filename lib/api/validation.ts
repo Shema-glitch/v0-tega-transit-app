@@ -30,7 +30,13 @@ export const VehicleSchema = z.object({
   lng: z.number(),
   brg: z.number().min(0).max(360),
   spd: z.number().nonnegative(),
-  occupancy: z.enum(['empty', 'standing_room_only', 'full']).optional(), // Optional in delta
+  // String rather than enum: simulated feeds use 'standing_room_only'/'full'
+  // while crowdsourced pings use 'empty'/'seats'/'standing'/'packed'
+  occupancy: z.string().optional(), // Optional in delta
+  // Broadcaster-submitted vehicle info (first broadcast only)
+  plate: z.string().optional(),
+  operator: z.string().optional(),
+  driver: z.string().optional(),
 })
 
 // Status/Telemetry Validation
@@ -62,14 +68,24 @@ export type SystemStatus = z.infer<typeof SystemStatusSchema>
 export type SearchSuggestQuery = z.infer<typeof SearchSuggestSchema>
 
 // Incident Validation
+// `incident_type`/`type` accepts any known keyword AND any other string —
+// unrecognized types are logged and accepted rather than rejected, since a
+// 400 on a forward-compat field name breaks callers using a newer client
+// (docs/BACKEND_HANDOFF.md #7, e.g. the search UI's "missing_stop" report).
+// vehicle_id/route_id/latitude/longitude are optional because a "missing
+// stop" report has no vehicle or exact coordinate to attach.
 export const IncidentSchema = z.object({
-  vehicle_id: z.string(),
-  route_id: z.string(),
+  vehicle_id: z.string().optional(),
+  route_id: z.string().optional(),
   client_id: z.string(),
-  incident_type: z.enum(['route_changed', 'traffic_delay', 'skip_stop']),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
+  incident_type: z.string().optional(),
+  type: z.string().optional(),
+  description: z.string().max(500).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   destination_stop_id: z.string().optional()
+}).refine((d) => d.incident_type || d.type, {
+  message: 'incident_type (or type) is required',
 })
 
 export type IncidentReport = z.infer<typeof IncidentSchema>
