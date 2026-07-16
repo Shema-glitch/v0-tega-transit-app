@@ -24,3 +24,12 @@ export function haversineMeters(
 export function walkingMinutes(meters: number): number {
   return Math.ceil(meters / 84)
 }
+
+/**
+ * Strip a `route-` prefix so IDs match the bare GTFS scheme used by
+ * Supabase-backed endpoints (docs/BACKEND_HANDOFF.md #3). Only the mock
+ * simulation data (lib/kigali-gtfs.ts) uses the prefixed form internally.
+ */
+export function bareRouteId(id: string): string {
+  return id.replace(/^route-/i, '')
+}

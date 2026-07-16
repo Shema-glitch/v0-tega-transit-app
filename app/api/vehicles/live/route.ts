@@ -27,9 +27,9 @@ async function handleGet() {
     const validated = snapshot.map((v) =>
       VehicleSchema.parse({
         id: v.id,
-        routeId: v.routeId,
+        route_id: v.route_id,
         lat: v.lat,
-        lng: v.lng,
+        lon: v.lon,
         brg: v.brg,
         spd: v.spd,
         occupancy: v.occupancy,

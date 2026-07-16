@@ -1,8 +1,21 @@
 import { supabase } from '@/lib/supabase'
-import { BusStop } from '@/lib/types'
 import { haversineMeters, walkingMinutes } from './geo'
 import { getCanonicalStops } from './stops-cache'
 import { getRoutesServingStop } from './gtfs-parser'
+
+// Canonical stop shape (docs/BACKEND_HANDOFF.md #4): id/name/lat/lon/type,
+// plus walking-distance extras. Not the legacy `BusStop` (latitude/longitude)
+// used by the deprecated mock-data path in lib/kigali-gtfs.ts.
+interface StopResult {
+  id: string
+  name: string
+  lat: number
+  lon: number
+  type: 'stop'
+  walkingDistance: number
+  walkingMeters: number
+  routes?: string[]
+}
 
 export class SpatialService {
   /**
@@ -10,7 +23,7 @@ export class SpatialService {
    * (see scripts/enable_postgis.mjs). Falls back to the in-memory stops
    * cache with a proper haversine scan when the RPC isn't deployed.
    */
-  static async getNearbyStops(lat: number, lng: number, radiusMeters: number, limit: number): Promise<BusStop[]> {
+  static async getNearbyStops(lat: number, lng: number, radiusMeters: number, limit: number): Promise<StopResult[]> {
     try {
       const { data, error } = await supabase.rpc('get_nearby_stops', {
         user_lat: lat,
@@ -26,8 +39,9 @@ export class SpatialService {
       return data.map((stop: any) => ({
         id: stop.stop_id,
         name: stop.stop_name,
-        latitude: stop.lat,
-        longitude: stop.lon,
+        lat: stop.lat,
+        lon: stop.lon,
+        type: 'stop' as const,
         walkingDistance: walkingMinutes(stop.distance_meters),
         walkingMeters: Math.round(stop.distance_meters)
       }))
@@ -41,8 +55,9 @@ export class SpatialService {
           return {
             id: s.id,
             name: s.name,
-            latitude: s.lat,
-            longitude: s.lon,
+            lat: s.lat,
+            lon: s.lon,
+            type: 'stop' as const,
             walkingMeters: Math.round(dist),
             walkingDistance: walkingMinutes(dist),
           }
@@ -58,7 +73,7 @@ export class SpatialService {
    * stop_times → trips → routes index (previously this decorated results
    * with a hardcoded mock mapping that never matched real stop IDs).
    */
-  static async searchStops(query: string, limit: number = 5): Promise<BusStop[]> {
+  static async searchStops(query: string, limit: number = 5): Promise<StopResult[]> {
     const { data, error } = await supabase
       .from('stops')
       .select('stop_id, stop_name, stop_lat, stop_lon')
@@ -78,12 +93,13 @@ export class SpatialService {
         return {
           id: s.stop_id,
           name: s.stop_name,
-          latitude: s.stop_lat,
-          longitude: s.stop_lon,
+          lat: s.stop_lat,
+          lon: s.stop_lon,
+          type: 'stop' as const,
           walkingDistance: 0,
           walkingMeters: 0,
           routes: routeNumbers,
-        } as any // routes is an extension of the BusStop shape
+        }
       })
     )
   }

@@ -18,12 +18,13 @@
 import { kigaliRoutes } from '../kigali-gtfs'
 import { LiveVehicleStore } from './live-store'
 import { truncateGeo } from './compression'
+import { bareRouteId } from './geo'
 
 export interface HubVehicle {
   id: string
-  routeId: string
+  route_id: string
   lat: number
-  lng: number
+  lon: number
   brg: number
   spd: number
   occupancy: string
@@ -49,14 +50,16 @@ class RealtimeHub {
     const liveVehicles = LiveVehicleStore.getVehicles()
 
     const snapshot: HubVehicle[] = kigaliRoutes.map((route, i) => {
-      const liveBus = liveVehicles.find((v) => v.routeId === route.id)
+      // Bare-ID comparison: crowdsourced pings may arrive as "101" or
+      // "route-101" depending on the broadcaster client version.
+      const liveBus = liveVehicles.find((v) => bareRouteId(v.routeId) === bareRouteId(route.id))
 
       if (liveBus) {
         return {
-          id: `bus-${route.id}-active`,
-          routeId: route.id,
+          id: `bus-${bareRouteId(route.id)}-active`,
+          route_id: bareRouteId(route.id),
           lat: truncateGeo(liveBus.lat, 5),
-          lng: truncateGeo(liveBus.lng, 5),
+          lon: truncateGeo(liveBus.lng, 5),
           brg: liveBus.heading || 0,
           spd: liveBus.speedKmh,
           occupancy: liveBus.occupancy || 'full',
@@ -69,10 +72,10 @@ class RealtimeHub {
 
       // Simulated fallback movement around the city centre
       return {
-        id: `bus-${route.id}-active`,
-        routeId: route.id,
+        id: `bus-${bareRouteId(route.id)}-active`,
+        route_id: bareRouteId(route.id),
         lat: truncateGeo(-1.9536 + (Math.random() - 0.5) * 0.05, 5),
-        lng: truncateGeo(30.0605 + (Math.random() - 0.5) * 0.05, 5),
+        lon: truncateGeo(30.0605 + (Math.random() - 0.5) * 0.05, 5),
         brg: Math.floor(Math.random() * 360),
         spd: Math.floor(Math.random() * 45) + 15,
         occupancy: i % 3 === 0 ? 'full' : 'standing_room_only',

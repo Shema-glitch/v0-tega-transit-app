@@ -22,14 +22,14 @@ export interface DiagnosticStatus {
 
 export interface ActiveIncident {
   id: string;
-  vehicleId?: string;
-  routeId?: string;
+  vehicle_id?: string;
+  route_id?: string;
   clientId: string;
-  incidentType: string;
+  type: string;
   description?: string;
   lat?: number;
-  lng?: number;
-  destinationStopId?: string;
+  lon?: number;
+  destination_stop_id?: string;
   reportedAt: number;
 }
 

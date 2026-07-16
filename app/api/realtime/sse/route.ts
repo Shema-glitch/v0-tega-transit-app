@@ -77,9 +77,9 @@ export async function GET(request: NextRequest) {
       for (const v of vehicles) {
         const nextState: Vehicle = {
           id: v.id,
-          routeId: v.routeId,
+          route_id: v.route_id,
           lat: v.lat,
-          lng: v.lng,
+          lon: v.lon,
           brg: v.brg,
           spd: v.spd,
           occupancy: v.occupancy,
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
           hasSignificantChange = true
         } else {
           // Delta logic: only send if moved significantly or bearing changed drastically
-          const movedMeters = haversineMeters(prevState.lat, prevState.lng, v.lat, v.lng)
+          const movedMeters = haversineMeters(prevState.lat, prevState.lon, v.lat, v.lon)
           if (movedMeters > 5 || Math.abs((prevState.brg ?? 0) - v.brg) > 5) {
             hasSignificantChange = true
           }
@@ -105,19 +105,19 @@ export async function GET(request: NextRequest) {
         const deltaPayload: Partial<Vehicle> = {
           id: v.id,
           lat: v.lat,
-          lng: v.lng,
+          lon: v.lon,
           brg: v.brg,
           spd: v.spd,
         }
 
         // Include static fields ONLY on the first broadcast to this client
         if (!prevState) {
-          deltaPayload.routeId = v.routeId
+          deltaPayload.route_id = v.route_id
           deltaPayload.occupancy = v.occupancy
 
           // Track viewer for this route
-          clientViewingRoutes.add(v.routeId)
-          LiveVehicleStore.addViewer(v.routeId, clientId)
+          clientViewingRoutes.add(v.route_id)
+          LiveVehicleStore.addViewer(v.route_id, clientId)
 
           // Broadcaster-submitted vehicle info if available
           if (v.plate) deltaPayload.plate = v.plate
@@ -144,21 +144,21 @@ export async function GET(request: NextRequest) {
       // Incidents without coordinates (e.g. "missing_stop" reports) have no
       // location to filter by, so they're always included.
       const relevantIncidents = LiveVehicleStore.getIncidents().filter((inc) => {
-        if (inc.lat === undefined || inc.lng === undefined) return true
-        return haversineMeters(userLat, userLng, inc.lat, inc.lng) <= radius
+        if (inc.lat === undefined || inc.lon === undefined) return true
+        return haversineMeters(userLat, userLng, inc.lat, inc.lon) <= radius
       })
 
       if (relevantIncidents.length > 0) {
         send({
           type: 'incident:alert',
           incidents: relevantIncidents.map((inc) => ({
-            vehicleId: inc.vehicleId,
-            routeId: inc.routeId,
-            incidentType: inc.incidentType,
+            vehicle_id: inc.vehicle_id,
+            route_id: inc.route_id,
+            type: inc.type,
             description: inc.description,
-            message: inc.routeId
-              ? `Alert — Bus ${inc.routeId} reported ${inc.incidentType.replace('_', ' ')}.`
-              : `Alert — ${inc.incidentType.replace('_', ' ')} reported.`,
+            message: inc.route_id
+              ? `Alert — Bus ${inc.route_id} reported ${inc.type.replace('_', ' ')}.`
+              : `Alert — ${inc.type.replace('_', ' ')} reported.`,
           })),
         })
       }

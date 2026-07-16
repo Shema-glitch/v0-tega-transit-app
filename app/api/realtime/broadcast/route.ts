@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { LiveVehicleStore } from '@/lib/api/live-store'
+import { bareRouteId } from '@/lib/api/geo'
 import { z } from 'zod'
 
 const PingSchema = z.object({
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     LiveVehicleStore.ingest({
       vehicleId: data.vehicle_id,
-      routeId: data.route_id,
+      routeId: bareRouteId(data.route_id),
       clientId: data.client_id,
       lat: data.latitude,
       lng: data.longitude,

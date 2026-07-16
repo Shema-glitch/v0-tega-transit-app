@@ -25,9 +25,9 @@ export const ArrivalSchema = z.object({
 // Vehicle Location Validation (Minified keys for bandwidth optimization)
 export const VehicleSchema = z.object({
   id: z.string(),
-  routeId: z.string().optional(), // Optional in delta stream to save bytes
+  route_id: z.string().optional(), // Optional in delta stream to save bytes
   lat: z.number(),
-  lng: z.number(),
+  lon: z.number(),
   brg: z.number().min(0).max(360),
   spd: z.number().nonnegative(),
   // String rather than enum: simulated feeds use 'standing_room_only'/'full'

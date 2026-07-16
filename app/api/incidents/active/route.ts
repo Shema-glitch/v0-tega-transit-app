@@ -14,14 +14,14 @@ import { CORS, corsPreflight } from '@/lib/api/cors'
 
 export async function GET() {
   const incidents = LiveVehicleStore.getIncidents().map((inc) => ({
-    vehicleId: inc.vehicleId,
-    routeId: inc.routeId,
-    incidentType: inc.incidentType,
+    vehicle_id: inc.vehicle_id,
+    route_id: inc.route_id,
+    type: inc.type,
     description: inc.description,
-    destinationStopId: inc.destinationStopId,
+    destination_stop_id: inc.destination_stop_id,
     lat: inc.lat,
-    lng: inc.lng,
-    reportedAt: new Date(inc.reportedAt).toISOString(),
+    lon: inc.lon,
+    reported_at: new Date(inc.reportedAt).toISOString(),
   }))
 
   return NextResponse.json(

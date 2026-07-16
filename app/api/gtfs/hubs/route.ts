@@ -8,29 +8,29 @@ const HUB_DEFINITIONS = [
   {
     id: 'hub-nyabugogo',
     name: 'Nyabugogo Transit Hub',
-    latitude: -1.9367,
-    longitude: 30.0485,
+    lat: -1.9367,
+    lon: 30.0485,
     description: 'Major terminal',
   },
   {
     id: 'hub-downtown',
     name: 'Downtown City Center',
-    latitude: -1.9450,
-    longitude: 30.0590,
+    lat: -1.9450,
+    lon: 30.0590,
     description: 'Central hub',
   },
   {
     id: 'hub-remera',
     name: 'Remera Bus Park',
-    latitude: -1.9520,
-    longitude: 30.0920,
+    lat: -1.9520,
+    lon: 30.0920,
     description: 'East terminal',
   },
   {
     id: 'hub-kimironko',
     name: 'Kimironko Market Hub',
-    latitude: -1.9320,
-    longitude: 30.1050,
+    lat: -1.9320,
+    lon: 30.1050,
     description: 'Northeast hub',
   },
 ]
@@ -45,7 +45,7 @@ export async function GET() {
       let nearestDist = Infinity
 
       for (const stop of allStops) {
-        const dist = haversineMeters(hub.latitude, hub.longitude, stop.lat, stop.lon)
+        const dist = haversineMeters(hub.lat, hub.lon, stop.lat, stop.lon)
         if (dist < nearestDist) {
           nearestDist = dist
           nearestId = stop.id
@@ -56,8 +56,9 @@ export async function GET() {
         id: nearestId || hub.id, // Use real GTFS stop_id, fallback to synthetic
         name: hub.name,
         description: hub.description,
-        latitude: hub.latitude,
-        longitude: hub.longitude,
+        lat: hub.lat,
+        lon: hub.lon,
+        type: 'hub',
       }
     })
 

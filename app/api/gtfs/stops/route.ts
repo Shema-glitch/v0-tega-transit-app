@@ -69,7 +69,7 @@ export async function GET(request: Request) {
 
     const stops = matching
       .slice(offset, offset + limit)
-      .map((s) => ({ id: s.id, name: s.name, lat: s.lat, lon: s.lon }))
+      .map((s) => ({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, type: 'stop' as const }))
 
     return NextResponse.json(
       { stops, total: matching.length, limit, offset },
@@ -90,6 +90,7 @@ export async function GET(request: Request) {
             name: (stop.stop_name as string) ?? '',
             lat: parseFloat(stop.stop_lat),
             lon: parseFloat(stop.stop_lon),
+            type: 'stop' as const,
           }))
           .filter(
             (s: any) =>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { LiveVehicleStore } from '@/lib/api/live-store'
 import { IncidentSchema } from '@/lib/api/validation'
+import { bareRouteId } from '@/lib/api/geo'
 
 // Types we actively route/display differently. Anything else is still
 // accepted and stored — see docs/BACKEND_HANDOFF.md #7.
@@ -28,14 +29,14 @@ export async function POST(request: NextRequest) {
 
     LiveVehicleStore.reportIncident({
       id,
-      vehicleId: data.vehicle_id,
-      routeId: data.route_id,
+      vehicle_id: data.vehicle_id,
+      route_id: data.route_id ? bareRouteId(data.route_id) : undefined,
       clientId: data.client_id,
-      incidentType,
+      type: incidentType,
       description: data.description,
       lat: data.latitude,
-      lng: data.longitude,
-      destinationStopId: data.destination_stop_id
+      lon: data.longitude,
+      destination_stop_id: data.destination_stop_id
     })
 
     return NextResponse.json({ success: true, status: 'Incident Reported' })

@@ -63,7 +63,11 @@ async function handleGet(request: NextRequest) {
         .sort((a, b) => a._distM - b._distM)
     }
 
-    return NextResponse.json(stops.slice(0, limit), {
+    const result = stops
+      .slice(0, limit)
+      .map(({ id, name, lat, lon }) => ({ id, name, lat, lon, type: 'stop' as const }))
+
+    return NextResponse.json(result, {
       status: 200,
       headers: {
         ...CORS,
