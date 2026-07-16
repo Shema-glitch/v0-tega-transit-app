@@ -11,3 +11,5 @@ services:
         sync: false
       - key: NEXT_SUPABASE_CONNECTION_STRING
         sync: false
+      - key: ADMIN_TOKEN
+        sync: false

@@ -14,6 +14,7 @@
  *   event: message    → { type: 'vehicle:update', vehicles: Partial<Vehicle>[] }
  *   event: message    → { type: 'viewer:counts', counts: Record<routeId, number> }
  *   event: message    → { type: 'incident:alert', incidents: [...] }
+ *   event: message    → { type: 'system:maintenance', flags: [{feature, reason, since}] }
  */
 
 import { NextRequest } from 'next/server'
@@ -22,6 +23,7 @@ import { TelemetryService } from '@/lib/api/telemetry.service'
 import { Vehicle } from '@/lib/api/validation'
 import { LiveVehicleStore } from '@/lib/api/live-store'
 import { realtimeHub, HubVehicle } from '@/lib/api/realtime-hub'
+import { MaintenanceStore } from '@/lib/api/maintenance-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +62,9 @@ export async function GET(request: NextRequest) {
   const clientVehicleState = new Map<string, Vehicle>()
   // Routes this client is viewing (for viewer counts)
   const clientViewingRoutes = new Set<string>()
+  // Last maintenance snapshot sent to THIS client, so we only push on change
+  // (including the transition back to zero flags — see note below)
+  let lastMaintenanceJSON: string | null = null
 
   writer.write(encoder.encode('event: connected\ndata: {"status": "streaming_deltas"}\n\n'))
 
@@ -161,6 +166,18 @@ export async function GET(request: NextRequest) {
               : `Alert — ${inc.type.replace('_', ' ')} reported.`,
           })),
         })
+      }
+
+      // Maintenance flags — sent on connect and again only when the set
+      // changes, INCLUDING the transition back to an empty array. Unlike
+      // incidents/viewers above, this must fire on the empty case too, or a
+      // client would never learn a flag was cleared and would show a stale
+      // "under maintenance" notice forever.
+      const maintenanceFlags = MaintenanceStore.getAll()
+      const maintenanceJSON = JSON.stringify(maintenanceFlags)
+      if (maintenanceJSON !== lastMaintenanceJSON) {
+        lastMaintenanceJSON = maintenanceJSON
+        send({ type: 'system:maintenance', flags: maintenanceFlags })
       }
     } catch (error) {
       console.error(`[SSE] Broadcast error for ${clientId}:`, error)

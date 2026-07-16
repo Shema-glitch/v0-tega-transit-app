@@ -3,6 +3,7 @@ import { SystemStatusSchema } from '@/lib/api/validation'
 import { CacheService } from '@/lib/api/cache.service'
 import { supabase } from '@/lib/supabase'
 import { TelemetryService } from '@/lib/api/telemetry.service'
+import { MaintenanceStore } from '@/lib/api/maintenance-store'
 
 export async function GET() {
   try {
@@ -15,6 +16,7 @@ export async function GET() {
       realtimeServices: 'fallback', // 'active' when connected to Redis/Supabase Channels
       gtfsFreshnessHours: 24, // Ideally fetched from an import_logs table
       outages: dbError ? ['database_unreachable'] : [],
+      maintenance: MaintenanceStore.getAll(),
       telemetry: {
         activeSSEConnections: TelemetryService.activeSSEConnections,
         averagePayloadSizeBytes: TelemetryService.getAveragePayloadSize(),

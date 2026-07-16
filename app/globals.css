@@ -14,6 +14,11 @@
   --ok: var(--color-success);
   --warn: var(--color-warning);
   --err: var(--color-error);
+
+  /* Method colors are a separate hue family from status colors, so a
+     healthy POST row never reads as "cautioned" the way orange did. */
+  --method-get: var(--clay-blue-deep);
+  --method-post: var(--clay-lilac-deep);
 }
 
 body {

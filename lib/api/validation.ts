@@ -46,6 +46,11 @@ export const SystemStatusSchema = z.object({
   realtimeServices: z.enum(['active', 'fallback']),
   gtfsFreshnessHours: z.number(),
   outages: z.array(z.string()),
+  maintenance: z.array(z.object({
+    feature: z.string(),
+    reason: z.string(),
+    since: z.number(),
+  })).optional(),
   telemetry: z.object({
     activeSSEConnections: z.number(),
     averagePayloadSizeBytes: z.number(),
