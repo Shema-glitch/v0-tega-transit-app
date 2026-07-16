@@ -1,19 +1,23 @@
+@import './tega-clay-tokens.css';
 @import 'tailwindcss';
 
+/* Dashboard palette — remapped onto the Tega claymorphism tokens above
+   (docs/DESIGN_TOKENS.md) so the existing --bg/--surface/... usage in
+   app/page.tsx picks up the shared look without a rewrite. */
 :root {
-  --bg: #0b0e14;
-  --surface: #12161f;
-  --border: #232936;
-  --text: #d7dce4;
-  --text-dim: #7d8590;
-  --accent: #00a896;
-  --ok: #3fb950;
-  --warn: #d29922;
-  --err: #f85149;
+  --bg: var(--clay-bg);
+  --surface: var(--clay-surface);
+  --border: var(--clay-border);
+  --text: var(--clay-text);
+  --text-dim: var(--clay-text-secondary);
+  --accent: var(--clay-teal);
+  --ok: var(--color-success);
+  --warn: var(--color-warning);
+  --err: var(--color-error);
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: var(--font-body);
 }
