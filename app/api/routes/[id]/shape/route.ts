@@ -124,10 +124,20 @@ export async function GET(
 
     // ── 4. Build GeoJSON Feature ───────────────────────────────────────────────
     // Coordinates in [longitude, latitude] order — GeoJSON / Mapbox standard.
-    const coordinates: [number, number][] = shapeRows.map((pt) => [
-      pt.shape_pt_lon as number,
-      pt.shape_pt_lat as number,
-    ])
+    // Filter out any malformed rows: a single null/NaN shape point turns the
+    // whole LineString into something Mapbox throws "Invalid LngLat object"
+    // on, crashing the map for every consumer of this route, not just the
+    // bad point.
+    const coordinates: [number, number][] = shapeRows
+      .map((pt) => [pt.shape_pt_lon as number, pt.shape_pt_lat as number] as [number, number])
+      .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat))
+
+    if (coordinates.length === 0) {
+      return NextResponse.json(
+        { error: `Shape '${trip.shape_id}' has no valid coordinate points`, routeId },
+        { status: 404, headers: CORS }
+      )
+    }
 
     const feature = {
       type: 'Feature',
