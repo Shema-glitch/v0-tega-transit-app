@@ -9,7 +9,7 @@
  * each one (including the SSE stream) without leaving the browser.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 // ─── endpoint catalog ─────────────────────────────────────────────────────────
 
@@ -112,12 +112,57 @@ interface MaintenanceFlag {
   since: number
 }
 
+// ─── SSE live diagnostic ──────────────────────────────────────────────────────
+// The frontend consumes one long-lived SSE connection carrying several event
+// types multiplexed by a `type` field. When the app "feels dead," the useful
+// questions are: is the socket even open? which event types are actually
+// arriving? and how long since the last frame (a live stream should never go
+// quiet for long)? This diagnostic answers all three, live, without leaving
+// the browser — a step up from the old fire-once-for-8s counter.
+
+// The event types the SSE route emits (see app/api/realtime/sse/route.ts).
+const SSE_EVENT_TYPES = [
+  'connected',
+  'vehicle:update',
+  'viewer:counts',
+  'incident:alert',
+  'system:maintenance',
+] as const
+
+interface SseDiag {
+  running: boolean
+  state: string // human-readable connection state
+  connectedAt: number | null // first successful open (for uptime)
+  reconnects: number // times the browser silently re-opened the socket
+  errors: number // onerror fires (transient during reconnect)
+  total: number // all message frames seen
+  byType: Record<string, number> // frames bucketed by `type`
+  lastMessageAt: number | null // for the staleness clock
+  lastPayload: string // truncated last frame, for eyeballing shape
+}
+
+const EMPTY_SSE_DIAG: SseDiag = {
+  running: false,
+  state: 'idle',
+  connectedAt: null,
+  reconnects: 0,
+  errors: 0,
+  total: 0,
+  byType: {},
+  lastMessageAt: null,
+  lastPayload: '',
+}
+
 export default function StatusPage() {
   const [results, setResults] = useState<Record<string, CheckResult>>({})
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [sse, setSse] = useState<{ state: string; messages: number; last: string }>({
-    state: 'idle', messages: 0, last: '',
-  })
+  const [sse, setSse] = useState<SseDiag>(EMPTY_SSE_DIAG)
+  const esRef = useRef<EventSource | null>(null)
+  const openCountRef = useRef(0) // distinguishes first open from reconnects
+  // Ticks once a second while streaming so the "since last frame" clock is live
+  // even when no new frames are arriving (which is itself the thing to notice).
+  const [now, setNow] = useState(() => Date.now())
+  const [injecting, setInjecting] = useState(false)
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
   const [maintenance, setMaintenance] = useState<MaintenanceFlag[]>([])
 
@@ -184,26 +229,99 @@ export default function StatusPage() {
     }
   }, [runCheck])
 
-  const testSse = useCallback(() => {
-    setSse({ state: 'connecting', messages: 0, last: '' })
-    const es = new EventSource('/api/realtime/sse?lat=-1.9403&lng=30.0618&radius=5000')
-    let count = 0
-    es.addEventListener('connected', () => setSse((s) => ({ ...s, state: 'streaming' })))
-    es.addEventListener('message', (e) => {
-      count += 1
-      const last = e.data.length > 300 ? e.data.slice(0, 300) + ' …' : e.data
-      setSse({ state: 'streaming', messages: count, last })
-    })
-    es.onerror = () => {
-      es.close()
-      setSse((s) => ({ ...s, state: s.messages > 0 ? 'closed (had messages)' : 'error' }))
-    }
-    // Sample for 8 seconds then close
-    setTimeout(() => {
-      es.close()
-      setSse((s) => ({ ...s, state: `closed after 8s — ${count} messages` }))
-    }, 8000)
+  const stopSse = useCallback(() => {
+    esRef.current?.close()
+    esRef.current = null
+    setSse((s) => ({ ...s, running: false, state: 'stopped' }))
   }, [])
+
+  const startSse = useCallback(() => {
+    esRef.current?.close() // never leak a prior connection
+    openCountRef.current = 0
+    setSse({ ...EMPTY_SSE_DIAG, running: true, state: 'connecting' })
+
+    const es = new EventSource('/api/realtime/sse?lat=-1.9403&lng=30.0618&radius=5000')
+    esRef.current = es
+
+    // The `connected` handshake is its own SSE event name, not a `message`.
+    es.addEventListener('connected', () => {
+      setSse((s) => ({
+        ...s,
+        state: 'streaming',
+        byType: { ...s.byType, connected: (s.byType.connected ?? 0) + 1 },
+      }))
+    })
+
+    es.onopen = () => {
+      openCountRef.current += 1
+      const isReconnect = openCountRef.current > 1
+      setSse((s) => ({
+        ...s,
+        state: 'streaming',
+        connectedAt: s.connectedAt ?? Date.now(),
+        reconnects: isReconnect ? s.reconnects + 1 : s.reconnects,
+      }))
+    }
+
+    es.addEventListener('message', (e) => {
+      let type = 'unknown'
+      try { type = (JSON.parse(e.data)?.type as string) ?? 'unknown' } catch { /* keep 'unknown' */ }
+      const last = e.data.length > 400 ? e.data.slice(0, 400) + ' …' : e.data
+      setSse((s) => ({
+        ...s,
+        state: 'streaming',
+        total: s.total + 1,
+        byType: { ...s.byType, [type]: (s.byType[type] ?? 0) + 1 },
+        lastMessageAt: Date.now(),
+        lastPayload: last,
+      }))
+    })
+
+    // EventSource auto-reconnects on transient errors; we deliberately do NOT
+    // close here, so the tool surfaces flapping (rising reconnect count) rather
+    // than hiding it. readyState tells us whether it's retrying or truly dead.
+    es.onerror = () => {
+      const dead = es.readyState === EventSource.CLOSED
+      setSse((s) => ({
+        ...s,
+        errors: s.errors + 1,
+        state: dead ? 'connection closed by server' : 'reconnecting…',
+      }))
+    }
+  }, [])
+
+  // Fire a real vehicle ping + incident report so they round-trip back through
+  // the SSE stream — proves the whole ingest→broadcast→client path end to end,
+  // not just that the socket is open.
+  const injectTestData = useCallback(async () => {
+    setInjecting(true)
+    try {
+      const ping = ENDPOINTS.find((e) => e.path === '/api/realtime/broadcast')
+      const incident = ENDPOINTS.find((e) => e.path === '/api/incidents/report')
+      await Promise.all(
+        [ping, incident].map((ep) =>
+          ep?.body
+            ? fetch(ep.testPath, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ep.body),
+                cache: 'no-store',
+              })
+            : Promise.resolve()
+        )
+      )
+    } catch { /* the SSE panel will simply show nothing new arrived */ }
+    finally { setInjecting(false) }
+  }, [])
+
+  // Live staleness clock + cleanup. Only ticks while a stream is active.
+  useEffect(() => {
+    if (!sse.running) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [sse.running])
+
+  useEffect(() => () => { esRef.current?.close() }, []) // close on unmount
 
   useEffect(() => {
     runAll()
@@ -245,24 +363,76 @@ export default function StatusPage() {
             ↻ Re-run all checks
           </button>
           <button
-            onClick={testSse}
+            onClick={sse.running ? stopSse : startSse}
             className="cursor-pointer rounded border px-3 py-1 text-xs hover:opacity-80"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
+            style={
+              sse.running
+                ? { borderColor: 'var(--err)', color: 'var(--err)' }
+                : { borderColor: 'var(--border)', color: 'var(--text-dim)' }
+            }
           >
-            ⚡ Test SSE stream (8s)
+            {sse.running ? '■ Stop SSE stream' : '⚡ Start live SSE monitor'}
           </button>
+          {sse.running && (
+            <button
+              onClick={injectTestData}
+              disabled={injecting}
+              className="cursor-pointer rounded border px-3 py-1 text-xs hover:opacity-80 disabled:opacity-50"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
+            >
+              {injecting ? 'injecting…' : '💉 Inject test ping + incident'}
+            </button>
+          )}
         </div>
         {sse.state !== 'idle' && (
           <div className="mt-3 rounded border p-3 text-xs" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-            <div>
-              SSE: <span style={{ color: 'var(--accent)' }}>{sse.state}</span>
-              {sse.messages > 0 && <> · {sse.messages} messages received</>}
-            </div>
-            {sse.last && (
-              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all" style={{ color: 'var(--text-dim)' }}>
-                {sse.last}
-              </pre>
-            )}
+            {(() => {
+              const staleSec = sse.lastMessageAt ? Math.floor((now - sse.lastMessageAt) / 1000) : null
+              const upSec = sse.connectedAt ? Math.floor((now - sse.connectedAt) / 1000) : null
+              // A live stream ticks every ~2s; >10s quiet while "streaming" is suspicious.
+              const staleColor =
+                staleSec === null ? 'var(--text-dim)'
+                : staleSec > 10 ? 'var(--err)'
+                : staleSec > 4 ? 'var(--warn)'
+                : 'var(--ok)'
+              return (
+                <>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span>
+                      SSE: <span style={{ color: 'var(--accent)' }}>{sse.state}</span>
+                    </span>
+                    <span>{sse.total} frames</span>
+                    {upSec !== null && <span>up {upSec}s</span>}
+                    {staleSec !== null && (
+                      <span style={{ color: staleColor }}>last frame {staleSec}s ago</span>
+                    )}
+                    {sse.reconnects > 0 && (
+                      <span style={{ color: 'var(--warn)' }}>{sse.reconnects} reconnect{sse.reconnects > 1 ? 's' : ''}</span>
+                    )}
+                    {sse.errors > 0 && (
+                      <span style={{ color: 'var(--text-dim)' }}>{sse.errors} error{sse.errors > 1 ? 's' : ''}</span>
+                    )}
+                  </div>
+                  {/* Per-type breakdown — a stream that's "connected" but with a
+                      whole event type stuck at 0 is the real bug most of the time. */}
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1" style={{ color: 'var(--text-dim)' }}>
+                    {SSE_EVENT_TYPES.map((t) => {
+                      const n = sse.byType[t] ?? 0
+                      return (
+                        <span key={t}>
+                          {t}: <span style={{ color: n > 0 ? 'var(--ok)' : 'var(--text-dim)' }}>{n}</span>
+                        </span>
+                      )
+                    })}
+                  </div>
+                  {sse.lastPayload && (
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all" style={{ color: 'var(--text-dim)' }}>
+                      {sse.lastPayload}
+                    </pre>
+                  )}
+                </>
+              )
+            })()}
           </div>
         )}
       </header>
