@@ -16,7 +16,7 @@
  */
 
 import { kigaliRoutes, kigaliRouteGeometries } from '../kigali-gtfs'
-import { LiveVehicleStore } from './live-store'
+import { LiveVehicleStore, LiveVehicle } from './live-store'
 import { truncateGeo } from './compression'
 import { bareRouteId, haversineMeters } from './geo'
 
@@ -30,10 +30,20 @@ export interface HubVehicle {
   occupancy: string
   /** true when position comes from a crowdsourced broadcaster ping */
   live: boolean
+  /** number of commuters currently broadcasting from this physical bus */
+  reporters?: number
+  /** journey scoping, when the broadcaster supplied it */
+  direction_id?: number
+  destination_stop_id?: string
   plate?: string
   operator?: string
   driver?: string
 }
+
+// Two commuters on the same physical bus produce two pings a few metres
+// apart; anything on the same route (and not explicitly opposite directions)
+// within this distance is treated as ONE bus.
+const CLUSTER_RADIUS_M = 150
 
 export const TICK_INTERVAL_MS = 2000
 
@@ -160,39 +170,84 @@ class RealtimeHub {
     // consistent; clamp so a bus doesn't teleport after an idle stretch.
     const elapsedMs = this.lastTickAt ? Math.min(now - this.lastTickAt, 10_000) : TICK_INTERVAL_MS
 
-    const snapshot: HubVehicle[] = kigaliRoutes.map((route, i) => {
-      // Bare-ID comparison: crowdsourced pings may arrive as "101" or
-      // "route-101" depending on the broadcaster client version.
-      const liveBus = liveVehicles.find((v) => bareRouteId(v.routeId) === bareRouteId(route.id))
-
-      if (liveBus) {
-        return {
-          id: `bus-${bareRouteId(route.id)}-active`,
-          route_id: bareRouteId(route.id),
-          lat: truncateGeo(liveBus.lat, 5),
-          lon: truncateGeo(liveBus.lng, 5),
-          brg: liveBus.heading || 0,
-          spd: liveBus.speedKmh,
-          occupancy: liveBus.occupancy || 'full',
-          live: true,
-          plate: liveBus.plate,
-          operator: liveBus.operator,
-          driver: liveBus.driver,
+    // 1. EVERY crowdsourced ping is surfaced, whatever its route. Previously
+    // the snapshot was built by looping the 8 simulated routes and looking up
+    // a matching ping, so a commuter broadcasting on any other real route
+    // (e.g. 109) got a 200 from /api/realtime/broadcast but never appeared to
+    // anyone.
+    //
+    // Co-riding broadcasters are clustered: same route, compatible direction,
+    // within CLUSTER_RADIUS_M ⇒ one vehicle, with `reporters` = rider count.
+    // Freshest ping first, so the representative position is the most recent
+    // report; the cluster id is the smallest member id so the marker keeps a
+    // stable identity when a second rider joins or pings interleave.
+    const sortedLive = [...liveVehicles].sort((a, b) => b.lastPing - a.lastPing)
+    const clusters: LiveVehicle[][] = []
+    for (const v of sortedLive) {
+      const cluster = clusters.find((members) => {
+        const rep = members[0]
+        if (bareRouteId(rep.routeId) !== bareRouteId(v.routeId)) return false
+        // Explicitly opposite directions = different physical buses, even if
+        // they happen to pass each other closely
+        if (
+          rep.directionId !== undefined &&
+          v.directionId !== undefined &&
+          rep.directionId !== v.directionId
+        ) {
+          return false
         }
-      }
+        return haversineMeters(rep.lat, rep.lng, v.lat, v.lng) <= CLUSTER_RADIUS_M
+      })
+      if (cluster) cluster.push(v)
+      else clusters.push([v])
+    }
 
-      // Simulated fallback: drive along the route's real polyline
-      const sim = this.simulate(route.id, elapsedMs, now)
+    const snapshot: HubVehicle[] = clusters.map((members) => {
+      const rep = members[0]
+      const first = <T>(pickFn: (m: LiveVehicle) => T | undefined): T | undefined => {
+        for (const m of members) {
+          const val = pickFn(m)
+          if (val !== undefined) return val
+        }
+        return undefined
+      }
       return {
-        id: `bus-${bareRouteId(route.id)}-active`,
-        route_id: bareRouteId(route.id),
+        id: members.map((m) => m.vehicleId).sort()[0],
+        route_id: bareRouteId(rep.routeId),
+        lat: truncateGeo(rep.lat, 5),
+        lon: truncateGeo(rep.lng, 5),
+        // Normalize: broadcaster headings aren't bounds-checked at ingest,
+        // and VehicleSchema rejects anything outside 0–360
+        brg: (((rep.heading || 0) % 360) + 360) % 360,
+        spd: rep.speedKmh,
+        occupancy: first((m) => m.occupancy) || 'full',
+        live: true,
+        reporters: members.length,
+        direction_id: first((m) => m.directionId),
+        destination_stop_id: first((m) => m.destinationStopId),
+        plate: first((m) => m.plate),
+        operator: first((m) => m.operator),
+        driver: first((m) => m.driver),
+      }
+    })
+
+    // 2. Simulated fallback fills the 8 demo routes that have no live
+    // coverage, so the map never looks dead.
+    const liveRouteIds = new Set(snapshot.map((v) => v.route_id))
+    kigaliRoutes.forEach((route, i) => {
+      const routeId = bareRouteId(route.id)
+      if (liveRouteIds.has(routeId)) return
+      const sim = this.simulate(route.id, elapsedMs, now)
+      snapshot.push({
+        id: `bus-${routeId}-active`,
+        route_id: routeId,
         lat: truncateGeo(sim?.lat ?? -1.9536, 5),
         lon: truncateGeo(sim?.lon ?? 30.0605, 5),
         brg: sim?.brg ?? 0,
         spd: sim?.spd ?? 0,
         occupancy: i % 3 === 0 ? 'full' : 'standing_room_only',
         live: false,
-      }
+      })
     })
 
     this.lastSnapshot = snapshot

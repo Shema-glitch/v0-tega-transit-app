@@ -25,7 +25,13 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const id = data.vehicle_id ?? `${data.client_id}-${Date.now()}`
+    // Store key: reporter + type + route. Keying by vehicle_id alone made
+    // every anonymous report (vehicle_id "crowd-anonymous") from every user
+    // land on the SAME map key, so each new report deleted the previous one
+    // system-wide. Same reporter re-reporting the same thing on the same
+    // route still updates in place rather than duplicating.
+    const routeKey = data.route_id ? bareRouteId(data.route_id) : 'general'
+    const id = `${data.vehicle_id ?? data.client_id}-${incidentType}-${routeKey}`
 
     LiveVehicleStore.reportIncident({
       id,

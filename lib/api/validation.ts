@@ -37,6 +37,13 @@ export const VehicleSchema = z.object({
   plate: z.string().optional(),
   operator: z.string().optional(),
   driver: z.string().optional(),
+  // Crowdsourced-vs-simulated, and journey scoping (first broadcast only)
+  live: z.boolean().optional(),
+  direction_id: z.number().int().min(0).max(1).optional(),
+  destination_stop_id: z.string().optional(),
+  // How many commuters are currently broadcasting from this physical bus —
+  // co-riding broadcasters are clustered into one vehicle server-side
+  reporters: z.number().int().positive().optional(),
 })
 
 // Status/Telemetry Validation

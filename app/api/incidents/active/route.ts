@@ -14,6 +14,11 @@ import { CORS, corsPreflight } from '@/lib/api/cors'
 
 export async function GET() {
   const incidents = LiveVehicleStore.getIncidents().map((inc) => ({
+    // Same id + reportedAt (ms) the SSE incident:alert frames carry, so a
+    // client that merges this snapshot with the live stream dedups the same
+    // incident to ONE entry instead of deriving a second identity for it.
+    id: inc.id,
+    reportedAt: inc.reportedAt,
     vehicle_id: inc.vehicle_id,
     route_id: inc.route_id,
     type: inc.type,

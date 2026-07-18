@@ -15,10 +15,17 @@
  *   event: message    → { type: 'viewer:counts', counts: Record<routeId, number> }
  *   event: message    → { type: 'incident:alert', incidents: [...] }
  *   event: message    → { type: 'system:maintenance', flags: [{feature, reason, since}] }
+ *
+ * Optional scoping params (reduce clutter for a rider waiting at a stop):
+ *   ?routes=101,105  → vehicle + incident frames only for these routes
+ *                      (incidents without a route are always included)
+ *   ?direction=0|1   → additionally hide vehicles explicitly tagged with the
+ *                      OTHER direction (untagged vehicles still stream)
+ * Omit both for the original everything-in-region behavior.
  */
 
 import { NextRequest } from 'next/server'
-import { haversineMeters } from '@/lib/api/geo'
+import { haversineMeters, bareRouteId } from '@/lib/api/geo'
 import { TelemetryService } from '@/lib/api/telemetry.service'
 import { Vehicle } from '@/lib/api/validation'
 import { LiveVehicleStore } from '@/lib/api/live-store'
@@ -50,6 +57,14 @@ export async function GET(request: NextRequest) {
   const userLng = Number.isFinite(rawLng) ? rawLng : DEFAULT_LNG
   const radius = parseFloat(searchParams.get('radius') || String(DEFAULT_RADIUS))
 
+  // Optional scoping: only stream what this rider actually cares about
+  const routesParam = searchParams.get('routes')
+  const routeFilter: Set<string> | null = routesParam
+    ? new Set(routesParam.split(',').map((r) => bareRouteId(r.trim())).filter(Boolean))
+    : null
+  const rawDirection = searchParams.get('direction')
+  const directionFilter = rawDirection === '0' || rawDirection === '1' ? Number(rawDirection) : null
+
   const encoder = new TextEncoder()
   const stream = new TransformStream()
   const writer = stream.writable.getWriter()
@@ -80,6 +95,18 @@ export async function GET(request: NextRequest) {
       const updates: Partial<Vehicle>[] = []
 
       for (const v of vehicles) {
+        // Scoping: a rider watching route 101 direction 0 shouldn't get the
+        // whole city's buses. Vehicles without an explicit direction tag are
+        // never hidden by the direction filter — unknown ≠ irrelevant.
+        if (routeFilter && !routeFilter.has(v.route_id)) continue
+        if (
+          directionFilter !== null &&
+          v.direction_id !== undefined &&
+          v.direction_id !== directionFilter
+        ) {
+          continue
+        }
+
         const nextState: Vehicle = {
           id: v.id,
           route_id: v.route_id,
@@ -88,6 +115,7 @@ export async function GET(request: NextRequest) {
           brg: v.brg,
           spd: v.spd,
           occupancy: v.occupancy,
+          reporters: v.reporters,
         }
 
         const prevState = clientVehicleState.get(v.id)
@@ -96,9 +124,14 @@ export async function GET(request: NextRequest) {
         if (!prevState) {
           hasSignificantChange = true
         } else {
-          // Delta logic: only send if moved significantly or bearing changed drastically
+          // Delta logic: only send if moved significantly, bearing changed
+          // drastically, or the co-riding broadcaster count changed
           const movedMeters = haversineMeters(prevState.lat, prevState.lon, v.lat, v.lon)
-          if (movedMeters > 5 || Math.abs((prevState.brg ?? 0) - v.brg) > 5) {
+          if (
+            movedMeters > 5 ||
+            Math.abs((prevState.brg ?? 0) - v.brg) > 5 ||
+            prevState.reporters !== v.reporters
+          ) {
             hasSignificantChange = true
           }
         }
@@ -114,20 +147,24 @@ export async function GET(request: NextRequest) {
           brg: v.brg,
           spd: v.spd,
         }
+        if (v.reporters !== undefined) deltaPayload.reporters = v.reporters
 
         // Include static fields ONLY on the first broadcast to this client
         if (!prevState) {
           deltaPayload.route_id = v.route_id
           deltaPayload.occupancy = v.occupancy
+          deltaPayload.live = v.live
 
           // Track viewer for this route
           clientViewingRoutes.add(v.route_id)
           LiveVehicleStore.addViewer(v.route_id, clientId)
 
-          // Broadcaster-submitted vehicle info if available
+          // Broadcaster-submitted vehicle + journey info if available
           if (v.plate) deltaPayload.plate = v.plate
           if (v.operator) deltaPayload.operator = v.operator
           if (v.driver) deltaPayload.driver = v.driver
+          if (v.direction_id !== undefined) deltaPayload.direction_id = v.direction_id
+          if (v.destination_stop_id) deltaPayload.destination_stop_id = v.destination_stop_id
         }
 
         updates.push(deltaPayload)
@@ -145,10 +182,15 @@ export async function GET(request: NextRequest) {
         send({ type: 'viewer:counts', counts: viewerCounts, viewers: viewerCounts })
       }
 
-      // Active incidents within the client's region.
-      // Incidents without coordinates (e.g. "missing_stop" reports) have no
-      // location to filter by, so they're always included.
+      // Active incidents within the client's region (and route scope, when
+      // the client asked for one — a rider waiting on 101 shouldn't get 105's
+      // detour alerts). Incidents without coordinates (e.g. "missing_stop"
+      // reports) have no location to filter by, so they pass the region
+      // check; incidents without a route pass the route check.
       const relevantIncidents = LiveVehicleStore.getIncidents().filter((inc) => {
+        if (routeFilter && inc.route_id && !routeFilter.has(bareRouteId(inc.route_id))) {
+          return false
+        }
         if (inc.lat === undefined || inc.lon === undefined) return true
         return haversineMeters(userLat, userLng, inc.lat, inc.lon) <= radius
       })
@@ -157,6 +199,11 @@ export async function GET(request: NextRequest) {
         send({
           type: 'incident:alert',
           incidents: relevantIncidents.map((inc) => ({
+            // Server id + timestamp so clients can dedup/dismiss on a real
+            // identity instead of deriving one (a derived id made "dismiss"
+            // silently swallow every later incident of the same type).
+            id: inc.id,
+            reportedAt: inc.reportedAt,
             vehicle_id: inc.vehicle_id,
             route_id: inc.route_id,
             type: inc.type,

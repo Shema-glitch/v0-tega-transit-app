@@ -7,6 +7,9 @@ export interface LiveVehicle {
   speedKmh: number;
   lastPing: number; // timestamp
   heading?: number;
+  // Journey scoping — lets clients show only buses coming THEIR way
+  directionId?: number;
+  destinationStopId?: string;
   // Broadcaster-submitted vehicle info
   plate?: string;
   occupancy?: string;

@@ -12,6 +12,10 @@ const PingSchema = z.object({
   speed_kmh: z.number().min(0),
   heading: z.number().optional(),
   timestamp: z.string().datetime().optional(),
+  // Journey scoping (optional): which way the bus is heading, so waiting
+  // riders can be shown only buses coming toward THEM
+  direction_id: z.number().int().min(0).max(1).optional(),
+  destination_stop_id: z.string().max(64).optional(),
   // Broadcaster-submitted vehicle info
   plate: z.string().max(20).optional(),
   occupancy: z.enum(['empty', 'seats', 'standing', 'packed']).optional(),
@@ -43,6 +47,8 @@ export async function POST(request: NextRequest) {
       lng: data.longitude,
       speedKmh: data.speed_kmh,
       heading: data.heading || 0,
+      directionId: data.direction_id,
+      destinationStopId: data.destination_stop_id,
       plate: data.plate,
       occupancy: data.occupancy,
       operator: data.operator,

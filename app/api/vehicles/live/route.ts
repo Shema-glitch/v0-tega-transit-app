@@ -33,6 +33,13 @@ async function handleGet() {
         brg: v.brg,
         spd: v.spd,
         occupancy: v.occupancy,
+        live: v.live,
+        reporters: v.reporters,
+        direction_id: v.direction_id,
+        destination_stop_id: v.destination_stop_id,
+        plate: v.plate,
+        operator: v.operator,
+        driver: v.driver,
       })
     )
 
