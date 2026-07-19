@@ -56,4 +56,9 @@ describe('middleware rate limiting', () => {
     expect(last!.status).toBe(429)
     expect(last!.headers.get('retry-after')).toBeTruthy()
   })
+
+  it('applies the write budget (30/min) to /api/feedback/report too', () => {
+    const res = middleware(req({ method: 'POST', path: '/api/feedback/report' }))
+    expect(res.headers.get('x-ratelimit-limit')).toBe('30')
+  })
 })
