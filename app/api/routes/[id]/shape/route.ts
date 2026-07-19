@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase-server'
 import { CacheService } from '@/lib/api/cache.service'
+import { ErrorLog } from '@/lib/api/error-log'
 
 const CORS: HeadersInit = {
   'Access-Control-Allow-Origin': '*',
@@ -176,6 +177,13 @@ export async function GET(
     )
   } catch (err) {
     console.error('[GET /api/routes/[id]/shape] Unexpected error:', err)
+    ErrorLog.record({
+      path: '/api/routes/{id}/shape',
+      method: 'GET',
+      status: 500,
+      message: err instanceof Error ? err.message : 'Unknown error',
+      details: { routeId },
+    })
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500, headers: CORS }

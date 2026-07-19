@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { LiveVehicleStore } from '@/lib/api/live-store'
 import { bareRouteId } from '@/lib/api/geo'
+import { ErrorLog } from '@/lib/api/error-log'
 import { z } from 'zod'
+
+const PATH = '/api/realtime/broadcast'
 
 const PingSchema = z.object({
   vehicle_id: z.string(),
@@ -29,13 +32,15 @@ export async function POST(request: NextRequest) {
     const parsed = PingSchema.safeParse(body)
     
     if (!parsed.success) {
+      ErrorLog.record({ path: PATH, method: 'POST', status: 400, message: 'Invalid ping payload', details: parsed.error.format() })
       return NextResponse.json({ error: 'Invalid payload', details: parsed.error.format() }, { status: 400 })
     }
-    
+
     const data = parsed.data
-    
+
     // Validate speed (reject impossible speeds > 120 km/h to prevent spoofing)
     if (data.speed_kmh > 120) {
+      ErrorLog.record({ path: PATH, method: 'POST', status: 422, message: `Speed anomaly rejected: ${data.speed_kmh} km/h`, details: { vehicle_id: data.vehicle_id, route_id: data.route_id } })
       return NextResponse.json({ error: 'Speed anomaly detected. Ping rejected.' }, { status: 422 })
     }
 
@@ -58,6 +63,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, status: 'Ingested' })
   } catch (error) {
     console.error('Broadcast API Error:', error)
+    ErrorLog.record({ path: PATH, method: 'POST', status: 500, message: error instanceof Error ? error.message : 'Unknown error' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

@@ -29,6 +29,7 @@ const ENDPOINTS: EndpointDef[] = [
   { group: 'System', method: 'GET', path: '/api/status', testPath: '/api/status', description: 'System status with SSE telemetry' },
   { group: 'System', method: 'GET', path: '/api/diagnostics', testPath: '/api/diagnostics', description: 'Per-vehicle health of crowdsourced pings' },
   { group: 'System', method: 'GET', path: '/api/admin/maintenance', testPath: '/api/admin/maintenance', description: 'Active maintenance flags (toggle via the 🛠 button per row)' },
+  { group: 'System', method: 'GET', path: '/api/errors', testPath: '/api/errors', description: 'Recent endpoint failures ledger (shows in the panel above when non-empty)' },
 
   // Stops & arrivals
   { group: 'Stops & Arrivals', method: 'GET', path: '/api/stops?lat&lng&radius&limit', testPath: '/api/stops?lat=-1.9403&lng=30.0618&radius=3000&limit=5', description: 'Deduplicated stops with optional proximity sort (cached)' },
@@ -112,6 +113,18 @@ interface MaintenanceFlag {
   since: number
 }
 
+// Mirrors lib/api/error-log.ts ErrorEntry — the recent-failures ledger.
+interface ErrorEntry {
+  path: string
+  method: string
+  status: number
+  message: string
+  details?: string
+  count: number
+  firstAt: number
+  lastAt: number
+}
+
 // ─── SSE live diagnostic ──────────────────────────────────────────────────────
 // The frontend consumes one long-lived SSE connection carrying several event
 // types multiplexed by a `type` field. When the app "feels dead," the useful
@@ -165,6 +178,7 @@ export default function StatusPage() {
   const [injecting, setInjecting] = useState(false)
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
   const [maintenance, setMaintenance] = useState<MaintenanceFlag[]>([])
+  const [errors, setErrors] = useState<ErrorEntry[]>([])
 
   const refreshMaintenance = useCallback(async () => {
     try {
@@ -173,6 +187,27 @@ export default function StatusPage() {
       setMaintenance(data.flags ?? [])
     } catch { /* dashboard still works without this */ }
   }, [])
+
+  const refreshErrors = useCallback(async () => {
+    try {
+      const res = await fetch('/api/errors', { cache: 'no-store' })
+      const data = await res.json()
+      setErrors(data.errors ?? [])
+    } catch { /* dashboard still works without this */ }
+  }, [])
+
+  const clearErrors = useCallback(async () => {
+    const token = sessionStorage.getItem('admin-token') || window.prompt('Admin token (ADMIN_TOKEN env var):') || ''
+    if (!token) return
+    sessionStorage.setItem('admin-token', token)
+    const res = await fetch('/api/errors', { method: 'DELETE', headers: { 'x-admin-token': token } })
+    if (res.status === 401) {
+      sessionStorage.removeItem('admin-token')
+      window.alert('Wrong admin token.')
+      return
+    }
+    refreshErrors()
+  }, [refreshErrors])
 
   const toggleMaintenance = useCallback(async (ep: EndpointDef, isActive: boolean) => {
     const token = sessionStorage.getItem('admin-token') || window.prompt('Admin token (ADMIN_TOKEN env var):') || ''
@@ -326,7 +361,12 @@ export default function StatusPage() {
   useEffect(() => {
     runAll()
     refreshMaintenance()
-  }, [runAll, refreshMaintenance])
+    refreshErrors()
+    // Poll the error ledger so a failure that happens while the dashboard is
+    // open surfaces on its own, without a manual refresh.
+    const id = setInterval(refreshErrors, 15_000)
+    return () => clearInterval(id)
+  }, [runAll, refreshMaintenance, refreshErrors])
 
   const health = results['/api/health']
   const overall =
@@ -436,6 +476,66 @@ export default function StatusPage() {
           </div>
         )}
       </header>
+
+      {/* Recent errors ledger — the "what broke while I was away" panel.
+          Only rendered when there's something to show. */}
+      {errors.length > 0 && (
+        <section className="mb-6">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--err)' }}>
+              ⚠ Recent errors ({errors.length})
+            </h2>
+            <button
+              onClick={clearErrors}
+              className="cursor-pointer rounded border px-2 py-0.5 text-xs hover:opacity-80"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
+            >
+              Clear
+            </button>
+          </div>
+          <div className="overflow-hidden rounded border" style={{ borderColor: 'var(--err)' }}>
+            {errors.map((e, i) => {
+              const agoSec = Math.floor((now - e.lastAt) / 1000)
+              const ago =
+                agoSec < 60 ? `${agoSec}s ago`
+                : agoSec < 3600 ? `${Math.floor(agoSec / 60)}m ago`
+                : `${Math.floor(agoSec / 3600)}h ago`
+              return (
+                <div
+                  key={e.path + e.status + e.message}
+                  className="px-3 py-2 text-xs"
+                  style={{
+                    background: 'var(--surface)',
+                    borderBottom: i < errors.length - 1 ? '1px solid var(--border)' : undefined,
+                  }}
+                >
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="font-bold" style={{ color: e.status >= 500 ? 'var(--err)' : 'var(--warn)' }}>
+                      {e.status}
+                    </span>
+                    <code style={{ color: 'var(--accent)' }}>{e.method} {e.path}</code>
+                    <span style={{ color: 'var(--text-dim)' }}>{ago}</span>
+                    {e.count > 1 && (
+                      <span className="rounded px-1.5 font-bold" style={{ background: 'color-mix(in srgb, var(--err) 15%, transparent)', color: 'var(--err)' }}>
+                        ×{e.count}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1" style={{ color: 'var(--text)' }}>{e.message}</div>
+                  {e.details && (
+                    <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all" style={{ color: 'var(--text-dim)' }}>
+                      {e.details}
+                    </pre>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <p className="mt-1.5 text-xs" style={{ color: 'var(--text-dim)' }}>
+            In-memory since last restart — clears on redeploy. Auto-refreshes every 15s.
+          </p>
+        </section>
+      )}
 
       {/* Endpoint groups */}
       {GROUPS.map((group) => (

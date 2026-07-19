@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { SpatialService } from '@/lib/api/spatial.service'
 import { SearchSuggestSchema } from '@/lib/api/validation'
 import { CacheService } from '@/lib/api/cache.service'
+import { ErrorLog } from '@/lib/api/error-log'
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('Search API Error:', error)
+    ErrorLog.record({ path: '/api/search/suggest', method: 'GET', status: 500, message: error instanceof Error ? error.message : 'Unknown error' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

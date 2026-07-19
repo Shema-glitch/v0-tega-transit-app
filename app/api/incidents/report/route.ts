@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { LiveVehicleStore } from '@/lib/api/live-store'
 import { IncidentSchema } from '@/lib/api/validation'
 import { bareRouteId } from '@/lib/api/geo'
+import { ErrorLog } from '@/lib/api/error-log'
+
+const PATH = '/api/incidents/report'
 
 // Types we actively route/display differently. Anything else is still
 // accepted and stored — see docs/BACKEND_HANDOFF.md #7.
@@ -13,6 +16,7 @@ export async function POST(request: NextRequest) {
     const parsed = IncidentSchema.safeParse(body)
 
     if (!parsed.success) {
+      ErrorLog.record({ path: PATH, method: 'POST', status: 400, message: 'Invalid incident payload', details: parsed.error.format() })
       return NextResponse.json({ error: 'Invalid payload', details: parsed.error.format() }, { status: 400 })
     }
 
@@ -48,6 +52,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, status: 'Incident Reported' })
   } catch (error) {
     console.error('Incident API Error:', error)
+    ErrorLog.record({ path: PATH, method: 'POST', status: 500, message: error instanceof Error ? error.message : 'Unknown error' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

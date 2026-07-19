@@ -24,6 +24,7 @@ import { CacheService } from '@/lib/api/cache.service'
 import { LiveVehicleStore } from '@/lib/api/live-store'
 import { haversineMeters } from '@/lib/api/geo'
 import { findStopIdsNear } from '@/lib/api/stops-cache'
+import { ErrorLog } from '@/lib/api/error-log'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 import { withLatencyTracking } from '@/lib/api/telemetry.service'
 
@@ -231,6 +232,7 @@ async function handleGet(
     )
   } catch (err) {
     console.error('[GET /api/stops/[id]/arrivals] Unexpected error:', err)
+    ErrorLog.record({ path: '/api/stops/{id}/arrivals', method: 'GET', status: 500, message: err instanceof Error ? err.message : 'Unknown error' })
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500, headers: CORS }

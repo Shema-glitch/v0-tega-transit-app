@@ -12,6 +12,7 @@ import { CacheService } from '@/lib/api/cache.service'
 import { realtimeHub } from '@/lib/api/realtime-hub'
 import { withLatencyTracking } from '@/lib/api/telemetry.service'
 import { bareRouteId } from '@/lib/api/geo'
+import { ErrorLog } from '@/lib/api/error-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,6 +79,7 @@ async function handleGet(request: NextRequest) {
     )
   } catch (error) {
     console.error('Vehicles API Error:', error)
+    ErrorLog.record({ path: '/api/vehicles/live', method: 'GET', status: 500, message: error instanceof Error ? error.message : 'Unknown error' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

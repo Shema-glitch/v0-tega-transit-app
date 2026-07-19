@@ -4,11 +4,16 @@ import { CacheService } from '@/lib/api/cache.service'
 import { supabase } from '@/lib/supabase'
 import { TelemetryService } from '@/lib/api/telemetry.service'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
+import { ErrorLog } from '@/lib/api/error-log'
 
 export async function GET() {
   try {
     // Check DB connection via a quick health ping
     const { error: dbError } = await supabase.from('stops').select('stop_id').limit(1)
+
+    if (dbError) {
+      ErrorLog.record({ path: '/api/status', method: 'GET', status: 503, message: `Database unreachable: ${dbError.message}` })
+    }
     
     const statusData = {
       status: dbError ? 'degraded' : 'healthy',
@@ -34,6 +39,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Status API Error:', error)
+    ErrorLog.record({ path: '/api/status', method: 'GET', status: 500, message: error instanceof Error ? error.message : 'Unknown error' })
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

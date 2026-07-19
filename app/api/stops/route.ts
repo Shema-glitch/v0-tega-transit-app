@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getCanonicalStops } from '@/lib/api/stops-cache'
+import { ErrorLog } from '@/lib/api/error-log'
 import { haversineMeters } from '@/lib/api/geo'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 import { withLatencyTracking } from '@/lib/api/telemetry.service'
@@ -77,6 +78,7 @@ async function handleGet(request: NextRequest) {
     })
   } catch (err) {
     console.error('[GET /api/stops] Unexpected error:', err)
+    ErrorLog.record({ path: '/api/stops', method: 'GET', status: 500, message: err instanceof Error ? err.message : 'Unknown error' })
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500, headers: CORS }
