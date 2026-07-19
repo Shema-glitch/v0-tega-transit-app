@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
   if (TelemetryService.activeSSEConnections >= MAX_CONNECTIONS) {
     return new Response(JSON.stringify({ error: 'Too Many Connections' }), {
       status: 503,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 

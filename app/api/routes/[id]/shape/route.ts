@@ -17,7 +17,7 @@
  *  - 404  if the route exists but has no trips or shape data.
  *  - 500  on any database error.
  *
- * CORS is fully open.
+ * Access-Control-Allow-Origin is set by middleware.ts (allowlisted, not open).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -26,7 +26,6 @@ import { CacheService } from '@/lib/api/cache.service'
 import { ErrorLog } from '@/lib/api/error-log'
 
 const CORS: HeadersInit = {
-  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }

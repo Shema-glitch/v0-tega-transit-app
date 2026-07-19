@@ -14,13 +14,14 @@ const nextConfig = {
   async headers() {
     return [
       {
-        // Apply permissive CORS to all API routes so any frontend origin
-        // (Vite dev, Vercel preview, Render, mobile) is never blocked.
+        // Access-Control-Allow-Origin is NOT set here — middleware.ts sets it
+        // dynamically per-request (reflecting an allowlisted origin only,
+        // see FRONTEND_ORIGIN), so a wildcard here can't reopen the API to
+        // any site. Methods/Headers don't vary per-request, so they stay static.
         source: "/api/:path*",
         headers: [
-          { key: "Access-Control-Allow-Origin", value: "*" },
           { key: "Access-Control-Allow-Methods", value: "GET,HEAD,OPTIONS,POST,PUT,PATCH,DELETE" },
-          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, X-Requested-With, Accept, Accept-Version, X-Api-Version" },
+          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, X-Requested-With, Accept, Accept-Version, X-Api-Version, X-Admin-Token" },
         ]
       }
     ]

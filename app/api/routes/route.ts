@@ -7,14 +7,13 @@
  *   Array of route objects with id, shortName, longName, color, textColor.
  *
  * Always returns 200. Empty array if no routes are in the database.
- * CORS is fully open.
+ * Access-Control-Allow-Origin is set by middleware.ts (allowlisted, not open).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase-server'
 
 const CORS: HeadersInit = {
-  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
