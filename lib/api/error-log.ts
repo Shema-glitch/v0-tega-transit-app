@@ -38,6 +38,9 @@ export interface ErrorEntry {
 
 const MAX_ENTRIES = 50
 const MAX_DETAILS_CHARS = 1000
+// Matches the retention period stated in the privacy policy.
+const RETENTION_DAYS = 90
+const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 class ErrorLogger {
   private entries = new Map<string, ErrorEntry>()
@@ -145,6 +148,17 @@ class ErrorLogger {
     }
   }
 
+  /** Best-effort durable prune of rows older than `days` (see 0002_api_errors_retention.sql). */
+  async pruneOld(days = RETENTION_DAYS): Promise<void> {
+    try {
+      const supabase = getSupabaseServer()
+      await supabase.rpc('prune_api_errors', { p_days: days })
+    } catch {
+      // Supabase down or migration 0002 not run yet — nothing lost, just
+      // means rows keep accumulating until the next successful prune tick.
+    }
+  }
+
   /** Most-recently-seen first. */
   getAll(): ErrorEntry[] {
     return Array.from(this.entries.values()).sort((a, b) => b.lastAt - a.lastAt)
@@ -216,7 +230,15 @@ type GlobalWithLog = typeof globalThis & { [KEY]?: ErrorLogger }
 
 const g = globalThis as GlobalWithLog
 if (!g[KEY]) {
-  g[KEY] = new ErrorLogger()
+  const logger = new ErrorLogger()
+  g[KEY] = logger
+
+  // Self-scheduled retention: the app is a long-running Render process (not
+  // serverless), so a plain setInterval survives for the process lifetime —
+  // same assumption RealtimeHub's tick loop already relies on. No pg_cron or
+  // external scheduler needed.
+  void logger.pruneOld()
+  setInterval(() => void logger.pruneOld(), PRUNE_INTERVAL_MS).unref()
 }
 
 export const ErrorLog: ErrorLogger = g[KEY]!

@@ -62,4 +62,8 @@ describe('ErrorLog (Supabase unreachable — in-memory fallback)', () => {
     ErrorLog.clear()
     expect(ErrorLog.size).toBe(0)
   })
+
+  it('pruneOld() never throws when Supabase is unreachable (fire-and-forget)', async () => {
+    await expect(ErrorLog.pruneOld()).resolves.toBeUndefined()
+  })
 })
