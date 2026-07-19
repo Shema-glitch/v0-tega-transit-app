@@ -1,7 +1,7 @@
 @import './tega-clay-tokens.css';
 @import 'tailwindcss';
 
-/* Dashboard palette — remapped onto the Tega claymorphism tokens above
+/* Dashboard palette — remapped onto the BusGo Track claymorphism tokens above
    (docs/DESIGN_TOKENS.md) so the existing --bg/--surface/... usage in
    app/page.tsx picks up the shared look without a rewrite. */
 :root {

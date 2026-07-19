@@ -1,4 +1,4 @@
-# Tega Transit API Deployment Guide
+# BusGo Track API Deployment Guide
 
 Since this backend is built with Next.js, it is highly optimized for deployment. I have already configured the codebase with `output: 'standalone'` in your `next.config.mjs` and created a `render.yaml` file, so deployment will be essentially plug-and-play.
 

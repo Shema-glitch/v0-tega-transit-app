@@ -2,9 +2,9 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Tega Transit API — Status',
+  title: 'BusGo Track API — Status',
   description:
-    'Developer status page for the Tega transit API: GTFS stops, routes, arrivals, and realtime vehicle streaming for Kigali.',
+    'Developer status page for the BusGo Track API: GTFS stops, routes, arrivals, and realtime vehicle streaming for Kigali.',
   icons: {
     icon: '/icon.svg',
   },

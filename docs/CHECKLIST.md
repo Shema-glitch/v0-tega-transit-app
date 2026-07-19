@@ -1,4 +1,4 @@
-# Tega - BusGo Track Implementation Checklist v2.0
+# BusGo Track Implementation Checklist v2.0
 
 Use this checklist to verify all PRD requirements have been implemented.
 

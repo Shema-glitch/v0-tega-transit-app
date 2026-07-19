@@ -1,6 +1,6 @@
 {
-  "name": "Tega",
-  "short_name": "Tega",
+  "name": "BusGo Track",
+  "short_name": "BusGo Track",
   "description": "Real-time bus tracking for Kigali commuters",
   "start_url": "/",
   "display": "standalone",

@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Developer status page for the Tega Transit API.
+ * Developer status page for the BusGo Track API.
  *
  * This repo is API-only — the production frontend lives in a separate
  * repository. This page exists so a developer hitting the deployment root
@@ -383,7 +383,7 @@ export default function StatusPage() {
       <header className="mb-8">
         <div className="flex items-center gap-3">
           <span className="text-2xl" style={{ color: 'var(--accent)' }}>▍</span>
-          <h1 className="text-xl font-bold tracking-tight">Tega Transit API</h1>
+          <h1 className="text-xl font-bold tracking-tight">BusGo Track API</h1>
           <span
             className="rounded px-2 py-0.5 text-xs font-bold"
             style={{ background: 'color-mix(in srgb, ' + overall.color + ' 15%, transparent)', color: overall.color }}
@@ -656,7 +656,7 @@ export default function StatusPage() {
       ))}
 
       <footer className="mt-10 text-center text-xs" style={{ color: 'var(--text-dim)' }}>
-        Tega Transit API · GTFS data: Kigali · SSE stream at <code>/api/realtime/sse</code>
+        BusGo Track API · GTFS data: Kigali · SSE stream at <code>/api/realtime/sse</code>
       </footer>
     </main>
   )

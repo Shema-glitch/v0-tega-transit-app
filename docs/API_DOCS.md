@@ -1,10 +1,10 @@
-# Tega Transit API Documentation (v3.0)
+# BusGo Track API Documentation (v3.0)
 
 > **Base URL**  
 > Local: `http://localhost:3000/api`  
 > Production: `https://tega-transit-api.onrender.com/api`
 
-This is the complete reference for the Tega Transit backend API. Every endpoint is documented with its purpose, expected inputs, outputs, and practical coding advice.
+This is the complete reference for the BusGo Track backend API. Every endpoint is documented with its purpose, expected inputs, outputs, and practical coding advice.
 
 ---
 

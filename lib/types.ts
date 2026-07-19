@@ -1,4 +1,4 @@
-// Types for Tega transit app
+// Types for the BusGo Track transit app
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low'
 

@@ -1,4 +1,4 @@
-# TegaBus Backend Evolution Blueprint
+# BusGo Track Backend Evolution Blueprint
 
 To fully unlock the frontend features we've built (like the Route Timeline, the Map Hubs, and the Crowdsourcing Toggle), the backend needs to evolve to provide the following endpoints and logic. 
 
