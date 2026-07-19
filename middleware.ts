@@ -1,5 +1,5 @@
 /**
- * Runs in front of every /api/* request. Two jobs:
+ * Runs in front of every /api/* request. Three jobs:
  *
  * 1. CORS allowlisting — reflects Access-Control-Allow-Origin only for the
  *    deployed frontend (FRONTEND_ORIGIN) and its Vercel preview deploys
@@ -16,6 +16,11 @@
  *    real distributed (multi-IP) DDoS — that needs a CDN/WAF (e.g.
  *    Cloudflare) in front of Render, not application code.
  *
+ * 3. Maintenance enforcement — the admin dashboard (/admin) can flip an
+ *    endpoint off (lib/api/endpoint-registry.ts + MaintenanceStore). This is
+ *    what actually makes that real: a disabled endpoint gets a 503 here,
+ *    before the route handler ever runs. See docs/ADMIN_DASHBOARD_PRD.md §4.
+ *
  * Runs on the Node.js runtime (not edge) so it shares the same in-memory
  * globalThis singleton the route handlers use for everything else.
  */
@@ -23,6 +28,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { RateLimiterStore } from '@/lib/api/rate-limiter'
 import { ErrorLog } from '@/lib/api/error-log'
+import { findEndpoint } from '@/lib/api/endpoint-registry'
+import { MaintenanceStore } from '@/lib/api/maintenance-store'
 
 export const config = {
   matcher: '/api/:path*',
@@ -70,6 +77,21 @@ export function middleware(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname
+
+  // Maintenance kill switch — checked before rate limiting so a disabled
+  // endpoint doesn't even spend the caller's rate-limit budget.
+  const endpoint = findEndpoint(path, request.method)
+  if (endpoint) {
+    const flags = MaintenanceStore.getAll()
+    const flag = flags.find((f) => f.feature === endpoint.id)
+    if (flag) {
+      return NextResponse.json(
+        { error: 'Endpoint temporarily disabled', reason: flag.reason, since: flag.since },
+        { status: 503, headers: corsHeaders }
+      )
+    }
+  }
+
   const isWrite = WRITE_PREFIXES.some((p) => path.startsWith(p))
   const limit = isWrite ? WRITE_LIMIT : READ_LIMIT
   const key = `${clientIp(request)}:${isWrite ? path : path.split('/').slice(0, 4).join('/')}`

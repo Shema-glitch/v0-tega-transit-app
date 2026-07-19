@@ -28,9 +28,9 @@ const ENDPOINTS: EndpointDef[] = [
   { group: 'System', method: 'GET', path: '/api/health', testPath: '/api/health', description: 'Liveness + database connectivity' },
   { group: 'System', method: 'GET', path: '/api/status', testPath: '/api/status', description: 'System status with SSE telemetry' },
   { group: 'System', method: 'GET', path: '/api/diagnostics', testPath: '/api/diagnostics', description: 'Per-vehicle health of crowdsourced pings' },
-  { group: 'System', method: 'GET', path: '/api/admin/maintenance', testPath: '/api/admin/maintenance', description: 'Active maintenance flags (toggle via the 🛠 button per row)' },
-  { group: 'System', method: 'GET', path: '/api/errors', testPath: '/api/errors', description: 'Recent endpoint failures ledger (shows in the panel above when non-empty)' },
-  { group: 'System', method: 'POST', path: '/api/feedback/report', testPath: '/api/feedback/report', description: 'Rider bug-report submission (public, no auth) — view results in the panel above', body: { subject: 'Test report', message: 'This is a test bug report from the dashboard.', pageUrl: 'https://bus-go-track.vercel.app/' } },
+  { group: 'System', method: 'GET', path: '/api/admin/maintenance', testPath: '/api/admin/maintenance', description: 'Active maintenance flags (toggle from /admin)' },
+  { group: 'System', method: 'GET', path: '/api/errors', testPath: '/api/errors', description: 'Recent endpoint failures ledger (shows in the panel above when non-empty; manage from /admin)' },
+  { group: 'System', method: 'POST', path: '/api/feedback/report', testPath: '/api/feedback/report', description: 'Rider bug-report submission (public, no auth) — view + resolve from /admin', body: { subject: 'Test report', message: 'This is a test bug report from the dashboard.', pageUrl: 'https://bus-go-track.vercel.app/' } },
 
   // Stops & arrivals
   { group: 'Stops & Arrivals', method: 'GET', path: '/api/stops?lat&lng&radius&limit', testPath: '/api/stops?lat=-1.9403&lng=30.0618&radius=3000&limit=5', description: 'Deduplicated stops with optional proximity sort (cached)' },
@@ -126,17 +126,6 @@ interface ErrorEntry {
   lastAt: number
 }
 
-// Mirrors lib/api/bug-reports.ts BugReport — rider-submitted feedback.
-interface BugReportEntry {
-  id: string
-  subject: string
-  message: string
-  pageUrl?: string
-  userAgent?: string
-  status: 'open' | 'resolved'
-  createdAt: number
-}
-
 // ─── SSE live diagnostic ──────────────────────────────────────────────────────
 // The frontend consumes one long-lived SSE connection carrying several event
 // types multiplexed by a `type` field. When the app "feels dead," the useful
@@ -192,9 +181,6 @@ export default function StatusPage() {
   const [maintenance, setMaintenance] = useState<MaintenanceFlag[]>([])
   const [errors, setErrors] = useState<ErrorEntry[]>([])
   const [errorSource, setErrorSource] = useState<'supabase' | 'memory'>('memory')
-  const [bugReports, setBugReports] = useState<BugReportEntry[]>([])
-  const [bugReportsSource, setBugReportsSource] = useState<'supabase' | 'memory'>('memory')
-  const [bugReportsUnlocked, setBugReportsUnlocked] = useState(false)
 
   const refreshMaintenance = useCallback(async () => {
     try {
@@ -212,91 +198,6 @@ export default function StatusPage() {
       setErrorSource(data.source === 'supabase' ? 'supabase' : 'memory')
     } catch { /* dashboard still works without this */ }
   }, [])
-
-  const clearErrors = useCallback(async () => {
-    const token = sessionStorage.getItem('admin-token') || window.prompt('Admin token (ADMIN_TOKEN env var):') || ''
-    if (!token) return
-    sessionStorage.setItem('admin-token', token)
-    const res = await fetch('/api/errors', { method: 'DELETE', headers: { 'x-admin-token': token } })
-    if (res.status === 401) {
-      sessionStorage.removeItem('admin-token')
-      window.alert('Wrong admin token.')
-      return
-    }
-    refreshErrors()
-  }, [refreshErrors])
-
-  // Bug reports are admin-only to READ (they can carry incidental PII like
-  // page URL / user agent), so this silently no-ops without a stored token
-  // instead of prompting on every page load — it only actually fetches once
-  // the admin has unlocked the panel (or already did earlier this session).
-  const refreshBugReports = useCallback(async (tokenOverride?: string) => {
-    const token = tokenOverride || sessionStorage.getItem('admin-token')
-    if (!token) return
-    try {
-      const res = await fetch('/api/feedback', { cache: 'no-store', headers: { 'x-admin-token': token } })
-      if (res.status === 401) {
-        setBugReportsUnlocked(false)
-        return
-      }
-      const data = await res.json()
-      setBugReports(data.reports ?? [])
-      setBugReportsSource(data.source === 'supabase' ? 'supabase' : 'memory')
-      setBugReportsUnlocked(true)
-    } catch { /* dashboard still works without this */ }
-  }, [])
-
-  const unlockBugReports = useCallback(async () => {
-    const token = sessionStorage.getItem('admin-token') || window.prompt('Admin token (ADMIN_TOKEN env var):') || ''
-    if (!token) return
-    sessionStorage.setItem('admin-token', token)
-    await refreshBugReports(token)
-  }, [refreshBugReports])
-
-  const clearBugReports = useCallback(async () => {
-    const token = sessionStorage.getItem('admin-token') || window.prompt('Admin token (ADMIN_TOKEN env var):') || ''
-    if (!token) return
-    sessionStorage.setItem('admin-token', token)
-    const res = await fetch('/api/feedback', { method: 'DELETE', headers: { 'x-admin-token': token } })
-    if (res.status === 401) {
-      sessionStorage.removeItem('admin-token')
-      window.alert('Wrong admin token.')
-      return
-    }
-    refreshBugReports(token)
-  }, [refreshBugReports])
-
-  const resolveBugReport = useCallback(async (id: string) => {
-    const token = sessionStorage.getItem('admin-token') || window.prompt('Admin token (ADMIN_TOKEN env var):') || ''
-    if (!token) return
-    sessionStorage.setItem('admin-token', token)
-    await fetch('/api/feedback', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
-      body: JSON.stringify({ id }),
-    })
-    refreshBugReports(token)
-  }, [refreshBugReports])
-
-  const toggleMaintenance = useCallback(async (ep: EndpointDef, isActive: boolean) => {
-    const token = sessionStorage.getItem('admin-token') || window.prompt('Admin token (ADMIN_TOKEN env var):') || ''
-    if (!token) return
-    sessionStorage.setItem('admin-token', token)
-
-    const reason = isActive ? undefined : window.prompt(`Reason for maintenance on ${ep.path}:`, 'Investigating an issue') || 'Under maintenance'
-
-    const res = await fetch('/api/admin/maintenance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
-      body: JSON.stringify({ feature: ep.path, reason, active: !isActive }),
-    })
-    if (res.status === 401) {
-      sessionStorage.removeItem('admin-token')
-      window.alert('Wrong admin token.')
-      return
-    }
-    refreshMaintenance()
-  }, [refreshMaintenance])
 
   const runCheck = useCallback(async (ep: EndpointDef) => {
     setResults((r) => ({ ...r, [ep.path]: { state: 'running' } }))
@@ -431,15 +332,11 @@ export default function StatusPage() {
     runAll()
     refreshMaintenance()
     refreshErrors()
-    refreshBugReports() // no-ops silently if not unlocked yet this session
-    // Poll the error ledger + (if unlocked) bug reports so anything new
-    // surfaces on its own, without a manual refresh.
-    const id = setInterval(() => {
-      refreshErrors()
-      refreshBugReports()
-    }, 15_000)
+    // Poll the error ledger so a failure that happens while the dashboard is
+    // open surfaces on its own, without a manual refresh.
+    const id = setInterval(refreshErrors, 15_000)
     return () => clearInterval(id)
-  }, [runAll, refreshMaintenance, refreshErrors, refreshBugReports])
+  }, [runAll, refreshMaintenance, refreshErrors])
 
   const health = results['/api/health']
   const overall =
@@ -452,21 +349,35 @@ export default function StatusPage() {
     <main className="mx-auto max-w-4xl px-4 py-10">
       {/* Header */}
       <header className="mb-8">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl" style={{ color: 'var(--accent)' }}>▍</span>
-          <h1 className="text-xl font-bold tracking-tight">BusGo Track API</h1>
-          <span
-            className="rounded px-2 py-0.5 text-xs font-bold"
-            style={{ background: 'color-mix(in srgb, ' + overall.color + ' 15%, transparent)', color: overall.color }}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl" style={{ color: 'var(--accent)' }}>▍</span>
+            <h1 className="text-xl font-bold tracking-tight">BusGo Track API</h1>
+            <span
+              className="rounded px-2 py-0.5 text-xs font-bold"
+              style={{ background: 'color-mix(in srgb, ' + overall.color + ' 15%, transparent)', color: overall.color }}
+            >
+              {overall.label}
+            </span>
+          </div>
+          <a
+            href="/admin"
+            className="shrink-0 rounded border px-2.5 py-1 text-xs font-semibold hover:opacity-80"
+            style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
           >
-            {overall.label}
-          </span>
+            Admin →
+          </a>
         </div>
         <p className="mt-2 text-sm" style={{ color: 'var(--text-dim)' }}>
           GTFS + realtime transit API for Kigali. The production frontend lives in a separate
           repository — this page is the developer status board.
           {checkedAt && <> Last checked {checkedAt}.</>}
         </p>
+        {maintenance.length > 0 && (
+          <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--warn)' }}>
+            ⚠ {maintenance.length} endpoint{maintenance.length > 1 ? 's' : ''} currently disabled — see /admin for details.
+          </p>
+        )}
         <div className="mt-4 flex gap-2">
           <button
             onClick={runAll}
@@ -558,13 +469,9 @@ export default function StatusPage() {
             <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--err)' }}>
               ⚠ Recent errors ({errors.length})
             </h2>
-            <button
-              onClick={clearErrors}
-              className="cursor-pointer rounded border px-2 py-0.5 text-xs hover:opacity-80"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
-            >
-              Clear
-            </button>
+            <a href="/admin" className="cursor-pointer rounded border px-2 py-0.5 text-xs hover:opacity-80" style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}>
+              Manage in /admin
+            </a>
           </div>
           <div className="overflow-hidden rounded border" style={{ borderColor: 'var(--err)' }}>
             {errors.map((e, i) => {
@@ -612,98 +519,6 @@ export default function StatusPage() {
         </section>
       )}
 
-      {/* Bug reports — rider feedback from the frontend's landing-page form,
-          POSTed to /api/feedback/report. Admin-only to read (may carry
-          incidental PII like page URL / user agent), so it stays locked
-          until you unlock it with the admin token. */}
-      <section className="mb-6">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--accent)' }}>
-            🐞 Bug reports {bugReportsUnlocked ? `(${bugReports.length})` : ''}
-          </h2>
-          {bugReportsUnlocked ? (
-            <button
-              onClick={clearBugReports}
-              className="cursor-pointer rounded border px-2 py-0.5 text-xs hover:opacity-80"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
-            >
-              Clear
-            </button>
-          ) : (
-            <button
-              onClick={unlockBugReports}
-              className="cursor-pointer rounded border px-2 py-0.5 text-xs hover:opacity-80"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
-            >
-              Unlock (admin)
-            </button>
-          )}
-        </div>
-
-        {!bugReportsUnlocked && (
-          <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
-            Requires the admin token to view — reports may include the page URL and browser of whoever submitted them.
-          </p>
-        )}
-
-        {bugReportsUnlocked && bugReports.length === 0 && (
-          <p className="text-xs" style={{ color: 'var(--text-dim)' }}>No reports yet.</p>
-        )}
-
-        {bugReportsUnlocked && bugReports.length > 0 && (
-          <>
-            <div className="overflow-hidden rounded border" style={{ borderColor: 'var(--accent)' }}>
-              {bugReports.map((r, i) => {
-                const agoSec = Math.floor((now - r.createdAt) / 1000)
-                const ago =
-                  agoSec < 60 ? `${agoSec}s ago`
-                  : agoSec < 3600 ? `${Math.floor(agoSec / 60)}m ago`
-                  : `${Math.floor(agoSec / 3600)}h ago`
-                return (
-                  <div
-                    key={r.id}
-                    className="px-3 py-2 text-xs"
-                    style={{
-                      background: 'var(--surface)',
-                      borderBottom: i < bugReports.length - 1 ? '1px solid var(--border)' : undefined,
-                      opacity: r.status === 'resolved' ? 0.5 : 1,
-                    }}
-                  >
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="font-bold" style={{ color: 'var(--text)' }}>{r.subject}</span>
-                      <span style={{ color: 'var(--text-dim)' }}>{ago}</span>
-                      {r.status === 'resolved' && (
-                        <span className="rounded px-1.5" style={{ background: 'color-mix(in srgb, var(--text-dim) 15%, transparent)', color: 'var(--text-dim)' }}>
-                          resolved
-                        </span>
-                      )}
-                      {r.status === 'open' && (
-                        <button
-                          onClick={() => resolveBugReport(r.id)}
-                          className="cursor-pointer rounded border px-1.5 hover:opacity-80"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
-                        >
-                          Mark resolved
-                        </button>
-                      )}
-                    </div>
-                    <div className="mt-1 whitespace-pre-wrap" style={{ color: 'var(--text)' }}>{r.message}</div>
-                    {r.pageUrl && (
-                      <div className="mt-1" style={{ color: 'var(--text-dim)' }}>from: {r.pageUrl}</div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <p className="mt-1.5 text-xs" style={{ color: 'var(--text-dim)' }}>
-              {bugReportsSource === 'supabase'
-                ? 'Durable (Supabase) — survives redeploys. Auto-refreshes every 15s.'
-                : 'In-memory only — clears on redeploy. Run supabase/migrations/0003_bug_reports.sql to persist. Auto-refreshes every 15s.'}
-            </p>
-          </>
-        )}
-      </section>
-
       {/* Endpoint groups */}
       {GROUPS.map((group) => (
         <section key={group} className="mb-6">
@@ -714,9 +529,8 @@ export default function StatusPage() {
             {ENDPOINTS.filter((e) => e.group === group).map((ep, i, arr) => {
               const r = results[ep.path] ?? { state: 'idle' as const }
               const isOpen = expanded === ep.path
-              const flag = maintenance.find((m) => m.feature === ep.path)
-              const label = flag ? 'MAINTENANCE' : statusLabel(r, !!ep.deprecated)
-              const dotColor = flag ? 'var(--text-dim)' : statusColor(r, !!ep.deprecated)
+              const label = statusLabel(r, !!ep.deprecated)
+              const dotColor = statusColor(r, !!ep.deprecated)
               return (
                 <div
                   key={ep.path}
@@ -748,28 +562,12 @@ export default function StatusPage() {
                         DEPRECATED
                       </span>
                     )}
-                    {flag && (
-                      <span
-                        className="hidden shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold sm:inline"
-                        style={{ background: 'color-mix(in srgb, var(--clay-yellow) 18%, transparent)', color: 'var(--color-warning)' }}
-                      >
-                        MAINTENANCE
-                      </span>
-                    )}
                     <span className="hidden shrink-0 text-xs sm:inline" style={{ color: 'var(--text-dim)' }}>
                       {r.state === 'done' && <>{r.status} · {r.latencyMs}ms</>}
                       {r.state === 'failed' && 'network error'}
                       {r.state === 'running' && '…'}
-                      {label && <> · <span style={{ color: flag ? 'var(--color-warning)' : dotColor, fontWeight: 700 }}>{label}</span></>}
+                      {label && <> · <span style={{ color: dotColor, fontWeight: 700 }}>{label}</span></>}
                     </span>
-                    <button
-                      onClick={() => toggleMaintenance(ep, !!flag)}
-                      className="shrink-0 cursor-pointer text-xs hover:opacity-80"
-                      style={{ color: flag ? 'var(--color-warning)' : 'var(--text-dim)' }}
-                      title={flag ? 'Clear maintenance flag' : 'Mark this endpoint under maintenance'}
-                    >
-                      🛠
-                    </button>
                     <button
                       onClick={() => runCheck(ep)}
                       className="shrink-0 cursor-pointer text-xs hover:opacity-80"
@@ -794,11 +592,6 @@ export default function StatusPage() {
                       {ep.deprecated && (
                         <p className="mt-1 font-semibold" style={{ color: 'var(--clay-terracotta-deep)' }}>
                           Deprecated — use <code>{ep.deprecated.replacement}</code> instead.
-                        </p>
-                      )}
-                      {flag && (
-                        <p className="mt-1 font-semibold" style={{ color: 'var(--color-warning)' }}>
-                          Under maintenance since {new Date(flag.since).toLocaleTimeString()} — {flag.reason}
                         </p>
                       )}
                       {r.preview && (
