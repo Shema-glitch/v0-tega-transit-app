@@ -6,21 +6,43 @@
  * Crowdsourced broadcaster pings take precedence; simulation fills the rest.
  */
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { VehicleSchema } from '@/lib/api/validation'
 import { CacheService } from '@/lib/api/cache.service'
 import { realtimeHub } from '@/lib/api/realtime-hub'
 import { withLatencyTracking } from '@/lib/api/telemetry.service'
+import { bareRouteId } from '@/lib/api/geo'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  return withLatencyTracking(handleGet)
+export async function GET(request: NextRequest) {
+  return withLatencyTracking(() => handleGet(request))
 }
 
-async function handleGet() {
+async function handleGet(request: NextRequest) {
   try {
-    const snapshot = realtimeHub.getSnapshot()
+    // Optional ?routes=101,105 and ?direction=0|1 — same scoping semantics
+    // as the SSE stream, so a client polling this as a stream fallback gets
+    // the same filtered view. Untagged vehicles pass the direction filter.
+    const routesParam = request.nextUrl.searchParams.get('routes')
+    const routeFilter: Set<string> | null = routesParam
+      ? new Set(routesParam.split(',').map((r) => bareRouteId(r.trim())).filter(Boolean))
+      : null
+    const rawDirection = request.nextUrl.searchParams.get('direction')
+    const directionFilter =
+      rawDirection === '0' || rawDirection === '1' ? Number(rawDirection) : null
+
+    const snapshot = realtimeHub.getSnapshot().filter((v) => {
+      if (routeFilter && !routeFilter.has(v.route_id)) return false
+      if (
+        directionFilter !== null &&
+        v.direction_id !== undefined &&
+        v.direction_id !== directionFilter
+      ) {
+        return false
+      }
+      return true
+    })
     const hasLive = snapshot.some((v) => v.live)
 
     // Validate through Zod
