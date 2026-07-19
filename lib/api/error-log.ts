@@ -11,10 +11,16 @@
  * with a `count` and `lastAt`, so a flapping endpoint reads as
  * "×47, 12s ago" instead of burying everything else.
  *
- * Same caveats as every other store here: in-memory, per-process, cleared on
- * redeploy/restart. It answers "what's failing right now", not "audit trail".
- * Persistence would be a Supabase table — a deliberately separate, bigger step.
+ * Durability: the in-memory ledger is the always-available fast path, and
+ * every record is ALSO written through to Supabase (public.api_errors via the
+ * log_api_error RPC — see supabase/migrations/0001_api_errors.sql) so it
+ * survives redeploys/restarts. The write is fire-and-forget: it never blocks
+ * the response and never throws, so a logging failure (or the table not
+ * existing yet) can't turn one error into two. Reads prefer the durable store
+ * and fall back to in-memory when Supabase is unreachable.
  */
+
+import { getSupabaseServer } from '../supabase-server'
 
 export interface ErrorEntry {
   /** Stable key: method + path + status + message. */
@@ -60,32 +66,82 @@ class ErrorLogger {
       existing.count++
       existing.lastAt = now
       if (details) existing.details = details
-      return
+    } else {
+      this.entries.set(key, {
+        key,
+        path: input.path,
+        method,
+        status: input.status,
+        message,
+        details,
+        count: 1,
+        firstAt: now,
+        lastAt: now,
+      })
+
+      // Evict the oldest (by lastAt) once we exceed the cap.
+      if (this.entries.size > MAX_ENTRIES) {
+        let oldestKey: string | null = null
+        let oldest = Infinity
+        for (const [k, e] of this.entries) {
+          if (e.lastAt < oldest) {
+            oldest = e.lastAt
+            oldestKey = k
+          }
+        }
+        if (oldestKey) this.entries.delete(oldestKey)
+      }
     }
 
-    this.entries.set(key, {
-      key,
-      path: input.path,
-      method,
-      status: input.status,
-      message,
-      details,
-      count: 1,
-      firstAt: now,
-      lastAt: now,
-    })
+    // Write through to the durable store — fire-and-forget, never throws.
+    void this.persist({ key, path: input.path, method, status: input.status, message, details: input.details })
+  }
 
-    // Evict the oldest (by lastAt) once we exceed the cap.
-    if (this.entries.size > MAX_ENTRIES) {
-      let oldestKey: string | null = null
-      let oldest = Infinity
-      for (const [k, e] of this.entries) {
-        if (e.lastAt < oldest) {
-          oldest = e.lastAt
-          oldestKey = k
-        }
-      }
-      if (oldestKey) this.entries.delete(oldestKey)
+  /** Best-effort durable write. Swallows every failure by design. */
+  private async persist(e: {
+    key: string
+    path: string
+    method: string
+    status: number
+    message: string
+    details?: unknown
+  }): Promise<void> {
+    try {
+      const jsonbDetails = toJsonbDetails(e.details)
+      const supabase = getSupabaseServer()
+      await supabase.rpc('log_api_error', {
+        p_key: e.key,
+        p_path: e.path,
+        p_method: e.method,
+        p_status: e.status,
+        p_message: e.message,
+        p_details: jsonbDetails,
+      })
+    } catch {
+      // Supabase down, table not created yet, bad creds — the in-memory
+      // ledger already captured this error, so we lose nothing critical.
+    }
+  }
+
+  /** Durable recent errors, newest first. Returns null if Supabase is unreachable. */
+  async getPersisted(limit = MAX_ENTRIES): Promise<ErrorEntry[] | null> {
+    try {
+      const supabase = getSupabaseServer()
+      const { data, error } = await supabase.rpc('get_recent_api_errors', { p_limit: limit })
+      if (error || !Array.isArray(data)) return null
+      return data.map(mapRow)
+    } catch {
+      return null
+    }
+  }
+
+  /** Best-effort durable clear. */
+  async clearPersisted(): Promise<void> {
+    try {
+      const supabase = getSupabaseServer()
+      await supabase.rpc('clear_api_errors')
+    } catch {
+      /* best-effort */
     }
   }
 
@@ -108,6 +164,48 @@ function safeStringify(value: unknown): string {
     return JSON.stringify(value)
   } catch {
     return String(value)
+  }
+}
+
+/** Coerce arbitrary details into something safe to store in a jsonb column. */
+function toJsonbDetails(details: unknown): unknown {
+  if (details === undefined || details === null) return null
+  const asString = typeof details === 'string' ? details : safeStringify(details)
+  if (asString.length > MAX_DETAILS_CHARS) {
+    return { truncated: true, preview: asString.slice(0, MAX_DETAILS_CHARS) }
+  }
+  // Objects go through as-is (jsonb); primitives get wrapped so the column
+  // always holds a JSON object rather than a bare scalar/string.
+  return typeof details === 'object' ? details : { value: details }
+}
+
+/** Map a durable api_errors row into the in-memory ErrorEntry shape. */
+function mapRow(row: {
+  error_key: string
+  path: string
+  method: string
+  status: number
+  message: string
+  details: unknown
+  count: number
+  first_seen: string
+  last_seen: string
+}): ErrorEntry {
+  return {
+    key: row.error_key,
+    path: row.path,
+    method: row.method,
+    status: row.status,
+    message: row.message,
+    details:
+      row.details == null
+        ? undefined
+        : typeof row.details === 'string'
+          ? row.details
+          : safeStringify(row.details),
+    count: row.count,
+    firstAt: Date.parse(row.first_seen),
+    lastAt: Date.parse(row.last_seen),
   }
 }
 

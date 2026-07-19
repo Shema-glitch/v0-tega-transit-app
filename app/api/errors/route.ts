@@ -14,9 +14,13 @@ import { CORS, corsPreflight } from '@/lib/api/cors'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const errors = ErrorLog.getAll()
+  // Prefer the durable store (survives redeploys); fall back to the in-memory
+  // ledger when Supabase is unreachable or the table hasn't been created yet.
+  const persisted = await ErrorLog.getPersisted()
+  const errors = persisted ?? ErrorLog.getAll()
+  const source = persisted ? 'supabase' : 'memory'
   return NextResponse.json(
-    { errors, total: errors.length },
+    { errors, total: errors.length, source },
     { headers: { ...CORS, ...(CacheService.noCacheHeaders() as Record<string, string>) } }
   )
 }
@@ -27,6 +31,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
   ErrorLog.clear()
+  await ErrorLog.clearPersisted()
   return NextResponse.json({ success: true, cleared: true }, { headers: CORS })
 }
 

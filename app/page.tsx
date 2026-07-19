@@ -179,6 +179,7 @@ export default function StatusPage() {
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
   const [maintenance, setMaintenance] = useState<MaintenanceFlag[]>([])
   const [errors, setErrors] = useState<ErrorEntry[]>([])
+  const [errorSource, setErrorSource] = useState<'supabase' | 'memory'>('memory')
 
   const refreshMaintenance = useCallback(async () => {
     try {
@@ -193,6 +194,7 @@ export default function StatusPage() {
       const res = await fetch('/api/errors', { cache: 'no-store' })
       const data = await res.json()
       setErrors(data.errors ?? [])
+      setErrorSource(data.source === 'supabase' ? 'supabase' : 'memory')
     } catch { /* dashboard still works without this */ }
   }, [])
 
@@ -532,7 +534,9 @@ export default function StatusPage() {
             })}
           </div>
           <p className="mt-1.5 text-xs" style={{ color: 'var(--text-dim)' }}>
-            In-memory since last restart — clears on redeploy. Auto-refreshes every 15s.
+            {errorSource === 'supabase'
+              ? 'Durable (Supabase) — survives redeploys. Auto-refreshes every 15s.'
+              : 'In-memory only — clears on redeploy. Run supabase/migrations/0001_api_errors.sql to persist. Auto-refreshes every 15s.'}
           </p>
         </section>
       )}
