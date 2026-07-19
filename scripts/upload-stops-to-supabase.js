@@ -1,10 +1,17 @@
 /**
  * Upload Cleaned GTFS Stops to Supabase via direct PostgreSQL connection.
+ *
+ * Requires NEXT_SUPABASE_CONNECTION_STRING (or SUPABASE_DB_PASSWORD, used to
+ * build the pooler/direct variants below) in your environment — see .env.local.
+ * The DB password used to be hardcoded here; it has since been rotated in
+ * Supabase and must never be committed again.
  */
 
 const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
 
 // Read cleaned stops
 const stopsPath = path.join(__dirname, '..', 'kigali_gtfs', 'stops.txt');
@@ -21,24 +28,36 @@ const stops = lines.map((line) => {
   };
 }).filter(s => s.stop_id && !isNaN(s.stop_lat) && !isNaN(s.stop_lon));
 
-// Try multiple connection strategies
-const CONNECTIONS = [
-  // Direct connection (port 5432)
-  'postgresql://postgres:Tega.com%2F2026@db.yhaswnumfjbjkxyhekrg.supabase.co:5432/postgres',
-  // Connection pooler (port 6543)
-  'postgresql://postgres:Tega.com%2F2026@db.yhaswnumfjbjkxyhekrg.supabase.co:6543/postgres',
-  // Supabase pooler format
-  'postgresql://postgres.yhaswnumfjbjkxyhekrg:Tega.com%2F2026@aws-0-eu-west-1.pooler.supabase.com:6543/postgres',
-];
+// Try multiple connection strategies, built from environment — never hardcode
+// the DB password here again (see git history for why).
+const PROJECT_REF = process.env.SUPABASE_PROJECT_REF || 'yhaswnumfjbjkxyhekrg';
+const DB_PASSWORD = process.env.SUPABASE_DB_PASSWORD;
+
+const CONNECTIONS = [];
+if (process.env.NEXT_SUPABASE_CONNECTION_STRING) {
+  CONNECTIONS.push(process.env.NEXT_SUPABASE_CONNECTION_STRING);
+}
+if (DB_PASSWORD) {
+  const pw = encodeURIComponent(DB_PASSWORD);
+  CONNECTIONS.push(
+    // Direct connection (port 5432)
+    `postgresql://postgres:${pw}@db.${PROJECT_REF}.supabase.co:5432/postgres`,
+    // Connection pooler (port 6543)
+    `postgresql://postgres:${pw}@db.${PROJECT_REF}.supabase.co:6543/postgres`,
+    // Supabase pooler format
+    `postgresql://postgres.${PROJECT_REF}:${pw}@aws-0-eu-west-1.pooler.supabase.com:6543/postgres`
+  );
+}
+
+if (CONNECTIONS.length === 0) {
+  console.error('❌ Set NEXT_SUPABASE_CONNECTION_STRING or SUPABASE_DB_PASSWORD in your environment first.');
+  process.exit(1);
+}
 
 async function tryConnect(connStr) {
   const client = new Client({ connectionString: connStr, connectionTimeoutMillis: 10000 });
-  try {
-    await client.connect();
-    return client;
-  } catch (err) {
-    throw err;
-  }
+  await client.connect();
+  return client;
 }
 
 async function main() {
