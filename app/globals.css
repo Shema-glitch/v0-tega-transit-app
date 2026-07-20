@@ -1,5 +1,9 @@
 @import './tega-clay-tokens.css';
 @import 'tailwindcss';
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* Dashboard palette — remapped onto the BusGo Track claymorphism tokens above
    (docs/DESIGN_TOKENS.md) so the existing --bg/--surface/... usage in
@@ -19,10 +23,108 @@
      healthy POST row never reads as "cautioned" the way orange did. */
   --method-get: var(--clay-blue-deep);
   --method-post: var(--clay-lilac-deep);
+
+  /* shadcn/ui theme variables — mapped onto the existing clay/color tokens
+     (docs/DESIGN_TOKENS.md) instead of shadcn's default zinc/oklch palette,
+     so there is one token system, not two. Because the clay tokens flip
+     under `.dark` (see tega-clay-tokens.css), these aliases don't need
+     their own `.dark` overrides — they inherit the swap for free. */
+  --background: var(--color-bg-canvas);
+  --foreground: var(--color-text-primary);
+  --card: var(--color-bg-surface);
+  --card-foreground: var(--color-text-primary);
+  --popover: var(--color-bg-surface);
+  --popover-foreground: var(--color-text-primary);
+  --primary: var(--clay-teal);
+  --primary-foreground: var(--clay-text);
+  --secondary: var(--color-bg-surface-elevated);
+  --secondary-foreground: var(--color-text-primary);
+  --muted: var(--color-bg-surface-elevated);
+  --muted-foreground: var(--color-text-secondary);
+  --accent-foreground: var(--color-text-primary);
+  --destructive: var(--color-error);
+  --input: var(--color-border-medium);
+  --ring: var(--clay-teal);
+  --chart-1: var(--clay-teal);
+  --chart-2: var(--clay-terracotta);
+  --chart-3: var(--clay-yellow);
+  --chart-4: var(--clay-blue);
+  --chart-5: var(--clay-mint);
+  --radius: var(--clay-radius-sm);
+  --sidebar: var(--color-bg-surface);
+  --sidebar-foreground: var(--color-text-primary);
+  --sidebar-primary: var(--clay-teal);
+  --sidebar-primary-foreground: var(--clay-text);
+  --sidebar-accent: var(--color-bg-surface-elevated);
+  --sidebar-accent-foreground: var(--color-text-primary);
+  --sidebar-border: var(--color-border-subtle);
+  --sidebar-ring: var(--clay-teal);
 }
 
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* No shadcn-specific `.dark` overrides needed: every alias above points at
+   a clay/color token, and those already redefine themselves inside `.dark`
+   (app/tega-clay-tokens.css) — the swap happens for free. */
+.dark {
+  --accent: var(--color-primary-dim);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
