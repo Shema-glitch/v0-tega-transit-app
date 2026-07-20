@@ -20,3 +20,6 @@ node_modules
 *Settings page.md
 .agents/
 skills-lock.json
+
+# Supabase CLI local state (project ref/connection info, not secrets to ship)
+supabase/.temp/

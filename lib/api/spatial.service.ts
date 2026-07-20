@@ -69,9 +69,12 @@ export class SpatialService {
   }
 
   /**
-   * Search stops by name. Route badges come from the real GTFS
-   * stop_times → trips → routes index (previously this decorated results
-   * with a hardcoded mock mapping that never matched real stop IDs).
+   * Search stops by name. Backed by a pg_trgm GIN index on stops.stop_name
+   * (supabase/migrations/0004_gtfs_indexes.sql) so the leading-wildcard
+   * ILIKE below can use an index scan instead of a full table scan. Route
+   * badges come from the real GTFS stop_times → trips → routes index
+   * (previously this decorated results with a hardcoded mock mapping that
+   * never matched real stop IDs).
    */
   static async searchStops(query: string, limit: number = 5): Promise<StopResult[]> {
     const { data, error } = await supabase
