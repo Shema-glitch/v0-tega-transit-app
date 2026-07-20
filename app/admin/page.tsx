@@ -105,19 +105,28 @@ function PageUrlLink({ url }: { url: string }) {
   )
 }
 
+// The visible switch stays small (28x48) so it doesn't look oversized next
+// to the endpoint label, but the actual tap target is padded out to the
+// 44x44 minimum (ui-ux-pro-max touch-target-size) via -m-2 p-2 so the extra
+// hit area doesn't shift layout.
 function Toggle({ checked, onChange, danger }: { checked: boolean; onChange: () => void; danger?: boolean }) {
   return (
     <button
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className="relative h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors"
-      style={{ background: checked ? (danger ? STATUS_COLOR.err : STATUS_COLOR.good) : 'var(--color-border-medium)' }}
+      className="relative -m-2 shrink-0 cursor-pointer rounded-full p-2 focus-visible:outline-none focus-visible:ring-2"
+      style={{ '--tw-ring-color': STATUS_COLOR.accent } as React.CSSProperties}
     >
       <span
-        className="absolute top-0.5 h-6 w-6 rounded-full transition-transform"
-        style={{ background: 'var(--color-bg-canvas)', transform: checked ? 'translateX(22px)' : 'translateX(2px)' }}
-      />
+        className="relative block h-7 w-12 rounded-full transition-colors"
+        style={{ background: checked ? (danger ? STATUS_COLOR.err : STATUS_COLOR.good) : 'var(--color-border-medium)' }}
+      >
+        <span
+          className="absolute top-0.5 h-6 w-6 rounded-full transition-transform"
+          style={{ background: 'var(--color-bg-canvas)', transform: checked ? 'translateX(22px)' : 'translateX(2px)' }}
+        />
+      </span>
     </button>
   )
 }
@@ -352,12 +361,21 @@ export default function AdminPage() {
             onChange={(e) => setTokenInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') login() }}
             placeholder="Admin token"
-            className="mb-3 w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
-            style={{ background: 'var(--color-bg-canvas)', borderColor: 'var(--color-border-medium)', color: 'var(--color-text-primary)' }}
+            className="mb-3 w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus-visible:ring-2"
+            style={{
+              background: 'var(--color-bg-canvas)',
+              borderColor: 'var(--color-border-medium)',
+              color: 'var(--color-text-primary)',
+              '--tw-ring-color': STATUS_COLOR.accent,
+            } as React.CSSProperties}
             autoFocus
           />
           {loginError && <p className="mb-3 text-xs" style={{ color: STATUS_COLOR.err }}>{loginError}</p>}
-          <button onClick={login} className="btn-primary w-full justify-center">
+          <button
+            onClick={login}
+            className="btn-primary w-full justify-center focus-visible:outline-none focus-visible:ring-2"
+            style={{ '--tw-ring-color': STATUS_COLOR.accent } as React.CSSProperties}
+          >
             Sign in
           </button>
           <p className="mt-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
@@ -382,8 +400,8 @@ export default function AdminPage() {
             <a href="/" style={{ color: 'var(--color-text-secondary)' }}>public status page</a>
             <button
               onClick={logout}
-              className="cursor-pointer rounded border px-3 py-1.5 hover:opacity-80"
-              style={{ borderColor: 'var(--color-border-subtle)' }}
+              className="min-h-11 cursor-pointer rounded border px-3 py-1.5 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2"
+              style={{ borderColor: 'var(--color-border-subtle)', '--tw-ring-color': STATUS_COLOR.accent } as React.CSSProperties}
             >
               Log out
             </button>
@@ -425,11 +443,12 @@ export default function AdminPage() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className="cursor-pointer whitespace-nowrap px-4 py-2.5 text-sm font-semibold capitalize"
+              className="min-h-11 cursor-pointer whitespace-nowrap px-4 py-2.5 text-sm font-semibold capitalize focus-visible:outline-none focus-visible:ring-2"
               style={{
                 color: tab === t ? STATUS_COLOR.accent : 'var(--color-text-secondary)',
                 borderBottom: tab === t ? `2px solid ${STATUS_COLOR.accent}` : '2px solid transparent',
-              }}
+                '--tw-ring-color': STATUS_COLOR.accent,
+              } as React.CSSProperties}
             >
               {t}
             </button>
@@ -439,16 +458,17 @@ export default function AdminPage() {
         {tab === 'issues' && (
           <section>
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <div className="flex gap-1 overflow-x-auto rounded-lg border p-1" style={{ borderColor: 'var(--color-border-subtle)' }}>
+              <div className="flex flex-wrap gap-2 overflow-x-auto rounded-lg border p-1" style={{ borderColor: 'var(--color-border-subtle)' }}>
                 {(['open', 'all', 'errors', 'bugs'] as const).map((f) => (
                   <button
                     key={f}
                     onClick={() => setIssueFilter(f)}
-                    className="cursor-pointer whitespace-nowrap rounded px-2.5 py-1.5 text-xs font-semibold capitalize"
+                    className="min-h-9 cursor-pointer whitespace-nowrap rounded px-2.5 py-1.5 text-xs font-semibold capitalize focus-visible:outline-none focus-visible:ring-2"
                     style={{
                       background: issueFilter === f ? 'var(--color-primary-dim)' : 'transparent',
                       color: issueFilter === f ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                    }}
+                      '--tw-ring-color': STATUS_COLOR.accent,
+                    } as React.CSSProperties}
                   >
                     {f}
                   </button>
@@ -458,13 +478,18 @@ export default function AdminPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search path, message, subject…"
-                className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs outline-none"
-                style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-border-subtle)', color: 'var(--color-text-primary)' }}
+                className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs outline-none focus-visible:ring-2"
+                style={{
+                  background: 'var(--color-bg-surface)',
+                  borderColor: 'var(--color-border-subtle)',
+                  color: 'var(--color-text-primary)',
+                  '--tw-ring-color': STATUS_COLOR.accent,
+                } as React.CSSProperties}
               />
-              <button onClick={clearErrors} className="btn-secondary px-2.5! py-1.5! text-xs!">
+              <button onClick={clearErrors} className="btn-secondary min-h-9! px-2.5! py-1.5! text-xs! focus-visible:ring-2!">
                 Clear errors
               </button>
-              <button onClick={clearBugReports} className="btn-secondary px-2.5! py-1.5! text-xs!">
+              <button onClick={clearBugReports} className="btn-secondary min-h-9! px-2.5! py-1.5! text-xs! focus-visible:ring-2!">
                 Clear bug reports
               </button>
             </div>
@@ -505,8 +530,8 @@ export default function AdminPage() {
                       {item.onResolve && !item.resolved && (
                         <button
                           onClick={item.onResolve}
-                          className="ml-auto cursor-pointer rounded border px-2.5 py-1 text-xs hover:opacity-80"
-                          style={{ borderColor: 'var(--color-border-subtle)', color: STATUS_COLOR.good }}
+                          className="ml-auto min-h-9 cursor-pointer rounded border px-2.5 py-1 text-xs hover:opacity-80 focus-visible:outline-none focus-visible:ring-2"
+                          style={{ borderColor: 'var(--color-border-subtle)', color: STATUS_COLOR.good, '--tw-ring-color': STATUS_COLOR.good } as React.CSSProperties}
                         >
                           Mark resolved
                         </button>
