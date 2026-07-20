@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
 import { CacheService } from '@/lib/api/cache.service'
+import { PROCESS_STARTED_AT } from '@/lib/api/process-info'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,10 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 export async function GET() {
-  return NextResponse.json({ flags: MaintenanceStore.getAll() }, { headers: CacheService.noCacheHeaders() })
+  return NextResponse.json(
+    { flags: MaintenanceStore.getAll(), processStartedAt: PROCESS_STARTED_AT },
+    { headers: CacheService.noCacheHeaders() }
+  )
 }
 
 export async function POST(request: NextRequest) {

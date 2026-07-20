@@ -8,27 +8,29 @@
  * production behavior (disabling an endpoint returns real 503s — see
  * middleware.ts + lib/api/endpoint-registry.ts). The public page stays a
  * lightweight, unauthenticated "is it up" view for anyone.
+ *
+ * Styling reuses BusGo Track's own claymorphism tokens (app/tega-clay-tokens.css,
+ * loaded globally via globals.css) instead of a second bespoke palette — same
+ * look, forced into dark mode via the `.dark` class since this is a "checking
+ * in at 11pm mid-incident" tool, not a bright daytime page.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ENDPOINT_REGISTRY } from '@/lib/api/endpoint-registry'
 
-// ─── shared color tokens (this page's own dark theme, independent of the
-// public dashboard's light claymorphism look) ──────────────────────────────
-const C = {
-  bg: '#0a0d14',
-  surface: '#12161f',
-  surfaceRaised: '#171c28',
-  border: '#232a38',
-  borderBright: '#2f3849',
-  text: '#e6e9f0',
-  textDim: '#8b93a7',
-  accent: '#22d3ee',
-  accentDim: '#0e7490',
-  good: '#34d399',
-  warn: '#fbbf24',
-  err: '#fb7185',
-}
+const STATUS_COLOR = {
+  good: 'var(--color-success)',
+  warn: 'var(--color-warning)',
+  err: 'var(--color-error)',
+  accent: 'var(--clay-teal)',
+  dim: 'var(--color-text-muted)',
+} as const
+
+// Restarts reset every in-memory maintenance flag with no trace (they don't
+// persist — see lib/api/maintenance-store.ts). A process younger than this
+// gets a one-time nudge so that's a visible surprise, not a silent one.
+const RECENT_RESTART_MS = 10 * 60 * 1000
+const LAST_SEEN_KEY = 'admin-last-seen'
 
 // Mirrors lib/api/error-log.ts ErrorEntry.
 interface ErrorEntry {
@@ -82,18 +84,39 @@ function timeAgo(ms: number, now: number): string {
   return `${Math.floor(sec / 86400)}d ago`
 }
 
+/** Renders as a clickable link if it looks like a URL, plain text otherwise. */
+function PageUrlLink({ url }: { url: string }) {
+  let isUrl = false
+  try {
+    isUrl = /^https?:\/\//i.test(url)
+  } catch { /* not a url */ }
+
+  if (!isUrl) return <span>{url}</span>
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="underline underline-offset-2 hover:opacity-80"
+      style={{ color: STATUS_COLOR.accent }}
+    >
+      {url}
+    </a>
+  )
+}
+
 function Toggle({ checked, onChange, danger }: { checked: boolean; onChange: () => void; danger?: boolean }) {
   return (
     <button
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className="relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors"
-      style={{ background: checked ? (danger ? C.err : C.good) : C.border }}
+      className="relative h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors"
+      style={{ background: checked ? (danger ? STATUS_COLOR.err : STATUS_COLOR.good) : 'var(--color-border-medium)' }}
     >
       <span
-        className="absolute top-0.5 h-5 w-5 rounded-full transition-transform"
-        style={{ background: C.bg, transform: checked ? 'translateX(22px)' : 'translateX(2px)' }}
+        className="absolute top-0.5 h-6 w-6 rounded-full transition-transform"
+        style={{ background: 'var(--color-bg-canvas)', transform: checked ? 'translateX(22px)' : 'translateX(2px)' }}
       />
     </button>
   )
@@ -119,6 +142,7 @@ export default function AdminPage() {
   const [errors, setErrors] = useState<ErrorEntry[]>([])
   const [bugReports, setBugReports] = useState<BugReportEntry[]>([])
   const [maintenance, setMaintenance] = useState<MaintenanceFlag[]>([])
+  const [processStartedAt, setProcessStartedAt] = useState<number | null>(null)
   const [source, setSource] = useState<{ errors: 'supabase' | 'memory'; bugs: 'supabase' | 'memory' }>({
     errors: 'memory',
     bugs: 'memory',
@@ -127,6 +151,10 @@ export default function AdminPage() {
   const [tab, setTab] = useState<'issues' | 'endpoints'>('issues')
   const [issueFilter, setIssueFilter] = useState<'all' | 'errors' | 'bugs' | 'open'>('open')
   const [query, setQuery] = useState('')
+
+  // Captured once on login — "since you last looked" compares against this,
+  // not the live-updating localStorage value (which we overwrite right away).
+  const lastSeenAtRef = useRef<number | null>(null)
 
   const authHeaders = useCallback((): Record<string, string> => {
     const token = sessionStorage.getItem('admin-token') || ''
@@ -152,6 +180,7 @@ export default function AdminPage() {
       setErrors(errData.errors ?? [])
       setBugReports(bugData.reports ?? [])
       setMaintenance(maintData.flags ?? [])
+      if (typeof maintData.processStartedAt === 'number') setProcessStartedAt(maintData.processStartedAt)
       setSource({
         errors: errData.source === 'supabase' ? 'supabase' : 'memory',
         bugs: bugData.source === 'supabase' ? 'supabase' : 'memory',
@@ -231,6 +260,15 @@ export default function AdminPage() {
       .catch(() => setAuthState('out'))
   }, [])
 
+  // Capture "last seen" once per login, before overwriting it — everything
+  // after this point compares against the moment THIS visit started.
+  useEffect(() => {
+    if (authState !== 'in') return
+    const prev = localStorage.getItem(LAST_SEEN_KEY)
+    lastSeenAtRef.current = prev ? Number(prev) : null
+    localStorage.setItem(LAST_SEEN_KEY, String(Date.now()))
+  }, [authState])
+
   useEffect(() => {
     if (authState !== 'in') return
     refreshAll()
@@ -282,23 +320,30 @@ export default function AdminPage() {
   const openCount = issues.filter((i) => !i.resolved).length
   const disabledIds = new Set(maintenance.map((f) => f.feature))
   const disabledCount = ENDPOINT_REGISTRY.filter((e) => disabledIds.has(e.id)).length
+  const isAllClear = issueFilter === 'open' && !query.trim() && openCount === 0
 
   const overallStatus = disabledCount > 0
-    ? { label: 'Endpoints disabled', color: C.warn }
+    ? { label: 'Endpoints disabled', color: STATUS_COLOR.warn }
     : openCount > 0
-      ? { label: 'Open issues', color: C.warn }
-      : { label: 'All clear', color: C.good }
+      ? { label: 'Open issues', color: STATUS_COLOR.warn }
+      : { label: 'All clear', color: STATUS_COLOR.good }
+
+  const processUptimeMs = processStartedAt ? now - processStartedAt : null
+  const showRestartNudge = processUptimeMs !== null && processUptimeMs < RECENT_RESTART_MS
 
   // ─── Login screen ─────────────────────────────────────────────────────────
   if (authState !== 'in') {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4" style={{ background: C.bg, color: C.text }}>
-        <div className="w-full max-w-sm rounded-2xl border p-6" style={{ background: C.surface, borderColor: C.border }}>
+      <div
+        className="dark flex min-h-screen items-center justify-center px-4"
+        style={{ background: 'var(--color-bg-canvas)', color: 'var(--color-text-primary)' }}
+      >
+        <div className="clay-card w-full max-w-sm p-6">
           <div className="mb-1 flex items-center gap-2">
-            <span className="text-lg" style={{ color: C.accent }}>▍</span>
-            <h1 className="text-lg font-bold">BusGo Track — Admin</h1>
+            <span className="text-lg" style={{ color: STATUS_COLOR.accent }}>▍</span>
+            <h1 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)' }}>BusGo Track — Admin</h1>
           </div>
-          <p className="mb-5 text-xs" style={{ color: C.textDim }}>
+          <p className="mb-5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
             {authState === 'checking' ? 'Checking for a saved session…' : 'Enter the ADMIN_TOKEN configured on Render.'}
           </p>
           <input
@@ -307,20 +352,16 @@ export default function AdminPage() {
             onChange={(e) => setTokenInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') login() }}
             placeholder="Admin token"
-            className="mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-            style={{ background: C.bg, borderColor: C.borderBright, color: C.text }}
+            className="mb-3 w-full rounded-lg border px-3 py-2.5 text-sm outline-none"
+            style={{ background: 'var(--color-bg-canvas)', borderColor: 'var(--color-border-medium)', color: 'var(--color-text-primary)' }}
             autoFocus
           />
-          {loginError && <p className="mb-3 text-xs" style={{ color: C.err }}>{loginError}</p>}
-          <button
-            onClick={login}
-            className="w-full cursor-pointer rounded-lg px-3 py-2 text-sm font-semibold"
-            style={{ background: C.accent, color: C.bg }}
-          >
+          {loginError && <p className="mb-3 text-xs" style={{ color: STATUS_COLOR.err }}>{loginError}</p>}
+          <button onClick={login} className="btn-primary w-full justify-center">
             Sign in
           </button>
-          <p className="mt-4 text-xs" style={{ color: C.textDim }}>
-            <a href="/" style={{ color: C.accent }}>← back to the public status page</a>
+          <p className="mt-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            <a href="/" style={{ color: STATUS_COLOR.accent }}>← back to the public status page</a>
           </p>
         </div>
       </div>
@@ -329,50 +370,65 @@ export default function AdminPage() {
 
   // ─── Dashboard ─────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen" style={{ background: C.bg, color: C.text }}>
-      <header className="border-b px-6 py-4" style={{ borderColor: C.border, background: C.surface }}>
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
+    <div className="dark min-h-screen" style={{ background: 'var(--color-bg-canvas)', color: 'var(--color-text-primary)' }}>
+      <header className="border-b px-4 py-4 sm:px-6" style={{ borderColor: 'var(--color-border-subtle)', background: 'var(--color-bg-surface)' }}>
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <span className="text-xl" style={{ color: C.accent }}>▍</span>
-            <h1 className="text-lg font-bold">BusGo Track — Admin</h1>
+            <span className="text-xl" style={{ color: STATUS_COLOR.accent }}>▍</span>
+            <h1 className="text-base font-bold sm:text-lg" style={{ fontFamily: 'var(--font-display)' }}>BusGo Track — Admin</h1>
             <Pill color={overallStatus.color}>{overallStatus.label}</Pill>
           </div>
-          <div className="flex items-center gap-4 text-xs" style={{ color: C.textDim }}>
-            <a href="/" style={{ color: C.textDim }}>public status page</a>
-            <button onClick={logout} className="cursor-pointer rounded border px-2 py-1 hover:opacity-80" style={{ borderColor: C.border }}>
+          <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            <a href="/" style={{ color: 'var(--color-text-secondary)' }}>public status page</a>
+            <button
+              onClick={logout}
+              className="cursor-pointer rounded border px-3 py-1.5 hover:opacity-80"
+              style={{ borderColor: 'var(--color-border-subtle)' }}
+            >
               Log out
             </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-6">
+      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        {showRestartNudge && (
+          <div
+            className="mb-4 rounded-xl border px-4 py-3 text-xs"
+            style={{ borderColor: STATUS_COLOR.warn, background: `color-mix(in srgb, ${STATUS_COLOR.warn} 10%, transparent)`, color: 'var(--color-text-primary)' }}
+          >
+            ⚠ This process started {timeAgo(processStartedAt!, now)} — maintenance flags live in memory only, so a
+            restart silently re-enables everything that was disabled before it. Double-check the Endpoints tab if
+            you were mid-incident.
+          </div>
+        )}
+
         {/* Stat bar */}
-        <div className="mb-6 grid grid-cols-3 gap-3">
-          <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
-            <div className="text-2xl font-bold" style={{ color: openCount > 0 ? C.warn : C.good }}>{openCount}</div>
-            <div className="text-xs" style={{ color: C.textDim }}>Open issues</div>
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="clay-surface p-4">
+            <div className="text-2xl font-bold" style={{ color: openCount > 0 ? STATUS_COLOR.warn : STATUS_COLOR.good }}>{openCount}</div>
+            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Open issues</div>
           </div>
-          <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
-            <div className="text-2xl font-bold" style={{ color: disabledCount > 0 ? C.warn : C.text }}>{disabledCount}</div>
-            <div className="text-xs" style={{ color: C.textDim }}>Endpoints disabled</div>
+          <div className="clay-surface p-4">
+            <div className="text-2xl font-bold" style={{ color: disabledCount > 0 ? STATUS_COLOR.warn : 'var(--color-text-primary)' }}>{disabledCount}</div>
+            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Endpoints disabled</div>
           </div>
-          <div className="rounded-xl border p-4" style={{ background: C.surface, borderColor: C.border }}>
+          <div className="clay-surface p-4">
             <div className="text-2xl font-bold">{bugReports.length}</div>
-            <div className="text-xs" style={{ color: C.textDim }}>Total bug reports</div>
+            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Total bug reports</div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="mb-4 flex gap-1 border-b" style={{ borderColor: C.border }}>
+        <div className="mb-4 flex gap-1 overflow-x-auto border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
           {(['issues', 'endpoints'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className="cursor-pointer px-4 py-2 text-sm font-semibold capitalize"
+              className="cursor-pointer whitespace-nowrap px-4 py-2.5 text-sm font-semibold capitalize"
               style={{
-                color: tab === t ? C.accent : C.textDim,
-                borderBottom: tab === t ? `2px solid ${C.accent}` : '2px solid transparent',
+                color: tab === t ? STATUS_COLOR.accent : 'var(--color-text-secondary)',
+                borderBottom: tab === t ? `2px solid ${STATUS_COLOR.accent}` : '2px solid transparent',
               }}
             >
               {t}
@@ -383,13 +439,16 @@ export default function AdminPage() {
         {tab === 'issues' && (
           <section>
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <div className="flex gap-1 rounded-lg border p-1" style={{ borderColor: C.border }}>
+              <div className="flex gap-1 overflow-x-auto rounded-lg border p-1" style={{ borderColor: 'var(--color-border-subtle)' }}>
                 {(['open', 'all', 'errors', 'bugs'] as const).map((f) => (
                   <button
                     key={f}
                     onClick={() => setIssueFilter(f)}
-                    className="cursor-pointer rounded px-2.5 py-1 text-xs font-semibold capitalize"
-                    style={{ background: issueFilter === f ? C.accentDim : 'transparent', color: issueFilter === f ? C.text : C.textDim }}
+                    className="cursor-pointer whitespace-nowrap rounded px-2.5 py-1.5 text-xs font-semibold capitalize"
+                    style={{
+                      background: issueFilter === f ? 'var(--color-primary-dim)' : 'transparent',
+                      color: issueFilter === f ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                    }}
                   >
                     {f}
                   </button>
@@ -399,63 +458,72 @@ export default function AdminPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search path, message, subject…"
-                className="min-w-0 flex-1 rounded-lg border px-3 py-1.5 text-xs outline-none"
-                style={{ background: C.surface, borderColor: C.border, color: C.text }}
+                className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs outline-none"
+                style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-border-subtle)', color: 'var(--color-text-primary)' }}
               />
-              <button
-                onClick={clearErrors}
-                className="cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs hover:opacity-80"
-                style={{ borderColor: C.border, color: C.textDim }}
-              >
+              <button onClick={clearErrors} className="btn-secondary px-2.5! py-1.5! text-xs!">
                 Clear errors
               </button>
-              <button
-                onClick={clearBugReports}
-                className="cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs hover:opacity-80"
-                style={{ borderColor: C.border, color: C.textDim }}
-              >
+              <button onClick={clearBugReports} className="btn-secondary px-2.5! py-1.5! text-xs!">
                 Clear bug reports
               </button>
             </div>
 
-            {filteredIssues.length === 0 && (
-              <p className="py-8 text-center text-sm" style={{ color: C.textDim }}>Nothing here. 🎉</p>
+            {filteredIssues.length === 0 && isAllClear && (
+              <div className="flex flex-col items-center gap-2 py-16 text-center">
+                <span className="text-4xl" style={{ color: STATUS_COLOR.good }}>✓</span>
+                <p className="text-sm font-semibold">All clear</p>
+                <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  No open errors or bug reports. This is what a routine check should look like.
+                </p>
+              </div>
+            )}
+            {filteredIssues.length === 0 && !isAllClear && (
+              <p className="py-8 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                Nothing matches this filter.
+              </p>
             )}
 
             <div className="space-y-2">
-              {filteredIssues.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-xl border p-3"
-                  style={{
-                    background: C.surface,
-                    borderColor: C.border,
-                    opacity: item.resolved ? 0.55 : 1,
-                  }}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Pill color={item.kind === 'error' ? C.err : C.accent}>{item.kind === 'error' ? 'ERROR' : 'BUG'}</Pill>
-                    <span className="font-mono text-xs font-semibold">{item.title}</span>
-                    <span className="text-xs" style={{ color: C.textDim }}>{timeAgo(item.timestamp, now)}</span>
-                    {item.count && item.count > 1 && <Pill color={C.warn}>×{item.count}</Pill>}
-                    {item.resolved && <Pill color={C.textDim}>resolved</Pill>}
-                    {item.onResolve && !item.resolved && (
-                      <button
-                        onClick={item.onResolve}
-                        className="ml-auto cursor-pointer rounded border px-2 py-0.5 text-xs hover:opacity-80"
-                        style={{ borderColor: C.border, color: C.good }}
-                      >
-                        Mark resolved
-                      </button>
+              {filteredIssues.map((item) => {
+                const isNew = lastSeenAtRef.current !== null && item.timestamp > lastSeenAtRef.current
+                return (
+                  <div
+                    key={item.id}
+                    className="clay-surface p-3"
+                    style={{ opacity: item.resolved ? 0.55 : 1 }}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Pill color={item.kind === 'error' ? STATUS_COLOR.err : STATUS_COLOR.accent}>
+                        {item.kind === 'error' ? 'ERROR' : 'BUG'}
+                      </Pill>
+                      {isNew && <Pill color={STATUS_COLOR.accent}>since you last looked</Pill>}
+                      <span className="font-mono text-xs font-semibold">{item.title}</span>
+                      <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{timeAgo(item.timestamp, now)}</span>
+                      {item.count && item.count > 1 && <Pill color={STATUS_COLOR.warn}>×{item.count}</Pill>}
+                      {item.resolved && <Pill color={STATUS_COLOR.dim}>resolved</Pill>}
+                      {item.onResolve && !item.resolved && (
+                        <button
+                          onClick={item.onResolve}
+                          className="ml-auto cursor-pointer rounded border px-2.5 py-1 text-xs hover:opacity-80"
+                          style={{ borderColor: 'var(--color-border-subtle)', color: STATUS_COLOR.good }}
+                        >
+                          Mark resolved
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-1.5 whitespace-pre-wrap text-xs" style={{ color: 'var(--color-text-primary)' }}>{item.detail}</div>
+                    {item.meta && (
+                      <div className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                        from: <PageUrlLink url={item.meta} />
+                      </div>
                     )}
                   </div>
-                  <div className="mt-1.5 whitespace-pre-wrap text-xs" style={{ color: C.text }}>{item.detail}</div>
-                  {item.meta && <div className="mt-1 text-xs" style={{ color: C.textDim }}>from: {item.meta}</div>}
-                </div>
-              ))}
+                )
+              })}
             </div>
 
-            <p className="mt-3 text-xs" style={{ color: C.textDim }}>
+            <p className="mt-3 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
               Errors: {source.errors === 'supabase' ? 'durable' : 'in-memory only'} · Bug reports: {source.bugs === 'supabase' ? 'durable' : 'in-memory only'} · auto-refreshes every 15s.
             </p>
           </section>
@@ -463,7 +531,7 @@ export default function AdminPage() {
 
         {tab === 'endpoints' && (
           <section>
-            <p className="mb-4 text-xs" style={{ color: C.textDim }}>
+            <p className="mb-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
               Disabling an endpoint here makes it actually return 503 to callers immediately — see docs/ADMIN_DASHBOARD_PRD.md.
               Meta endpoints (health, status, errors, feedback, admin/*) aren&apos;t listed — you can&apos;t disable the tools that turn things back on.
             </p>
@@ -474,25 +542,30 @@ export default function AdminPage() {
               }, {})
             ).map(([group, endpoints]) => (
               <div key={group} className="mb-5">
-                <h3 className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: C.textDim }}>{group}</h3>
-                <div className="overflow-hidden rounded-xl border" style={{ borderColor: C.border }}>
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-secondary)' }}>{group}</h3>
+                <div className="clay-surface overflow-hidden">
                   {endpoints.map((ep, i) => {
                     const flag = maintenance.find((f) => f.feature === ep.id)
                     const disabled = !!flag
                     return (
                       <div
                         key={ep.id}
-                        className="flex items-center gap-3 px-3 py-2.5"
-                        style={{ background: C.surface, borderBottom: i < endpoints.length - 1 ? `1px solid ${C.border}` : undefined }}
+                        className="flex items-center gap-3 px-3 py-3"
+                        style={{ borderBottom: i < endpoints.length - 1 ? '1px solid var(--color-border-subtle)' : undefined }}
                       >
                         <Toggle checked={!disabled} onChange={() => toggleEndpoint(ep.id, disabled)} danger={disabled} />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: C.borderBright, color: C.textDim }}>{ep.method}</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className="rounded px-1.5 py-0.5 text-[10px] font-bold"
+                              style={{ background: 'var(--color-border-medium)', color: 'var(--color-text-secondary)' }}
+                            >
+                              {ep.method}
+                            </span>
                             <span className="truncate font-mono text-xs">{ep.label}</span>
                           </div>
                           {flag && (
-                            <div className="mt-0.5 text-xs" style={{ color: C.warn }}>
+                            <div className="mt-0.5 text-xs" style={{ color: STATUS_COLOR.warn }}>
                               Disabled: {flag.reason} · {timeAgo(flag.since, now)}
                             </div>
                           )}

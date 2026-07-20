@@ -63,11 +63,23 @@ Just one: **you**, checking in from a phone or laptop, sometimes mid-incident ("
 
 - Open bug reports, open errors, endpoints currently disabled, overall status pill (Operational / Degraded / Endpoints disabled).
 
+### P1 — Restart-safety nudge (added post-launch)
+
+- `GET /api/admin/maintenance` also returns `processStartedAt` (`lib/api/process-info.ts`, a `globalThis` singleton set once at module load).
+- If the dashboard loads and process uptime is under 10 minutes, it shows a banner: the process just restarted, and every maintenance flag is in-memory only, so anything that was disabled before the restart is silently back on. This exists because in-memory flags plus frequent redeploys (this session pushed to `main` many times) is exactly the kind of thing you won't notice while heads-down debugging something else.
+
+### P1 — "Since you last looked" (added post-launch)
+
+- Last-login timestamp is captured once per session (`localStorage`, key `admin-last-seen`) before being overwritten with the current visit's time.
+- Any issue (error or bug report) newer than that captured timestamp gets a "since you last looked" pill in the feed — directly answers the §3 "anything I should know about since yesterday" use case instead of leaving it as aspirational copy.
+
 ### Future (not v1)
 
 - Durable maintenance flags (Supabase-backed, same `SECURITY DEFINER` RPC pattern as `api_errors`/`bug_reports`), so a disabled endpoint survives a redeploy instead of resetting.
 - Slack/email alert when a new bug report or a burst of errors comes in.
 - Per-endpoint request-volume graphs (would need the rate limiter to record counts over time, not just enforce a window).
+- **Snooze** for issues (hide for N days without marking resolved) — useful once there's a backlog of known-but-not-urgent items; deferred because "resolve" already covers the v1 need.
+- **Bulk resolve** for a burst of identical errors (same endpoint, same message) — deferred until real traffic actually produces that burst; today's dedup-by-count already keeps a flapping endpoint from flooding the feed as separate rows.
 
 ## 5. Data model additions
 
@@ -78,6 +90,8 @@ No new tables. Reuses `MaintenanceStore` (in-memory) with a changed key conventi
 - **Maintenance flags are in-memory only** — a Render restart/redeploy clears every disabled endpoint back to enabled. Acceptable for "I'm actively firefighting right now"; not for a planned multi-day maintenance window. Tracked as a Future item above.
 - **Single shared admin token** — anyone with the token has full access; there's no audit log of who toggled what (there's only one "who," so this is fine for now).
 - **Rate limiting is per-process** — if this ever runs on more than one Render instance, each counts independently (documented already in `lib/api/rate-limiter.ts`).
+- **No token expiry, rotation reminder, or in-app revoke.** The revoke path for a leaked token (screenshot, browser history, accidental commit) is manual: change `ADMIN_TOKEN` in Render's env vars and redeploy. That instantly invalidates the old value everywhere (every check is a live `=== process.env.ADMIN_TOKEN` compare, nothing cached), including anyone else's `sessionStorage` copy of the old token. No in-app "regenerate" button — the token lives outside the app's own database by design, so the app can't rotate its own credential.
+- **Token comparison is a plain `===`, not constant-time.** Theoretically vulnerable to a timing attack; not practically exploitable given the token is random and every `/api/admin/*` route is already rate-limited to 30 req/min.
 
 ## 7. Success criteria
 
