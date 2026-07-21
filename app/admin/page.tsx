@@ -9,12 +9,10 @@
  * middleware.ts + lib/api/endpoint-registry.ts). The public page stays a
  * lightweight, unauthenticated "is it up" view for anyone.
  *
- * Styling reuses BusGo Track's own claymorphism tokens (app/tega-clay-tokens.css,
- * loaded globally via globals.css) instead of a second bespoke palette — same
- * look, forced into dark mode via the `.dark` class since this is a "checking
- * in at 11pm mid-incident" tool, not a bright daytime page. shadcn/ui
- * components (components/ui/*) are wired onto those same tokens (see
- * app/globals.css) so there's one design system, not two.
+ * Styling uses shadcn/ui's own default components and dark theme (see
+ * app/globals.css) — no bespoke design-token system. Forced into dark mode
+ * via the `.dark` class since this is a "checking in at 11pm mid-incident"
+ * tool, not a bright daytime page.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -29,12 +27,24 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
+// shadcn's own theme doesn't ship semantic success/warning colors (only
+// primary/destructive/muted/accent), so those two route through Tailwind's
+// stock green/amber scale. Everything else uses shadcn's own tokens directly
+// via className (text-primary, text-destructive, text-muted-foreground, …).
 const STATUS_COLOR = {
-  good: 'var(--color-success)',
-  warn: 'var(--color-warning)',
-  err: 'var(--color-error)',
-  accent: 'var(--clay-teal)',
-  dim: 'var(--color-text-muted)',
+  good: 'text-green-500 dark:text-green-400',
+  warn: 'text-amber-500 dark:text-amber-400',
+  err: 'text-destructive',
+  accent: 'text-primary',
+  dim: 'text-muted-foreground',
+} as const
+
+const STATUS_BADGE = {
+  good: 'text-green-500 dark:text-green-400 bg-green-500/15 border-transparent',
+  warn: 'text-amber-500 dark:text-amber-400 bg-amber-500/15 border-transparent',
+  err: 'text-destructive bg-destructive/15 border-transparent',
+  accent: 'text-primary bg-primary/15 border-transparent',
+  dim: 'text-muted-foreground bg-muted border-transparent',
 } as const
 
 // Restarts reset every in-memory maintenance flag with no trace (they don't
@@ -108,8 +118,7 @@ function PageUrlLink({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="underline underline-offset-2 hover:opacity-80"
-      style={{ color: STATUS_COLOR.accent }}
+      className={`underline underline-offset-2 hover:opacity-80 ${STATUS_COLOR.accent}`}
     >
       {url}
     </a>
@@ -317,16 +326,13 @@ export default function AdminPage() {
   // ─── Login screen ─────────────────────────────────────────────────────────
   if (authState !== 'in') {
     return (
-      <div
-        className="dark flex min-h-screen items-center justify-center px-4"
-        style={{ background: 'var(--color-bg-canvas)', color: 'var(--color-text-primary)' }}
-      >
+      <div className="dark flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
         <Card className="w-full max-w-sm p-6">
           <div className="mb-1 flex items-center gap-2">
-            <span className="text-lg" style={{ color: STATUS_COLOR.accent }}>▍</span>
-            <h1 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)' }}>BusGo Track — Admin</h1>
+            <span className={`text-lg ${STATUS_COLOR.accent}`}>▍</span>
+            <h1 className="text-lg font-bold font-heading">BusGo Track — Admin</h1>
           </div>
-          <p className="mb-5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+          <p className="mb-5 text-xs text-muted-foreground">
             {authState === 'checking' ? 'Checking for a saved session…' : 'Enter the ADMIN_TOKEN configured on Render.'}
           </p>
           <Input
@@ -338,12 +344,12 @@ export default function AdminPage() {
             className="mb-3 h-11 text-sm"
             autoFocus
           />
-          {loginError && <p className="mb-3 text-xs" style={{ color: STATUS_COLOR.err }}>{loginError}</p>}
+          {loginError && <p className={`mb-3 text-xs ${STATUS_COLOR.err}`}>{loginError}</p>}
           <Button onClick={login} className="h-11 w-full justify-center text-sm">
             Sign in
           </Button>
-          <p className="mt-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            <a href="/" style={{ color: STATUS_COLOR.accent }}>← back to the public status page</a>
+          <p className="mt-4 text-xs text-muted-foreground">
+            <a href="/" className={STATUS_COLOR.accent}>← back to the public status page</a>
           </p>
         </Card>
       </div>
@@ -352,26 +358,21 @@ export default function AdminPage() {
 
   // ─── Dashboard ─────────────────────────────────────────────────────────────
   return (
-    <div className="dark min-h-screen" style={{ background: 'var(--color-bg-canvas)', color: 'var(--color-text-primary)' }}>
-      <header className="border-b px-4 py-4 sm:px-6" style={{ borderColor: 'var(--color-border-subtle)', background: 'var(--color-bg-surface)' }}>
+    <div className="dark min-h-screen bg-background text-foreground">
+      <header className="border-b border-border bg-card px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <span className="text-xl" style={{ color: STATUS_COLOR.accent }}>▍</span>
-            <h1 className="text-base font-bold sm:text-lg" style={{ fontFamily: 'var(--font-display)' }}>BusGo Track — Admin</h1>
+            <span className={`text-xl ${STATUS_COLOR.accent}`}>▍</span>
+            <h1 className="text-base font-bold font-heading sm:text-lg">BusGo Track — Admin</h1>
             <Badge
               variant="outline"
-              className="font-semibold"
-              style={{
-                color: overallStatus.variant === 'good' ? STATUS_COLOR.good : STATUS_COLOR.warn,
-                borderColor: 'transparent',
-                background: `color-mix(in srgb, ${overallStatus.variant === 'good' ? STATUS_COLOR.good : STATUS_COLOR.warn} 18%, transparent)`,
-              }}
+              className={`font-semibold ${overallStatus.variant === 'good' ? STATUS_BADGE.good : STATUS_BADGE.warn}`}
             >
               {overallStatus.label}
             </Badge>
           </div>
-          <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            <a href="/" style={{ color: 'var(--color-text-secondary)' }}>public status page</a>
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <a href="/">public status page</a>
             <Button onClick={logout} variant="outline" size="lg" className="h-11 text-xs">
               Log out
             </Button>
@@ -381,10 +382,10 @@ export default function AdminPage() {
 
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
         {showRestartNudge && (
-          <Alert className="mb-4" style={{ borderColor: STATUS_COLOR.warn, background: `color-mix(in srgb, ${STATUS_COLOR.warn} 10%, transparent)` }}>
-            <AlertTriangle className="size-4" style={{ color: STATUS_COLOR.warn }} />
-            <AlertTitle style={{ color: 'var(--color-text-primary)' }}>Process restarted recently</AlertTitle>
-            <AlertDescription style={{ color: 'var(--color-text-primary)' }}>
+          <Alert className="mb-4 border-amber-500/40 bg-amber-500/10">
+            <AlertTriangle className="size-4 text-amber-500 dark:text-amber-400" />
+            <AlertTitle>Process restarted recently</AlertTitle>
+            <AlertDescription>
               This process started {timeAgo(processStartedAt!, now)} — maintenance flags live in memory only, so a
               restart silently re-enables everything that was disabled before it. Double-check the Endpoints tab if
               you were mid-incident.
@@ -395,26 +396,26 @@ export default function AdminPage() {
         {/* Stat bar */}
         <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Card className="p-4">
-            <div className="text-2xl font-bold" style={{ color: openCount > 0 ? STATUS_COLOR.warn : STATUS_COLOR.good }}>{openCount}</div>
-            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Open issues</div>
+            <div className={`text-2xl font-bold ${openCount > 0 ? STATUS_COLOR.warn : STATUS_COLOR.good}`}>{openCount}</div>
+            <div className="text-xs text-muted-foreground">Open issues</div>
           </Card>
           <Card className="p-4">
-            <div className="text-2xl font-bold" style={{ color: disabledCount > 0 ? STATUS_COLOR.warn : 'var(--color-text-primary)' }}>{disabledCount}</div>
-            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Endpoints disabled</div>
+            <div className={`text-2xl font-bold ${disabledCount > 0 ? STATUS_COLOR.warn : ''}`}>{disabledCount}</div>
+            <div className="text-xs text-muted-foreground">Endpoints disabled</div>
           </Card>
           <Card className="p-4">
             <div className="text-2xl font-bold">{bugReports.length}</div>
-            <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Total bug reports</div>
+            <div className="text-xs text-muted-foreground">Total bug reports</div>
           </Card>
         </div>
 
         {/* Tabs */}
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'issues' | 'endpoints')}>
-          <TabsList variant="line" className="mb-4 h-auto w-full justify-start gap-1 border-b p-0" style={{ borderColor: 'var(--color-border-subtle)' }}>
-            <TabsTrigger value="issues" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-(--clay-teal)">
+          <TabsList variant="line" className="mb-4 h-auto w-full justify-start gap-1 border-b border-border p-0">
+            <TabsTrigger value="issues" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
               Issues
             </TabsTrigger>
-            <TabsTrigger value="endpoints" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-(--clay-teal)">
+            <TabsTrigger value="endpoints" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
               Endpoints
             </TabsTrigger>
           </TabsList>
@@ -429,8 +430,7 @@ export default function AdminPage() {
                     if (next) setIssueFilter(next)
                   }}
                   variant="outline"
-                  className="flex-wrap overflow-x-auto rounded-lg border p-1"
-                  style={{ borderColor: 'var(--color-border-subtle)' }}
+                  className="flex-wrap overflow-x-auto rounded-lg border border-border p-1"
                 >
                   {(['open', 'all', 'errors', 'bugs'] as const).map((f) => (
                     <ToggleGroupItem
@@ -458,15 +458,15 @@ export default function AdminPage() {
 
               {filteredIssues.length === 0 && isAllClear && (
                 <div className="flex flex-col items-center gap-2 py-16 text-center">
-                  <CheckCircle2 className="size-10" style={{ color: STATUS_COLOR.good }} />
+                  <CheckCircle2 className={`size-10 ${STATUS_COLOR.good}`} />
                   <p className="text-sm font-semibold">All clear</p>
-                  <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  <p className="text-xs text-muted-foreground">
                     No open errors or bug reports. This is what a routine check should look like.
                   </p>
                 </div>
               )}
               {filteredIssues.length === 0 && !isAllClear && (
-                <p className="py-8 text-center text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                <p className="py-8 text-center text-sm text-muted-foreground">
                   Nothing matches this filter.
                 </p>
               )}
@@ -477,42 +477,26 @@ export default function AdminPage() {
                   return (
                     <Card
                       key={item.id}
-                      className="p-3"
-                      style={{ opacity: item.resolved ? 0.55 : 1 }}
+                      className={`p-3 ${item.resolved ? 'opacity-55' : ''}`}
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge
-                          className="font-semibold"
-                          style={{
-                            color: item.kind === 'error' ? STATUS_COLOR.err : STATUS_COLOR.accent,
-                            background: `color-mix(in srgb, ${item.kind === 'error' ? STATUS_COLOR.err : STATUS_COLOR.accent} 18%, transparent)`,
-                          }}
-                        >
+                        <Badge className={`font-semibold ${item.kind === 'error' ? STATUS_BADGE.err : STATUS_BADGE.accent}`}>
                           {item.kind === 'error' ? 'ERROR' : 'BUG'}
                         </Badge>
                         {isNew && (
-                          <Badge
-                            className="font-semibold"
-                            style={{ color: STATUS_COLOR.accent, background: `color-mix(in srgb, ${STATUS_COLOR.accent} 18%, transparent)` }}
-                          >
+                          <Badge className={`font-semibold ${STATUS_BADGE.accent}`}>
                             since you last looked
                           </Badge>
                         )}
                         <span className="font-mono text-xs font-semibold">{item.title}</span>
-                        <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{timeAgo(item.timestamp, now)}</span>
+                        <span className="text-xs text-muted-foreground">{timeAgo(item.timestamp, now)}</span>
                         {item.count && item.count > 1 && (
-                          <Badge
-                            className="font-semibold"
-                            style={{ color: STATUS_COLOR.warn, background: `color-mix(in srgb, ${STATUS_COLOR.warn} 18%, transparent)` }}
-                          >
+                          <Badge className={`font-semibold ${STATUS_BADGE.warn}`}>
                             ×{item.count}
                           </Badge>
                         )}
                         {item.resolved && (
-                          <Badge
-                            className="font-semibold"
-                            style={{ color: STATUS_COLOR.dim, background: `color-mix(in srgb, ${STATUS_COLOR.dim} 18%, transparent)` }}
-                          >
+                          <Badge className={`font-semibold ${STATUS_BADGE.dim}`}>
                             resolved
                           </Badge>
                         )}
@@ -521,16 +505,15 @@ export default function AdminPage() {
                             onClick={item.onResolve}
                             variant="outline"
                             size="sm"
-                            className="ml-auto h-9 text-xs"
-                            style={{ color: STATUS_COLOR.good }}
+                            className={`ml-auto h-9 text-xs ${STATUS_COLOR.good}`}
                           >
                             Mark resolved
                           </Button>
                         )}
                       </div>
-                      <div className="mt-1.5 whitespace-pre-wrap text-xs" style={{ color: 'var(--color-text-primary)' }}>{item.detail}</div>
+                      <div className="mt-1.5 whitespace-pre-wrap text-xs">{item.detail}</div>
                       {item.meta && (
-                        <div className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                        <div className="mt-1 text-xs text-muted-foreground">
                           from: <PageUrlLink url={item.meta} />
                         </div>
                       )}
@@ -539,7 +522,7 @@ export default function AdminPage() {
                 })}
               </div>
 
-              <p className="mt-3 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              <p className="mt-3 text-xs text-muted-foreground">
                 Errors: {source.errors === 'supabase' ? 'durable' : 'in-memory only'} · Bug reports: {source.bugs === 'supabase' ? 'durable' : 'in-memory only'} · auto-refreshes every 15s.
               </p>
             </section>
@@ -547,7 +530,7 @@ export default function AdminPage() {
 
           <TabsContent value="endpoints">
             <section>
-              <p className="mb-4 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              <p className="mb-4 text-xs text-muted-foreground">
                 Disabling an endpoint here makes it actually return 503 to callers immediately — see docs/ADMIN_DASHBOARD_PRD.md.
                 Meta endpoints (health, status, errors, feedback, admin/*) aren&apos;t listed — you can&apos;t disable the tools that turn things back on.
               </p>
@@ -558,16 +541,15 @@ export default function AdminPage() {
                 }, {})
               ).map(([group, endpoints]) => (
                 <div key={group} className="mb-5">
-                  <h3 className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-secondary)' }}>{group}</h3>
-                  <Card className="overflow-hidden py-0">
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">{group}</h3>
+                  <Card className="overflow-hidden gap-0 py-0">
                     {endpoints.map((ep, i) => {
                       const flag = maintenance.find((f) => f.feature === ep.id)
                       const disabled = !!flag
                       return (
                         <div
                           key={ep.id}
-                          className="flex items-center gap-3 px-3 py-3"
-                          style={{ borderBottom: i < endpoints.length - 1 ? '1px solid var(--color-border-subtle)' : undefined }}
+                          className={`flex items-center gap-3 px-3 py-3 ${i < endpoints.length - 1 ? 'border-b border-border' : ''}`}
                         >
                           {/* The visible switch stays small, but the tap target is
                               padded to the 44x44 minimum via the wrapping span so
@@ -576,21 +558,18 @@ export default function AdminPage() {
                             <Switch
                               checked={!disabled}
                               onCheckedChange={() => toggleEndpoint(ep.id, disabled)}
-                              className="data-checked:bg-(--color-success) data-unchecked:bg-(--color-error)"
+                              className="data-checked:bg-green-600 data-unchecked:bg-destructive"
                             />
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span
-                                className="rounded px-1.5 py-0.5 text-[10px] font-bold"
-                                style={{ background: 'var(--color-border-medium)', color: 'var(--color-text-secondary)' }}
-                              >
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
                                 {ep.method}
                               </span>
                               <span className="truncate font-mono text-xs">{ep.label}</span>
                             </div>
                             {flag && (
-                              <div className="mt-0.5 text-xs" style={{ color: STATUS_COLOR.warn }}>
+                              <div className={`mt-0.5 text-xs ${STATUS_COLOR.warn}`}>
                                 Disabled: {flag.reason} · {timeAgo(flag.since, now)}
                               </div>
                             )}

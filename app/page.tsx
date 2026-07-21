@@ -7,9 +7,18 @@
  * repository. This page exists so a developer hitting the deployment root
  * can see at a glance whether every endpoint is behaving, and can exercise
  * each one (including the SSE stream) without leaving the browser.
+ *
+ * Styling uses shadcn/ui's own default (light) theme and components — this
+ * page isn't opinionated about light/dark, so it just takes shadcn's stock
+ * palette (see app/globals.css) rather than a bespoke design-token system.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { AlertTriangle } from 'lucide-react'
 
 // ─── endpoint catalog ─────────────────────────────────────────────────────────
 
@@ -86,14 +95,28 @@ interface CheckResult {
 
 const SLOW_MS = 500 // above this, a 2xx response is "degraded" not "healthy"
 
-function statusColor(r: CheckResult, deprecated?: boolean): string {
-  if (deprecated) return 'var(--text-dim)'
-  if (r.state === 'running') return 'var(--warn)'
-  if (r.state === 'idle') return 'var(--text-dim)'
-  if (r.state === 'failed' || (r.status ?? 500) >= 500) return 'var(--err)'
-  if ((r.status ?? 0) >= 400) return 'var(--warn)'
-  if ((r.latencyMs ?? 0) > SLOW_MS) return 'var(--warn)'
-  return 'var(--ok)'
+// Tailwind classes for each status tier. shadcn's own theme doesn't ship
+// semantic success/warning colors (only primary/destructive/muted/accent),
+// so those two use Tailwind's stock green/amber scale — everything else
+// routes through shadcn's own tokens (text-destructive, text-muted-foreground).
+function statusDotClass(r: CheckResult, deprecated?: boolean): string {
+  if (deprecated) return 'bg-muted-foreground'
+  if (r.state === 'running') return 'bg-amber-500'
+  if (r.state === 'idle') return 'bg-muted-foreground'
+  if (r.state === 'failed' || (r.status ?? 500) >= 500) return 'bg-destructive'
+  if ((r.status ?? 0) >= 400) return 'bg-amber-500'
+  if ((r.latencyMs ?? 0) > SLOW_MS) return 'bg-amber-500'
+  return 'bg-green-600 dark:bg-green-500'
+}
+
+function statusTextClass(r: CheckResult, deprecated?: boolean): string {
+  if (deprecated) return 'text-muted-foreground'
+  if (r.state === 'running') return 'text-amber-600 dark:text-amber-400'
+  if (r.state === 'idle') return 'text-muted-foreground'
+  if (r.state === 'failed' || (r.status ?? 500) >= 500) return 'text-destructive'
+  if ((r.status ?? 0) >= 400) return 'text-amber-600 dark:text-amber-400'
+  if ((r.latencyMs ?? 0) > SLOW_MS) return 'text-amber-600 dark:text-amber-400'
+  return 'text-green-600 dark:text-green-500'
 }
 
 // Status must never be color-alone — pair the dot with a short text label.
@@ -340,10 +363,10 @@ export default function StatusPage() {
 
   const health = results['/api/health']
   const overall =
-    !health || health.state === 'running' ? { label: 'CHECKING…', color: 'var(--warn)' }
-    : health.state === 'done' && (health.status ?? 500) < 400 ? { label: 'OPERATIONAL', color: 'var(--ok)' }
-    : health.state === 'done' && (health.status ?? 500) === 503 ? { label: 'DEGRADED', color: 'var(--warn)' }
-    : { label: 'DOWN', color: 'var(--err)' }
+    !health || health.state === 'running' ? { label: 'CHECKING…', variant: 'secondary' as const }
+    : health.state === 'done' && (health.status ?? 500) < 400 ? { label: 'OPERATIONAL', variant: 'default' as const }
+    : health.state === 'done' && (health.status ?? 500) === 503 ? { label: 'DEGRADED', variant: 'secondary' as const }
+    : { label: 'DOWN', variant: 'destructive' as const }
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
@@ -351,113 +374,98 @@ export default function StatusPage() {
       <header className="mb-8">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-2xl" style={{ color: 'var(--accent)' }}>▍</span>
+            <span className="text-2xl text-primary">▍</span>
             <h1 className="text-xl font-bold tracking-tight">BusGo Track API</h1>
-            <span
-              className="rounded px-2 py-0.5 text-xs font-bold"
-              style={{ background: 'color-mix(in srgb, ' + overall.color + ' 15%, transparent)', color: overall.color }}
-            >
+            <Badge variant={overall.variant} className="font-bold">
               {overall.label}
-            </span>
+            </Badge>
           </div>
-          <a
-            href="/admin"
-            className="shrink-0 rounded border px-2.5 py-1 text-xs font-semibold hover:opacity-80"
-            style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
-          >
+          <a href="/admin" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'h-9 shrink-0 text-xs' })}>
             Admin →
           </a>
         </div>
-        <p className="mt-2 text-sm" style={{ color: 'var(--text-dim)' }}>
+        <p className="mt-2 text-sm text-muted-foreground">
           GTFS + realtime transit API for Kigali. The production frontend lives in a separate
           repository — this page is the developer status board.
           {checkedAt && <> Last checked {checkedAt}.</>}
         </p>
         {maintenance.length > 0 && (
-          <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--warn)' }}>
-            ⚠ {maintenance.length} endpoint{maintenance.length > 1 ? 's' : ''} currently disabled — see /admin for details.
-          </p>
+          <Alert className="mt-3 border-amber-500/40 bg-amber-500/10">
+            <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+            <AlertTitle>Endpoint{maintenance.length > 1 ? 's' : ''} disabled</AlertTitle>
+            <AlertDescription>
+              {maintenance.length} endpoint{maintenance.length > 1 ? 's' : ''} currently disabled — see /admin for details.
+            </AlertDescription>
+          </Alert>
         )}
-        <div className="mt-4 flex gap-2">
-          <button
-            onClick={runAll}
-            className="cursor-pointer rounded border px-3 py-1 text-xs hover:opacity-80"
-            style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
-          >
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button onClick={runAll} variant="outline" size="sm" className="h-9 text-xs">
             ↻ Re-run all checks
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={sse.running ? stopSse : startSse}
-            className="cursor-pointer rounded border px-3 py-1 text-xs hover:opacity-80"
-            style={
-              sse.running
-                ? { borderColor: 'var(--err)', color: 'var(--err)' }
-                : { borderColor: 'var(--border)', color: 'var(--text-dim)' }
-            }
+            variant="outline"
+            size="sm"
+            className={sse.running ? 'h-9 text-xs text-destructive border-destructive/40 hover:bg-destructive/10' : 'h-9 text-xs'}
           >
             {sse.running ? '■ Stop SSE stream' : '⚡ Start live SSE monitor'}
-          </button>
+          </Button>
           {sse.running && (
-            <button
-              onClick={injectTestData}
-              disabled={injecting}
-              className="cursor-pointer rounded border px-3 py-1 text-xs hover:opacity-80 disabled:opacity-50"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
-            >
+            <Button onClick={injectTestData} disabled={injecting} variant="outline" size="sm" className="h-9 text-xs">
               {injecting ? 'injecting…' : '💉 Inject test ping + incident'}
-            </button>
+            </Button>
           )}
         </div>
         {sse.state !== 'idle' && (
-          <div className="mt-3 rounded border p-3 text-xs" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+          <Card className="mt-3 p-3 text-xs">
             {(() => {
               const staleSec = sse.lastMessageAt ? Math.floor((now - sse.lastMessageAt) / 1000) : null
               const upSec = sse.connectedAt ? Math.floor((now - sse.connectedAt) / 1000) : null
               // A live stream ticks every ~2s; >10s quiet while "streaming" is suspicious.
-              const staleColor =
-                staleSec === null ? 'var(--text-dim)'
-                : staleSec > 10 ? 'var(--err)'
-                : staleSec > 4 ? 'var(--warn)'
-                : 'var(--ok)'
+              const staleClass =
+                staleSec === null ? 'text-muted-foreground'
+                : staleSec > 10 ? 'text-destructive'
+                : staleSec > 4 ? 'text-amber-600 dark:text-amber-400'
+                : 'text-green-600 dark:text-green-500'
               return (
                 <>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <span>
-                      SSE: <span style={{ color: 'var(--accent)' }}>{sse.state}</span>
+                      SSE: <span className="text-primary">{sse.state}</span>
                     </span>
                     <span>{sse.total} frames</span>
                     {upSec !== null && <span>up {upSec}s</span>}
                     {staleSec !== null && (
-                      <span style={{ color: staleColor }}>last frame {staleSec}s ago</span>
+                      <span className={staleClass}>last frame {staleSec}s ago</span>
                     )}
                     {sse.reconnects > 0 && (
-                      <span style={{ color: 'var(--warn)' }}>{sse.reconnects} reconnect{sse.reconnects > 1 ? 's' : ''}</span>
+                      <span className="text-amber-600 dark:text-amber-400">{sse.reconnects} reconnect{sse.reconnects > 1 ? 's' : ''}</span>
                     )}
                     {sse.errors > 0 && (
-                      <span style={{ color: 'var(--text-dim)' }}>{sse.errors} error{sse.errors > 1 ? 's' : ''}</span>
+                      <span className="text-muted-foreground">{sse.errors} error{sse.errors > 1 ? 's' : ''}</span>
                     )}
                   </div>
                   {/* Per-type breakdown — a stream that's "connected" but with a
                       whole event type stuck at 0 is the real bug most of the time. */}
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1" style={{ color: 'var(--text-dim)' }}>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
                     {SSE_EVENT_TYPES.map((t) => {
                       const n = sse.byType[t] ?? 0
                       return (
                         <span key={t}>
-                          {t}: <span style={{ color: n > 0 ? 'var(--ok)' : 'var(--text-dim)' }}>{n}</span>
+                          {t}: <span className={n > 0 ? 'text-green-600 dark:text-green-500' : 'text-muted-foreground'}>{n}</span>
                         </span>
                       )
                     })}
                   </div>
                   {sse.lastPayload && (
-                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all" style={{ color: 'var(--text-dim)' }}>
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-muted-foreground">
                       {sse.lastPayload}
                     </pre>
                   )}
                 </>
               )
             })()}
-          </div>
+          </Card>
         )}
       </header>
 
@@ -466,14 +474,14 @@ export default function StatusPage() {
       {errors.length > 0 && (
         <section className="mb-6">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--err)' }}>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-destructive">
               ⚠ Recent errors ({errors.length})
             </h2>
-            <a href="/admin" className="cursor-pointer rounded border px-2 py-0.5 text-xs hover:opacity-80" style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}>
+            <a href="/admin" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'h-7 text-xs' })}>
               Manage in /admin
             </a>
           </div>
-          <div className="overflow-hidden rounded border" style={{ borderColor: 'var(--err)' }}>
+          <Card className="overflow-hidden gap-0 border-destructive/40 py-0">
             {errors.map((e, i) => {
               const agoSec = Math.floor((now - e.lastAt) / 1000)
               const ago =
@@ -483,35 +491,29 @@ export default function StatusPage() {
               return (
                 <div
                   key={e.path + e.status + e.message}
-                  className="px-3 py-2 text-xs"
-                  style={{
-                    background: 'var(--surface)',
-                    borderBottom: i < errors.length - 1 ? '1px solid var(--border)' : undefined,
-                  }}
+                  className={`px-3 py-2 text-xs ${i < errors.length - 1 ? 'border-b border-border' : ''}`}
                 >
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="font-bold" style={{ color: e.status >= 500 ? 'var(--err)' : 'var(--warn)' }}>
+                    <span className={`font-bold ${e.status >= 500 ? 'text-destructive' : 'text-amber-600 dark:text-amber-400'}`}>
                       {e.status}
                     </span>
-                    <code style={{ color: 'var(--accent)' }}>{e.method} {e.path}</code>
-                    <span style={{ color: 'var(--text-dim)' }}>{ago}</span>
+                    <code className="text-primary">{e.method} {e.path}</code>
+                    <span className="text-muted-foreground">{ago}</span>
                     {e.count > 1 && (
-                      <span className="rounded px-1.5 font-bold" style={{ background: 'color-mix(in srgb, var(--err) 15%, transparent)', color: 'var(--err)' }}>
-                        ×{e.count}
-                      </span>
+                      <Badge variant="destructive" className="font-bold">×{e.count}</Badge>
                     )}
                   </div>
-                  <div className="mt-1" style={{ color: 'var(--text)' }}>{e.message}</div>
+                  <div className="mt-1">{e.message}</div>
                   {e.details && (
-                    <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all" style={{ color: 'var(--text-dim)' }}>
+                    <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-muted-foreground">
                       {e.details}
                     </pre>
                   )}
                 </div>
               )
             })}
-          </div>
-          <p className="mt-1.5 text-xs" style={{ color: 'var(--text-dim)' }}>
+          </Card>
+          <p className="mt-1.5 text-xs text-muted-foreground">
             {errorSource === 'supabase'
               ? 'Durable (Supabase) — survives redeploys. Auto-refreshes every 15s.'
               : 'In-memory only — clears on redeploy. Run supabase/migrations/0001_api_errors.sql to persist. Auto-refreshes every 15s.'}
@@ -522,83 +524,64 @@ export default function StatusPage() {
       {/* Endpoint groups */}
       {GROUPS.map((group) => (
         <section key={group} className="mb-6">
-          <h2 className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-dim)' }}>
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
             {group}
           </h2>
-          <div className="overflow-hidden rounded border" style={{ borderColor: 'var(--border)' }}>
+          <Card className="overflow-hidden gap-0 py-0">
             {ENDPOINTS.filter((e) => e.group === group).map((ep, i, arr) => {
               const r = results[ep.path] ?? { state: 'idle' as const }
               const isOpen = expanded === ep.path
               const label = statusLabel(r, !!ep.deprecated)
-              const dotColor = statusColor(r, !!ep.deprecated)
               return (
                 <div
                   key={ep.path}
-                  style={{
-                    background: 'var(--surface)',
-                    borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : undefined,
-                    opacity: ep.deprecated ? 0.6 : 1,
-                  }}
+                  className={`${i < arr.length - 1 ? 'border-b border-border' : ''} ${ep.deprecated ? 'opacity-60' : ''}`}
                 >
                   <div className="flex items-center gap-3 px-3 py-2 text-sm">
-                    <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: dotColor }} />
-                    <span
-                      className="w-11 shrink-0 text-xs font-bold"
-                      style={{ color: ep.method === 'GET' ? 'var(--method-get)' : 'var(--method-post)' }}
-                    >
+                    <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusDotClass(r, !!ep.deprecated)}`} />
+                    <span className={`w-11 shrink-0 text-xs font-bold ${ep.method === 'GET' ? 'text-blue-600 dark:text-blue-400' : 'text-violet-600 dark:text-violet-400'}`}>
                       {ep.method}
                     </span>
-                    <code
-                      className="min-w-0 flex-1 truncate text-xs"
-                      style={ep.deprecated ? { textDecoration: 'line-through' } : undefined}
-                    >
+                    <code className={`min-w-0 flex-1 truncate text-xs ${ep.deprecated ? 'line-through' : ''}`}>
                       {ep.path}
                     </code>
                     {ep.deprecated && (
-                      <span
-                        className="hidden shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold sm:inline"
-                        style={{ background: 'color-mix(in srgb, var(--clay-terracotta) 15%, transparent)', color: 'var(--clay-terracotta-deep)' }}
-                      >
+                      <Badge variant="secondary" className="hidden shrink-0 text-[10px] font-bold sm:inline-flex">
                         DEPRECATED
-                      </span>
+                      </Badge>
                     )}
-                    <span className="hidden shrink-0 text-xs sm:inline" style={{ color: 'var(--text-dim)' }}>
+                    <span className="hidden shrink-0 text-xs sm:inline text-muted-foreground">
                       {r.state === 'done' && <>{r.status} · {r.latencyMs}ms</>}
                       {r.state === 'failed' && 'network error'}
                       {r.state === 'running' && '…'}
-                      {label && <> · <span style={{ color: dotColor, fontWeight: 700 }}>{label}</span></>}
+                      {label && <> · <span className={`font-bold ${statusTextClass(r, !!ep.deprecated)}`}>{label}</span></>}
                     </span>
                     <button
                       onClick={() => runCheck(ep)}
-                      className="shrink-0 cursor-pointer text-xs hover:opacity-80"
-                      style={{ color: 'var(--accent)' }}
+                      className="shrink-0 cursor-pointer text-xs text-primary hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                     >
                       run
                     </button>
                     <button
                       onClick={() => setExpanded(isOpen ? null : ep.path)}
-                      className="shrink-0 cursor-pointer text-xs hover:opacity-80"
-                      style={{ color: 'var(--text-dim)' }}
+                      className="shrink-0 cursor-pointer text-xs text-muted-foreground hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                     >
                       {isOpen ? '▲' : '▼'}
                     </button>
                   </div>
                   {isOpen && (
-                    <div className="border-t px-3 py-2 text-xs" style={{ borderColor: 'var(--border)' }}>
-                      <p style={{ color: 'var(--text-dim)' }}>{ep.description}</p>
-                      <p className="mt-1" style={{ color: 'var(--text-dim)' }}>
+                    <div className="border-t border-border px-3 py-2 text-xs">
+                      <p className="text-muted-foreground">{ep.description}</p>
+                      <p className="mt-1 text-muted-foreground">
                         Test request: <code>{ep.method} {ep.testPath}</code>
                       </p>
                       {ep.deprecated && (
-                        <p className="mt-1 font-semibold" style={{ color: 'var(--clay-terracotta-deep)' }}>
+                        <p className="mt-1 font-semibold text-amber-600 dark:text-amber-400">
                           Deprecated — use <code>{ep.deprecated.replacement}</code> instead.
                         </p>
                       )}
                       {r.preview && (
-                        <pre
-                          className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded p-2"
-                          style={{ background: 'var(--bg)', color: 'var(--text-dim)' }}
-                        >
+                        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-muted-foreground">
                           {r.preview}
                         </pre>
                       )}
@@ -607,11 +590,11 @@ export default function StatusPage() {
                 </div>
               )
             })}
-          </div>
+          </Card>
         </section>
       ))}
 
-      <footer className="mt-10 text-center text-xs" style={{ color: 'var(--text-dim)' }}>
+      <footer className="mt-10 text-center text-xs text-muted-foreground">
         BusGo Track API · GTFS data: Kigali · SSE stream at <code>/api/realtime/sse</code>
       </footer>
     </main>
