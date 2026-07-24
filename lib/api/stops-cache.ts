@@ -119,6 +119,18 @@ export async function getCanonicalStops(): Promise<CachedStop[]> {
   return canonical ?? snapshot ?? []
 }
 
+/**
+ * Forces the next getAllStops()/getCanonicalStops() call to refetch from
+ * Supabase instead of serving the hourly snapshot. Call this after any
+ * admin write (create/rename/delete) — otherwise a stop you just edited
+ * would keep reading stale for up to an hour.
+ */
+export function invalidateStopsCache(): void {
+  snapshot = null
+  canonical = null
+  fetchedAt = 0
+}
+
 /** IDs of all stops within `radiusMeters` of a coordinate (includes the origin stop). */
 export async function findStopIdsNear(
   lat: number,
