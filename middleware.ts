@@ -49,7 +49,7 @@ const CORS_METHODS = 'GET,HEAD,OPTIONS,POST,PUT,PATCH,DELETE'
 const CORS_HEADERS = 'Content-Type, Authorization, X-Requested-With, Accept, Accept-Version, X-Api-Version, X-Admin-Token'
 
 // Mutating/write endpoints get a tighter budget than read-only lookups.
-const WRITE_PREFIXES = ['/api/incidents/report', '/api/realtime/broadcast', '/api/admin', '/api/feedback/report']
+const WRITE_PREFIXES = ['/api/incidents/report', '/api/realtime/broadcast', '/api/admin', '/api/feedback/report', '/api/stops/suggest']
 const WINDOW_MS = 60_000
 const READ_LIMIT = 120
 const WRITE_LIMIT = 30

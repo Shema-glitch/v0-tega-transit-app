@@ -6,13 +6,17 @@
  * POST /api/admin/stops: a stop whose name changed on the ground, or one
  * that was decommissioned, shouldn't have to wait on a full GTFS re-import.
  *
+ * The actual writes live in lib/api/stops-admin.ts — shared with
+ * /api/admin/stop-suggestions/[id] (approving a rename/delete suggestion
+ * does the exact same write, just triggered by a review instead of direct
+ * entry).
+ *
  * Requires ADMIN_TOKEN via the x-admin-token header.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getSupabaseServer } from '@/lib/supabase-server'
-import { invalidateStopsCache } from '@/lib/api/stops-cache'
+import { updateStopRow, deleteStopRow } from '@/lib/api/stops-admin'
 import { ErrorLog } from '@/lib/api/error-log'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 
@@ -50,23 +54,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Invalid payload', details: parsed.error.format() }, { status: 400, headers: CORS })
     }
 
-    const patch: Record<string, string | number> = {}
-    if (parsed.data.name !== undefined) patch.stop_name = parsed.data.name
-    if (parsed.data.lat !== undefined) patch.stop_lat = parsed.data.lat
-    if (parsed.data.lon !== undefined) patch.stop_lon = parsed.data.lon
-
-    const supabase = getSupabaseServer()
-    const { data, error } = await supabase.from('stops').update(patch).eq('stop_id', id).select('stop_id')
-
-    if (error) {
-      ErrorLog.record({ path: PATH, method: 'PATCH', status: 500, message: `Supabase update failed: ${error.message}` })
+    const result = await updateStopRow(id, parsed.data)
+    if (!result.ok) {
+      if (result.notFound) return NextResponse.json({ error: 'Stop not found' }, { status: 404, headers: CORS })
+      ErrorLog.record({ path: PATH, method: 'PATCH', status: 500, message: `Supabase update failed: ${result.error}` })
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500, headers: CORS })
     }
-    if (!data || data.length === 0) {
-      return NextResponse.json({ error: 'Stop not found' }, { status: 404, headers: CORS })
-    }
-
-    invalidateStopsCache()
 
     return NextResponse.json({ success: true }, { headers: CORS })
   } catch (err) {
@@ -84,18 +77,12 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const { id } = await params
 
   try {
-    const supabase = getSupabaseServer()
-    const { data, error } = await supabase.from('stops').delete().eq('stop_id', id).select('stop_id')
-
-    if (error) {
-      ErrorLog.record({ path: PATH, method: 'DELETE', status: 500, message: `Supabase delete failed: ${error.message}` })
+    const result = await deleteStopRow(id)
+    if (!result.ok) {
+      if (result.notFound) return NextResponse.json({ error: 'Stop not found' }, { status: 404, headers: CORS })
+      ErrorLog.record({ path: PATH, method: 'DELETE', status: 500, message: `Supabase delete failed: ${result.error}` })
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500, headers: CORS })
     }
-    if (!data || data.length === 0) {
-      return NextResponse.json({ error: 'Stop not found' }, { status: 404, headers: CORS })
-    }
-
-    invalidateStopsCache()
 
     return NextResponse.json({ success: true }, { headers: CORS })
   } catch (err) {

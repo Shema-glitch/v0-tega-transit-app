@@ -5,9 +5,9 @@
  * feed). Used by the frontend's debug/stop-editing mode so a rider-reported
  * missing stop can be added without waiting on the next GTFS import.
  *
- * stop_id is generated here (prefixed '9' + timestamp) rather than accepted
- * from the client, so a debug-mode-created stop can never collide with a
- * real GTFS numeric id (existing ids observed as 10-digit strings).
+ * The actual insert lives in lib/api/stops-admin.ts — shared with
+ * /api/admin/stop-suggestions/[id] (approving an 'add' suggestion does the
+ * exact same write, just triggered by a review instead of direct entry).
  *
  * Requires ADMIN_TOKEN via the x-admin-token header, same as the other
  * /api/admin/* routes.
@@ -15,8 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getSupabaseServer } from '@/lib/supabase-server'
-import { invalidateStopsCache } from '@/lib/api/stops-cache'
+import { createStopRow } from '@/lib/api/stops-admin'
 import { ErrorLog } from '@/lib/api/error-log'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 
@@ -36,12 +35,6 @@ function isAuthorized(request: NextRequest): boolean {
   return request.headers.get('x-admin-token') === token
 }
 
-function generateStopId(): string {
-  // '9' prefix keeps this namespace visually distinct from imported GTFS
-  // ids in any admin listing/export.
-  return `9${Date.now()}`
-}
-
 export async function POST(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
@@ -54,24 +47,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload', details: parsed.error.format() }, { status: 400, headers: CORS })
     }
 
-    const stopId = generateStopId()
-    const supabase = getSupabaseServer()
-    const { error } = await supabase.from('stops').insert({
-      stop_id: stopId,
-      stop_name: parsed.data.name,
-      stop_lat: parsed.data.lat,
-      stop_lon: parsed.data.lon,
-    })
-
-    if (error) {
-      ErrorLog.record({ path: PATH, method: 'POST', status: 500, message: `Supabase insert failed: ${error.message}` })
+    const result = await createStopRow(parsed.data.name, parsed.data.lat, parsed.data.lon)
+    if (!result.ok) {
+      ErrorLog.record({ path: PATH, method: 'POST', status: 500, message: `Supabase insert failed: ${result.error}` })
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500, headers: CORS })
     }
 
-    invalidateStopsCache()
-
     return NextResponse.json(
-      { id: stopId, name: parsed.data.name, lat: parsed.data.lat, lon: parsed.data.lon, type: 'stop' },
+      { id: result.id, name: parsed.data.name, lat: parsed.data.lat, lon: parsed.data.lon, type: 'stop' },
       { status: 201, headers: CORS }
     )
   } catch (err) {

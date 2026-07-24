@@ -83,6 +83,20 @@ interface MaintenanceFlag {
   since: number
 }
 
+// Mirrors lib/api/stop-suggestions.ts StopSuggestion.
+interface StopSuggestionEntry {
+  id: number
+  type: 'add' | 'rename' | 'delete'
+  stop_id: string | null
+  proposed_name: string | null
+  proposed_lat: number | null
+  proposed_lon: number | null
+  reason: string | null
+  client_id: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+}
+
 type IssueKind = 'error' | 'bug'
 
 interface IssueItem {
@@ -134,13 +148,14 @@ export default function AdminPage() {
   const [errors, setErrors] = useState<ErrorEntry[]>([])
   const [bugReports, setBugReports] = useState<BugReportEntry[]>([])
   const [maintenance, setMaintenance] = useState<MaintenanceFlag[]>([])
+  const [stopSuggestions, setStopSuggestions] = useState<StopSuggestionEntry[]>([])
   const [processStartedAt, setProcessStartedAt] = useState<number | null>(null)
   const [source, setSource] = useState<{ errors: 'supabase' | 'memory'; bugs: 'supabase' | 'memory' }>({
     errors: 'memory',
     bugs: 'memory',
   })
 
-  const [tab, setTab] = useState<'issues' | 'endpoints'>('issues')
+  const [tab, setTab] = useState<'issues' | 'endpoints' | 'suggestions'>('issues')
   const [issueFilter, setIssueFilter] = useState<'all' | 'errors' | 'bugs' | 'open'>('open')
   const [query, setQuery] = useState('')
 
@@ -156,10 +171,11 @@ export default function AdminPage() {
   const refreshAll = useCallback(async () => {
     const headers = authHeaders()
     try {
-      const [errRes, bugRes, maintRes] = await Promise.all([
+      const [errRes, bugRes, maintRes, suggRes] = await Promise.all([
         fetch('/api/errors', { cache: 'no-store' }),
         fetch('/api/feedback', { cache: 'no-store', headers }),
         fetch('/api/admin/maintenance', { cache: 'no-store' }),
+        fetch('/api/admin/stop-suggestions', { cache: 'no-store', headers }),
       ])
       if (bugRes.status === 401) {
         sessionStorage.removeItem('admin-token')
@@ -169,9 +185,11 @@ export default function AdminPage() {
       const errData = await errRes.json()
       const bugData = await bugRes.json()
       const maintData = await maintRes.json()
+      const suggData = await suggRes.json().catch(() => ({}))
       setErrors(errData.errors ?? [])
       setBugReports(bugData.reports ?? [])
       setMaintenance(maintData.flags ?? [])
+      setStopSuggestions(suggData.suggestions ?? [])
       if (typeof maintData.processStartedAt === 'number') setProcessStartedAt(maintData.processStartedAt)
       setSource({
         errors: errData.source === 'supabase' ? 'supabase' : 'memory',
@@ -179,6 +197,15 @@ export default function AdminPage() {
       })
     } catch { /* transient network hiccup — next 15s poll will retry */ }
   }, [authHeaders])
+
+  const resolveStopSuggestion = useCallback(async (id: number, decision: 'approve' | 'reject') => {
+    await fetch(`/api/admin/stop-suggestions/${id}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision }),
+    })
+    refreshAll()
+  }, [authHeaders, refreshAll])
 
   const login = useCallback(async () => {
     if (!tokenInput.trim()) return
@@ -394,7 +421,7 @@ export default function AdminPage() {
         )}
 
         {/* Stat bar */}
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Card className="p-4">
             <div className={`text-2xl font-bold ${openCount > 0 ? STATUS_COLOR.warn : STATUS_COLOR.good}`}>{openCount}</div>
             <div className="text-xs text-muted-foreground">Open issues</div>
@@ -407,16 +434,23 @@ export default function AdminPage() {
             <div className="text-2xl font-bold">{bugReports.length}</div>
             <div className="text-xs text-muted-foreground">Total bug reports</div>
           </Card>
+          <Card className="p-4">
+            <div className={`text-2xl font-bold ${stopSuggestions.length > 0 ? STATUS_COLOR.accent : ''}`}>{stopSuggestions.length}</div>
+            <div className="text-xs text-muted-foreground">Pending stop suggestions</div>
+          </Card>
         </div>
 
         {/* Tabs */}
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'issues' | 'endpoints')}>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'issues' | 'endpoints' | 'suggestions')}>
           <TabsList variant="line" className="mb-4 h-auto w-full justify-start gap-1 border-b border-border p-0">
             <TabsTrigger value="issues" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
               Issues
             </TabsTrigger>
             <TabsTrigger value="endpoints" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
               Endpoints
+            </TabsTrigger>
+            <TabsTrigger value="suggestions" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
+              Stop Suggestions{stopSuggestions.length > 0 ? ` (${stopSuggestions.length})` : ''}
             </TabsTrigger>
           </TabsList>
 
@@ -580,6 +614,56 @@ export default function AdminPage() {
                   </Card>
                 </div>
               ))}
+            </section>
+          </TabsContent>
+
+          <TabsContent value="suggestions">
+            <section>
+              <p className="mb-4 text-xs text-muted-foreground">
+                Rider-submitted stop corrections. Nothing here has touched the live map yet — approving replays the
+                same write the debug/admin stop editor uses; rejecting just drops it.
+              </p>
+              {stopSuggestions.length === 0 && (
+                <div className="flex flex-col items-center gap-2 py-16 text-center">
+                  <CheckCircle2 className={`size-10 ${STATUS_COLOR.good}`} />
+                  <p className="text-sm font-semibold">Queue is empty</p>
+                  <p className="text-xs text-muted-foreground">No pending stop suggestions right now.</p>
+                </div>
+              )}
+              <div className="space-y-2">
+                {stopSuggestions.map((s) => (
+                  <Card key={s.id} className="p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={`font-semibold ${STATUS_BADGE.accent}`}>{s.type.toUpperCase()}</Badge>
+                      <span className="font-mono text-xs font-semibold">
+                        {s.type === 'add' && `"${s.proposed_name}" @ ${s.proposed_lat?.toFixed(5)}, ${s.proposed_lon?.toFixed(5)}`}
+                        {s.type === 'rename' && `stop ${s.stop_id} → "${s.proposed_name}"`}
+                        {s.type === 'delete' && `delete stop ${s.stop_id}`}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{timeAgo(new Date(s.created_at).getTime(), now)}</span>
+                      <div className="ml-auto flex gap-2">
+                        <Button
+                          onClick={() => resolveStopSuggestion(s.id, 'approve')}
+                          variant="outline"
+                          size="sm"
+                          className={`h-9 text-xs ${STATUS_COLOR.good}`}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          onClick={() => resolveStopSuggestion(s.id, 'reject')}
+                          variant="outline"
+                          size="sm"
+                          className={`h-9 text-xs ${STATUS_COLOR.err}`}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </div>
+                    {s.reason && <div className="mt-1.5 text-xs text-muted-foreground">Reason: {s.reason}</div>}
+                  </Card>
+                ))}
+              </div>
             </section>
           </TabsContent>
         </Tabs>

@@ -53,6 +53,9 @@ export const ENDPOINT_REGISTRY: EndpointRegistryEntry[] = [
   { id: 'incidents.report', method: 'POST', label: '/api/incidents/report', group: 'Realtime', match: exact('/api/incidents/report') },
   { id: 'incidents.active', method: 'GET', label: '/api/incidents/active', group: 'Realtime', match: exact('/api/incidents/active') },
 
+  // Community
+  { id: 'stops.suggest', method: 'POST', label: '/api/stops/suggest', group: 'Community', match: exact('/api/stops/suggest') },
+
   // Deprecated
   { id: 'arrivals.legacy', method: 'GET', label: '/api/arrivals', group: 'Deprecated', match: exact('/api/arrivals') },
 ]
