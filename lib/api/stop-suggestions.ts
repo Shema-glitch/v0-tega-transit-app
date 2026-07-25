@@ -57,12 +57,19 @@ export const StopSuggestions = {
     return (data ?? []) as StopSuggestion[]
   },
 
-  /** Returns the suggestion row (pre-update) so the caller can act on it, or null if not found/already resolved. */
+  /**
+   * Returns the pending suggestion row so the caller can act on it, or null
+   * if not found/already resolved. Must go through the RPC function, not a
+   * direct `.from('stop_suggestions')` query — RLS on that table has no
+   * policies (see 0005_stop_suggestions.sql), so a direct query silently
+   * returns zero rows for the anon key regardless of what's actually there.
+   */
   async getOne(id: number): Promise<StopSuggestion | null> {
     const supabase = getSupabaseServer()
-    const { data, error } = await supabase.from('stop_suggestions').select('*').eq('id', id).eq('status', 'pending').maybeSingle()
+    const { data, error } = await supabase.rpc('get_pending_stop_suggestion', { p_id: id })
     if (error) throw new Error(`[stop-suggestions] getOne failed: ${error.message}`)
-    return (data as StopSuggestion) ?? null
+    const rows = (data ?? []) as StopSuggestion[]
+    return rows[0] ?? null
   },
 
   async resolve(id: number, status: 'approved' | 'rejected'): Promise<void> {
