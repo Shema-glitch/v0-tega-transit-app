@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Share2 } from 'lucide-react'
 import { ENDPOINT_REGISTRY } from '@/lib/api/endpoint-registry'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,6 +52,17 @@ const STATUS_BADGE = {
 // gets a one-time nudge so that's a visible surprise, not a silent one.
 const RECENT_RESTART_MS = 10 * 60 * 1000
 const LAST_SEEN_KEY = 'admin-last-seen'
+
+// The one link this dashboard hands out for sharing — a static, riders-only
+// guide with no admin surface at all (see frontend/public/guide.html in the
+// BusGo_Track repo). Deliberately NOT the same origin/path pattern as
+// anything under /admin, so there's no way to fat-finger sharing the wrong
+// link. Hardcoded rather than reading FRONTEND_ORIGIN: this points at the
+// deployed frontend regardless of which origin the CORS allowlist is
+// currently configured for, and middleware.ts's own fallback constant has a
+// stray hyphen bug (bus-go-track vs the real busgo-track) that this avoids
+// depending on.
+const COMMUNITY_GUIDE_URL = 'https://busgo-track.vercel.app/guide.html'
 
 // Mirrors lib/api/error-log.ts ErrorEntry.
 interface ErrorEntry {
@@ -136,6 +147,40 @@ function PageUrlLink({ url }: { url: string }) {
     >
       {url}
     </a>
+  )
+}
+
+function CopyGuideLinkButton() {
+  const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const copy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(COMMUNITY_GUIDE_URL)
+    } catch {
+      // Clipboard API can fail (permissions, insecure context) — the link
+      // is still visible/clickable via the button's title, so this is a
+      // degraded-but-not-broken outcome, not worth surfacing an error for.
+      return
+    }
+    setCopied(true)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setCopied(false), 1800)
+  }, [])
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+
+  return (
+    <Button
+      onClick={copy}
+      variant="outline"
+      size="sm"
+      className="h-9 gap-1.5 text-xs"
+      title={COMMUNITY_GUIDE_URL}
+    >
+      <Share2 className="size-3.5" />
+      {copied ? 'Copied!' : 'Copy community guide link'}
+    </Button>
   )
 }
 
@@ -398,8 +443,9 @@ export default function AdminPage() {
               {overallStatus.label}
             </Badge>
           </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <a href="/">public status page</a>
+            <CopyGuideLinkButton />
             <Button onClick={logout} variant="outline" size="lg" className="h-11 text-xs">
               Log out
             </Button>
