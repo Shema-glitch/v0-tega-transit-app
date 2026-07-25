@@ -4,6 +4,14 @@
  * (app/api/admin/stop-suggestions/[id]), so "approve a suggestion" and
  * "edit a stop directly" can never drift into two different code paths
  * that happen to do almost the same insert/update/delete.
+ *
+ * Writes go through the admin_create_stop/admin_update_stop/admin_delete_stop
+ * SECURITY DEFINER functions (supabase/migrations/0007_stops_admin_writes.sql),
+ * not a direct `.from('stops')` call — the live `stops` table has RLS
+ * enabled with no policy permitting the anon key to write, discovered when
+ * a direct insert/update/delete failed with "new row violates row-level
+ * security policy" during verification. Same reason stop_suggestions and
+ * bug_reports already go through functions instead of direct table access.
  */
 
 import { getSupabaseServer } from '../supabase-server'
@@ -23,7 +31,7 @@ export function generateStopId(): string {
 export async function createStopRow(name: string, lat: number, lon: number): Promise<WriteResult> {
   const stopId = generateStopId()
   const supabase = getSupabaseServer()
-  const { error } = await supabase.from('stops').insert({ stop_id: stopId, stop_name: name, stop_lat: lat, stop_lon: lon })
+  const { error } = await supabase.rpc('admin_create_stop', { p_stop_id: stopId, p_name: name, p_lat: lat, p_lon: lon })
   if (error) return { ok: false, error: error.message }
   invalidateStopsCache()
   return { ok: true, id: stopId }
@@ -33,13 +41,13 @@ export async function updateStopRow(
   id: string,
   patch: { name?: string; lat?: number; lon?: number }
 ): Promise<WriteResult> {
-  const dbPatch: Record<string, string | number> = {}
-  if (patch.name !== undefined) dbPatch.stop_name = patch.name
-  if (patch.lat !== undefined) dbPatch.stop_lat = patch.lat
-  if (patch.lon !== undefined) dbPatch.stop_lon = patch.lon
-
   const supabase = getSupabaseServer()
-  const { data, error } = await supabase.from('stops').update(dbPatch).eq('stop_id', id).select('stop_id')
+  const { data, error } = await supabase.rpc('admin_update_stop', {
+    p_stop_id: id,
+    p_name: patch.name ?? null,
+    p_lat: patch.lat ?? null,
+    p_lon: patch.lon ?? null,
+  })
   if (error) return { ok: false, error: error.message }
   if (!data || data.length === 0) return { ok: false, error: 'Stop not found', notFound: true }
   invalidateStopsCache()
@@ -48,7 +56,7 @@ export async function updateStopRow(
 
 export async function deleteStopRow(id: string): Promise<WriteResult> {
   const supabase = getSupabaseServer()
-  const { data, error } = await supabase.from('stops').delete().eq('stop_id', id).select('stop_id')
+  const { data, error } = await supabase.rpc('admin_delete_stop', { p_stop_id: id })
   if (error) return { ok: false, error: error.message }
   if (!data || data.length === 0) return { ok: false, error: 'Stop not found', notFound: true }
   invalidateStopsCache()
