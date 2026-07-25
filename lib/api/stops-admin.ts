@@ -14,7 +14,7 @@
  * bug_reports already go through functions instead of direct table access.
  */
 
-import { getSupabaseServer } from '../supabase-server'
+import { getSupabaseAdmin } from '../supabase-server'
 import { invalidateStopsCache } from './stops-cache'
 
 type WriteResult = { ok: true; id?: string } | { ok: false; error: string; notFound?: boolean }
@@ -30,7 +30,7 @@ export function generateStopId(): string {
 
 export async function createStopRow(name: string, lat: number, lon: number): Promise<WriteResult> {
   const stopId = generateStopId()
-  const supabase = getSupabaseServer()
+  const supabase = getSupabaseAdmin()
   const { error } = await supabase.rpc('admin_create_stop', { p_stop_id: stopId, p_name: name, p_lat: lat, p_lon: lon })
   if (error) return { ok: false, error: error.message }
   invalidateStopsCache()
@@ -41,7 +41,7 @@ export async function updateStopRow(
   id: string,
   patch: { name?: string; lat?: number; lon?: number }
 ): Promise<WriteResult> {
-  const supabase = getSupabaseServer()
+  const supabase = getSupabaseAdmin()
   const { data, error } = await supabase.rpc('admin_update_stop', {
     p_stop_id: id,
     p_name: patch.name ?? null,
@@ -55,7 +55,7 @@ export async function updateStopRow(
 }
 
 export async function deleteStopRow(id: string): Promise<WriteResult> {
-  const supabase = getSupabaseServer()
+  const supabase = getSupabaseAdmin()
   const { data, error } = await supabase.rpc('admin_delete_stop', { p_stop_id: id })
   if (error) return { ok: false, error: error.message }
   if (!data || data.length === 0) return { ok: false, error: 'Stop not found', notFound: true }

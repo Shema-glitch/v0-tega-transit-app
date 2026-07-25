@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { BugReports } from '@/lib/api/bug-reports'
 import { CacheService } from '@/lib/api/cache.service'
 import { CORS, corsPreflight } from '@/lib/api/cors'
-import { getSupabaseServer } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,7 +57,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const supabase = getSupabaseServer()
+    const supabase = getSupabaseAdmin()
     await supabase.rpc('resolve_bug_report', { p_id: Number(id) })
     return NextResponse.json({ success: true }, { headers: CORS })
   } catch (error) {

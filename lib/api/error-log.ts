@@ -20,7 +20,7 @@
  * and fall back to in-memory when Supabase is unreachable.
  */
 
-import { getSupabaseServer } from '../supabase-server'
+import { getSupabaseServer, getSupabaseAdmin } from '../supabase-server'
 
 export interface ErrorEntry {
   /** Stable key: method + path + status + message. */
@@ -129,7 +129,7 @@ class ErrorLogger {
   /** Durable recent errors, newest first. Returns null if Supabase is unreachable. */
   async getPersisted(limit = MAX_ENTRIES): Promise<ErrorEntry[] | null> {
     try {
-      const supabase = getSupabaseServer()
+      const supabase = getSupabaseAdmin()
       const { data, error } = await supabase.rpc('get_recent_api_errors', { p_limit: limit })
       if (error || !Array.isArray(data)) return null
       return data.map(mapRow)
@@ -141,7 +141,7 @@ class ErrorLogger {
   /** Best-effort durable clear. */
   async clearPersisted(): Promise<void> {
     try {
-      const supabase = getSupabaseServer()
+      const supabase = getSupabaseAdmin()
       await supabase.rpc('clear_api_errors')
     } catch {
       /* best-effort */
@@ -151,7 +151,7 @@ class ErrorLogger {
   /** Best-effort durable prune of rows older than `days` (see 0002_api_errors_retention.sql). */
   async pruneOld(days = RETENTION_DAYS): Promise<void> {
     try {
-      const supabase = getSupabaseServer()
+      const supabase = getSupabaseAdmin()
       await supabase.rpc('prune_api_errors', { p_days: days })
     } catch {
       // Supabase down or migration 0002 not run yet — nothing lost, just

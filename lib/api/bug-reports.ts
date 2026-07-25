@@ -10,7 +10,7 @@
  * auto-prunes — these need a human to read and resolve, not age out.
  */
 
-import { getSupabaseServer } from '../supabase-server'
+import { getSupabaseServer, getSupabaseAdmin } from '../supabase-server'
 
 export interface BugReport {
   id: string
@@ -78,7 +78,7 @@ class BugReportLogger {
   /** Durable recent reports, newest first. Returns null if Supabase is unreachable. */
   async getPersisted(limit = MAX_ENTRIES): Promise<BugReport[] | null> {
     try {
-      const supabase = getSupabaseServer()
+      const supabase = getSupabaseAdmin()
       const { data, error } = await supabase.rpc('get_recent_bug_reports', { p_limit: limit })
       if (error || !Array.isArray(data)) return null
       return data.map(mapRow)
@@ -90,7 +90,7 @@ class BugReportLogger {
   /** Best-effort durable clear. */
   async clearPersisted(): Promise<void> {
     try {
-      const supabase = getSupabaseServer()
+      const supabase = getSupabaseAdmin()
       await supabase.rpc('clear_bug_reports')
     } catch {
       /* best-effort */

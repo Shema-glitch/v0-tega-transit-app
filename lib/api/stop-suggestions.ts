@@ -7,7 +7,7 @@
  * something anyone is waiting on synchronously.
  */
 
-import { getSupabaseServer } from '../supabase-server'
+import { getSupabaseServer, getSupabaseAdmin } from '../supabase-server'
 
 export type SuggestionType = 'add' | 'rename' | 'delete'
 
@@ -51,7 +51,7 @@ export const StopSuggestions = {
   },
 
   async getPending(limit = 200): Promise<StopSuggestion[]> {
-    const supabase = getSupabaseServer()
+    const supabase = getSupabaseAdmin()
     const { data, error } = await supabase.rpc('get_pending_stop_suggestions', { p_limit: limit })
     if (error) throw new Error(`[stop-suggestions] getPending failed: ${error.message}`)
     return (data ?? []) as StopSuggestion[]
@@ -65,7 +65,7 @@ export const StopSuggestions = {
    * returns zero rows for the anon key regardless of what's actually there.
    */
   async getOne(id: number): Promise<StopSuggestion | null> {
-    const supabase = getSupabaseServer()
+    const supabase = getSupabaseAdmin()
     const { data, error } = await supabase.rpc('get_pending_stop_suggestion', { p_id: id })
     if (error) throw new Error(`[stop-suggestions] getOne failed: ${error.message}`)
     const rows = (data ?? []) as StopSuggestion[]
@@ -73,7 +73,7 @@ export const StopSuggestions = {
   },
 
   async resolve(id: number, status: 'approved' | 'rejected'): Promise<void> {
-    const supabase = getSupabaseServer()
+    const supabase = getSupabaseAdmin()
     const { error } = await supabase.rpc('resolve_stop_suggestion', { p_id: id, p_status: status })
     if (error) throw new Error(`[stop-suggestions] resolve failed: ${error.message}`)
   },
