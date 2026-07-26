@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Share2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Share2, Wrench } from 'lucide-react'
 import { ENDPOINT_REGISTRY } from '@/lib/api/endpoint-registry'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,7 @@ import { Card } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { MAINTENANCE_GUIDE_HTML } from '@/lib/admin/maintenance-guide-html'
 
 // shadcn's own theme doesn't ship semantic success/warning colors (only
 // primary/destructive/muted/accent), so those two route through Tailwind's
@@ -184,6 +185,31 @@ function CopyGuideLinkButton() {
   )
 }
 
+// Debug Mode (stop rename/delete/add) used to be a toggle any rider could
+// find in the app's own Preferences screen — a real problem, since it
+// writes to the live database and only an admin token gated whether those
+// writes actually landed. It's no longer discoverable there at all; this
+// button (and GET /admin/debug, which it calls) is now the only way in.
+// That route redirects to the frontend with the token in a URL FRAGMENT
+// (`#admin_debug=...`), never a query param, so it's never sent to any
+// server or written to a server access log on the frontend's end — the
+// frontend's AppContext reads it client-side on load and strips it
+// immediately. Only ever click this on a device you trust with the token.
+function LaunchDebugModeButton() {
+  const launch = useCallback(() => {
+    const token = sessionStorage.getItem('admin-token') || ''
+    if (!token) return
+    window.open(`/admin/debug?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer')
+  }, [])
+
+  return (
+    <Button onClick={launch} variant="outline" size="sm" className="h-9 gap-1.5 text-xs">
+      <Wrench className="size-3.5" />
+      Open app in Debug Mode
+    </Button>
+  )
+}
+
 export default function AdminPage() {
   const [authState, setAuthState] = useState<'checking' | 'out' | 'in'>('checking')
   const [tokenInput, setTokenInput] = useState('')
@@ -200,7 +226,7 @@ export default function AdminPage() {
     bugs: 'memory',
   })
 
-  const [tab, setTab] = useState<'issues' | 'endpoints' | 'suggestions'>('issues')
+  const [tab, setTab] = useState<'issues' | 'endpoints' | 'suggestions' | 'guide'>('issues')
   const [issueFilter, setIssueFilter] = useState<'all' | 'errors' | 'bugs' | 'open'>('open')
   const [query, setQuery] = useState('')
 
@@ -446,6 +472,7 @@ export default function AdminPage() {
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <a href="/">public status page</a>
             <CopyGuideLinkButton />
+            <LaunchDebugModeButton />
             <Button onClick={logout} variant="outline" size="lg" className="h-11 text-xs">
               Log out
             </Button>
@@ -487,7 +514,7 @@ export default function AdminPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'issues' | 'endpoints' | 'suggestions')}>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'issues' | 'endpoints' | 'suggestions' | 'guide')}>
           <TabsList variant="line" className="mb-4 h-auto w-full justify-start gap-1 border-b border-border p-0">
             <TabsTrigger value="issues" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
               Issues
@@ -497,6 +524,9 @@ export default function AdminPage() {
             </TabsTrigger>
             <TabsTrigger value="suggestions" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
               Stop Suggestions{stopSuggestions.length > 0 ? ` (${stopSuggestions.length})` : ''}
+            </TabsTrigger>
+            <TabsTrigger value="guide" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
+              Maintenance Guide
             </TabsTrigger>
           </TabsList>
 
@@ -710,6 +740,23 @@ export default function AdminPage() {
                   </Card>
                 ))}
               </div>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="guide">
+            <section>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Dual-repo maintenance &amp; QA reference — frontend (<span className="font-mono">BusGo_Track</span>), backend
+                (this repo), and a persistent testing checklist. Only visible to a signed-in admin; not published anywhere public.
+              </p>
+              <Card className="overflow-hidden p-0">
+                <iframe
+                  title="Maintenance & QA Guide"
+                  srcDoc={MAINTENANCE_GUIDE_HTML}
+                  sandbox="allow-scripts allow-same-origin"
+                  className="h-[75vh] w-full border-0 bg-background"
+                />
+              </Card>
             </section>
           </TabsContent>
         </Tabs>
