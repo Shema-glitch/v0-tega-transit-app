@@ -36,7 +36,7 @@ export const config = {
   runtime: 'nodejs',
 }
 
-const DEFAULT_FRONTEND_ORIGIN = 'https://bus-go-track.vercel.app'
+const DEFAULT_FRONTEND_ORIGIN = 'https://busgo-track.vercel.app'
 const VERCEL_PREVIEW_RE = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i
 
 function isAllowedOrigin(origin: string | null): origin is string {

@@ -16,14 +16,14 @@ function req(opts: { origin?: string; method?: string; path?: string } = {}) {
 
 describe('middleware CORS', () => {
   it('reflects the allowlisted frontend origin', () => {
-    const res = middleware(req({ origin: 'https://bus-go-track.vercel.app' }))
-    expect(res.headers.get('access-control-allow-origin')).toBe('https://bus-go-track.vercel.app')
+    const res = middleware(req({ origin: 'https://busgo-track.vercel.app' }))
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://busgo-track.vercel.app')
   })
 
   it('reflects a Vercel preview subdomain of the same project pattern', () => {
-    const res = middleware(req({ origin: 'https://bus-go-track-git-feature-x.vercel.app' }))
+    const res = middleware(req({ origin: 'https://busgo-track-git-feature-x.vercel.app' }))
     expect(res.headers.get('access-control-allow-origin')).toBe(
-      'https://bus-go-track-git-feature-x.vercel.app'
+      'https://busgo-track-git-feature-x.vercel.app'
     )
   })
 
@@ -33,9 +33,9 @@ describe('middleware CORS', () => {
   })
 
   it('answers OPTIONS preflight directly with 204', () => {
-    const res = middleware(req({ origin: 'https://bus-go-track.vercel.app', method: 'OPTIONS' }))
+    const res = middleware(req({ origin: 'https://busgo-track.vercel.app', method: 'OPTIONS' }))
     expect(res.status).toBe(204)
-    expect(res.headers.get('access-control-allow-origin')).toBe('https://bus-go-track.vercel.app')
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://busgo-track.vercel.app')
   })
 })
 
