@@ -13,5 +13,9 @@ services:
         sync: false
       - key: ADMIN_TOKEN
         sync: false
+      - key: ADMIN_SESSION_SECRET
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false

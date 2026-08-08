@@ -1,16 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { middleware } from './middleware'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
+import { createSessionCookieValue } from '@/lib/api/admin-auth'
 
 vi.mock('@/lib/api/error-log', () => ({
   ErrorLog: { record: vi.fn() },
 }))
 
-function req(opts: { origin?: string; method?: string; path?: string } = {}) {
-  const { origin, method = 'GET', path = '/api/health' } = opts
+function req(opts: { origin?: string; method?: string; path?: string; cookie?: string; token?: string } = {}) {
+  const { origin, method = 'GET', path = '/api/health', cookie, token } = opts
   const headers = new Headers()
   if (origin) headers.set('origin', origin)
+  if (cookie) headers.set('cookie', cookie)
+  if (token) headers.set('x-admin-token', token)
   return new NextRequest(new URL(`http://localhost:3000${path}`), { method, headers })
 }
 
@@ -100,5 +103,58 @@ describe('middleware maintenance enforcement', () => {
     const res = middleware(req({ path: '/api/errors' }))
     expect(res.status).not.toBe(503)
     MaintenanceStore.clear('/api/errors')
+  })
+})
+
+describe('middleware admin auth gate', () => {
+  beforeEach(() => {
+    process.env.ADMIN_TOKEN = 'middleware-test-token-abcdef'
+  })
+
+  afterEach(() => {
+    delete process.env.ADMIN_TOKEN
+  })
+
+  it('blocks unauthenticated /api/admin/* requests with 401', () => {
+    const res = middleware(req({ method: 'POST', path: '/api/admin/maintenance' }))
+    expect(res.status).toBe(401)
+  })
+
+  it('blocks unauthenticated /api/errors reads (error details are sensitive)', () => {
+    const res = middleware(req({ path: '/api/errors' }))
+    expect(res.status).toBe(401)
+  })
+
+  it('keeps GET /api/admin/maintenance public (flags are shown to riders)', () => {
+    const res = middleware(req({ path: '/api/admin/maintenance' }))
+    expect(res.status).not.toBe(401)
+  })
+
+  it('allows an authenticated admin via a valid session cookie', () => {
+    const cookie = createSessionCookieValue('admin@busgo.test')!
+    const res = middleware(req({ method: 'POST', path: '/api/admin/maintenance', cookie: `admin_session=${cookie}` }))
+    expect(res.status).not.toBe(401)
+  })
+
+  it('allows the legacy x-admin-token header', () => {
+    const res = middleware(req({ method: 'POST', path: '/api/admin/maintenance', token: 'middleware-test-token-abcdef' }))
+    expect(res.status).not.toBe(401)
+  })
+
+  it('redirects unauthenticated /admin pages to /goToAdminAuth', () => {
+    const res = middleware(req({ path: '/admin' }))
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toContain('/goToAdminAuth')
+  })
+
+  it('does not redirect authenticated /admin pages', () => {
+    const cookie = createSessionCookieValue('admin@busgo.test')!
+    const res = middleware(req({ path: '/admin', cookie: `admin_session=${cookie}` }))
+    expect(res.status).not.toBe(302)
+  })
+
+  it('leaves /admin/debug alone (the route validates its own credential)', () => {
+    const res = middleware(req({ path: '/admin/debug' }))
+    expect(res.status).not.toBe(302)
   })
 })

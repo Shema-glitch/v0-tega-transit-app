@@ -323,9 +323,9 @@ function CopyGuideLinkButton() {
 // immediately. Only ever click this on a device you trust with the token.
 function LaunchDebugModeButton() {
   const launch = useCallback(() => {
-    const token = sessionStorage.getItem('admin-token') || ''
-    if (!token) return
-    window.open(`/admin/debug?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer')
+    // The session cookie authenticates the request; the route mints a
+    // short-lived token for the frontend (see app/admin/debug/route.ts).
+    window.open('/admin/debug', '_blank', 'noopener,noreferrer')
   }, [])
 
   return (
@@ -338,8 +338,6 @@ function LaunchDebugModeButton() {
 
 export default function AdminPage() {
   const [authState, setAuthState] = useState<'checking' | 'out' | 'in'>('checking')
-  const [tokenInput, setTokenInput] = useState('')
-  const [loginError, setLoginError] = useState<string | null>(null)
   const now = useSharedNow()
 
   const [errors, setErrors] = useState<ErrorEntry[]>([])
@@ -376,11 +374,6 @@ export default function AdminPage() {
   // not the live-updating localStorage value (which we overwrite right away).
   const lastSeenAtRef = useRef<number | null>(null)
 
-  const authHeaders = useCallback((): Record<string, string> => {
-    const token = sessionStorage.getItem('admin-token') || ''
-    return { 'x-admin-token': token }
-  }, [])
-
   const pushToast = useCallback((message: string, kind: ToastItem['kind'] = 'success') => {
     const id = Date.now() + Math.random()
     setToasts((t) => [...t, { id, message, kind }])
@@ -388,16 +381,14 @@ export default function AdminPage() {
   }, [])
 
   const refreshAll = useCallback(async () => {
-    const headers = authHeaders()
     try {
       const [errRes, bugRes, maintRes, suggRes] = await Promise.all([
         fetch('/api/errors', { cache: 'no-store' }),
-        fetch('/api/feedback', { cache: 'no-store', headers }),
+        fetch('/api/feedback', { cache: 'no-store' }),
         fetch('/api/admin/maintenance', { cache: 'no-store' }),
-        fetch('/api/admin/stop-suggestions', { cache: 'no-store', headers }),
+        fetch('/api/admin/stop-suggestions', { cache: 'no-store' }),
       ])
       if (bugRes.status === 401) {
-        sessionStorage.removeItem('admin-token')
         setAuthState('out')
         return
       }
@@ -422,38 +413,23 @@ export default function AdminPage() {
     } finally {
       setLoading(false)
     }
-  }, [authHeaders])
+  }, [])
 
   const resolveStopSuggestion = useCallback(async (id: number, decision: 'approve' | 'reject') => {
     await fetch(`/api/admin/stop-suggestions/${id}`, {
       method: 'PATCH',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ decision }),
     })
     refreshAll()
     pushToast(decision === 'approve' ? 'Suggestion approved — stop updated' : 'Suggestion rejected')
-  }, [authHeaders, pushToast, refreshAll])
+  }, [pushToast, refreshAll])
 
-  const login = useCallback(async () => {
-    if (!tokenInput.trim()) return
-    setLoginError(null)
+  const logout = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/verify', { headers: { 'x-admin-token': tokenInput.trim() } })
-      if (!res.ok) {
-        setLoginError('Wrong admin token.')
-        return
-      }
-      sessionStorage.setItem('admin-token', tokenInput.trim())
-      setAuthState('in')
-    } catch {
-      setLoginError('Could not reach the API — try again.')
-    }
-  }, [tokenInput])
-
-  const logout = useCallback(() => {
-    sessionStorage.removeItem('admin-token')
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch { /* cookie is cleared by the server response either way */ }
     setAuthState('out')
-    setTokenInput('')
   }, [])
 
   const clearErrors = useCallback(() => {
@@ -464,12 +440,12 @@ export default function AdminPage() {
           ? 'This permanently deletes the durable error ledger in Supabase. There is no undo.'
           : 'This clears the in-memory error ledger.',
       onConfirm: async () => {
-        await fetch('/api/errors', { method: 'DELETE', headers: authHeaders() })
+        await fetch('/api/errors', { method: 'DELETE' })
         refreshAll()
         pushToast('Error ledger cleared')
       },
     })
-  }, [authHeaders, pushToast, refreshAll, source.errors])
+  }, [pushToast, refreshAll, source.errors])
 
   const clearBugReports = useCallback(() => {
     setConfirmAction({
@@ -479,22 +455,22 @@ export default function AdminPage() {
           ? 'This permanently deletes the durable bug-report table in Supabase. There is no undo.'
           : 'This clears the in-memory bug-report list.',
       onConfirm: async () => {
-        await fetch('/api/feedback', { method: 'DELETE', headers: authHeaders() })
+        await fetch('/api/feedback', { method: 'DELETE' })
         refreshAll()
         pushToast('Bug reports cleared')
       },
     })
-  }, [authHeaders, pushToast, refreshAll, source.bugs])
+  }, [pushToast, refreshAll, source.bugs])
 
   const resolveBugReport = useCallback(async (id: string) => {
     await fetch('/api/feedback', {
       method: 'PATCH',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
     refreshAll()
     pushToast('Bug report marked resolved')
-  }, [authHeaders, pushToast, refreshAll])
+  }, [pushToast, refreshAll])
 
   // Enabling is the recovery path and stays instant; disabling goes through the
   // reason dialog so Cancel is always a no-op (the old window.prompt fallback
@@ -502,12 +478,12 @@ export default function AdminPage() {
   const enableEndpoint = useCallback(async (ep: EndpointRegistryEntry) => {
     await fetch('/api/admin/maintenance', {
       method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ feature: ep.id, reason: '', active: false }),
     })
     refreshAll()
     pushToast(`Re-enabled ${ep.label}`)
-  }, [authHeaders, pushToast, refreshAll])
+  }, [pushToast, refreshAll])
 
   const submitDisable = useCallback(async () => {
     if (!disableTarget) return
@@ -516,7 +492,7 @@ export default function AdminPage() {
       const reason = disableReason.trim() || 'Under maintenance'
       await fetch('/api/admin/maintenance', {
         method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feature: disableTarget.id, reason, active: true }),
       })
       refreshAll()
@@ -528,25 +504,20 @@ export default function AdminPage() {
     } finally {
       setDisabling(false)
     }
-  }, [authHeaders, disableReason, disableTarget, pushToast, refreshAll])
+  }, [disableReason, disableTarget, pushToast, refreshAll])
 
-  // Check for a stored token on load.
+  // Check the HttpOnly session cookie on load.
   useEffect(() => {
-    const stored = sessionStorage.getItem('admin-token')
-    if (!stored) {
-      setAuthState('out')
-      return
-    }
-    fetch('/api/admin/verify', { headers: { 'x-admin-token': stored } })
-      .then((res) => {
-        if (res.ok) setAuthState('in')
-        else {
-          sessionStorage.removeItem('admin-token')
-          setAuthState('out')
-        }
-      })
+    fetch('/api/auth/session', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => setAuthState(d?.authenticated ? 'in' : 'out'))
       .catch(() => setAuthState('out'))
   }, [])
+
+  // No session → the login page at /goToAdminAuth owns the flow now.
+  useEffect(() => {
+    if (authState === 'out') window.location.replace('/goToAdminAuth')
+  }, [authState])
 
   // Capture "last seen" once per login, before overwriting it — everything
   // after this point compares against the moment THIS visit started.
@@ -614,33 +585,17 @@ export default function AdminPage() {
   const processUptimeMs = processStartedAt ? now - processStartedAt : null
   const showRestartNudge = processUptimeMs !== null && processUptimeMs < RECENT_RESTART_MS
 
-  // ─── Login screen ─────────────────────────────────────────────────────────
+  // ─── Session check screen ────────────────────────────────────────────────
+  // 'out' redirects to /goToAdminAuth via the effect above; this just covers
+  // the brief 'checking' moment so there's no flash of the dashboard.
   if (authState !== 'in') {
     return (
       <div className="dark flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
-        <Card className="w-full max-w-sm p-6">
-          <div className="mb-1 flex items-center gap-2">
-            <span className={`text-lg ${STATUS_COLOR.accent}`}>▍</span>
-            <h1 className="text-lg font-bold font-heading">BusGo Track — Admin</h1>
-          </div>
-          <p className="mb-5 text-xs text-muted-foreground">
-            {authState === 'checking' ? 'Checking for a saved session…' : 'Enter the ADMIN_TOKEN configured on Render.'}
-          </p>
-          <Input
-            type="password"
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') login() }}
-            placeholder="Admin token"
-            className="mb-3 h-11 text-sm"
-            autoFocus
-          />
-          {loginError && <p className={`mb-3 text-xs ${STATUS_COLOR.err}`}>{loginError}</p>}
-          <Button onClick={login} className="h-11 w-full justify-center text-sm">
-            Sign in
-          </Button>
-          <p className="mt-4 text-xs text-muted-foreground">
-            <a href="/" className={STATUS_COLOR.accent}>← back to the public status page</a>
+        <Card className="flex w-full max-w-sm items-center gap-3 p-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/assets/busgo-logo-dark.png" alt="BusGo Track" className="h-9 w-auto" />
+          <p className="text-sm text-muted-foreground">
+            {authState === 'checking' ? 'Checking session…' : 'Redirecting to admin login…'}
           </p>
         </Card>
       </div>
@@ -653,8 +608,9 @@ export default function AdminPage() {
       <header className="border-b border-border bg-card px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <span className={`text-xl ${STATUS_COLOR.accent}`}>▍</span>
-            <h1 className="text-base font-bold font-heading sm:text-lg">BusGo Track — Admin</h1>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/assets/busgo-logo-dark.png" alt="BusGo Track" className="h-8 w-auto" />
+            <h1 className="text-base font-bold font-heading sm:text-lg">Admin</h1>
             <Badge
               variant="outline"
               className={`font-semibold ${overallStatus.variant === 'good' ? STATUS_BADGE.good : STATUS_BADGE.warn}`}

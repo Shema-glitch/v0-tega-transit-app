@@ -1,5 +1,5 @@
 /**
- * Runs in front of every /api/* request. Three jobs:
+ * Runs in front of every /api/* request (and the /admin pages). Five jobs:
  *
  * 1. CORS allowlisting — reflects Access-Control-Allow-Origin only for the
  *    deployed frontend (FRONTEND_ORIGIN) and its Vercel preview deploys
@@ -7,16 +7,24 @@
  *    websites' browser JS from reading responses cross-origin. It does NOT
  *    stop non-browser callers (curl, scripts, server-to-server) — CORS is a
  *    browser-enforced mechanism, not an auth mechanism. That's what the rate
- *    limiter and the per-endpoint ADMIN_TOKEN checks are for.
+ *    limiter and the per-endpoint auth checks are for.
  *
- * 2. Per-IP rate limiting — a fixed-window counter (lib/api/rate-limiter.ts)
+ * 2. Admin auth gate — /api/admin/* and /api/errors require a valid
+ *    `admin_session` cookie (or the constant-time-checked legacy
+ *    x-admin-token). Unauthenticated /admin pages get redirected to
+ *    /goToAdminAuth, the login page. /admin/debug is exempt from the page
+ *    redirect — that route validates its own credential.
+ *
+ * 3. Per-IP rate limiting — a fixed-window counter (lib/api/rate-limiter.ts)
  *    that caps how many requests one IP can make to one route group per
  *    minute. This is the actual defense against a script hammering the API
  *    or someone firing 10,000 requests at one endpoint. It will NOT stop a
  *    real distributed (multi-IP) DDoS — that needs a CDN/WAF (e.g.
- *    Cloudflare) in front of Render, not application code.
+ *    Cloudflare) in front of Render, not application code. The auth
+ *    endpoints additionally have their own lockout + circuit breaker
+ *    (lib/api/auth-guard.ts).
  *
- * 3. Maintenance enforcement — the admin dashboard (/admin) can flip an
+ * 4. Maintenance enforcement — the admin dashboard (/admin) can flip an
  *    endpoint off (lib/api/endpoint-registry.ts + MaintenanceStore). This is
  *    what actually makes that real: a disabled endpoint gets a 503 here,
  *    before the route handler ever runs. See docs/ADMIN_DASHBOARD_PRD.md §4.
@@ -30,9 +38,11 @@ import { RateLimiterStore } from '@/lib/api/rate-limiter'
 import { ErrorLog } from '@/lib/api/error-log'
 import { findEndpoint } from '@/lib/api/endpoint-registry'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
+import { checkAdminAuth } from '@/lib/api/admin-auth'
+import { clientIp } from '@/lib/api/client-ip'
 
 export const config = {
-  matcher: '/api/:path*',
+  matcher: ['/api/:path*', '/admin/:path*'],
   runtime: 'nodejs',
 }
 
@@ -49,16 +59,17 @@ const CORS_METHODS = 'GET,HEAD,OPTIONS,POST,PUT,PATCH,DELETE'
 const CORS_HEADERS = 'Content-Type, Authorization, X-Requested-With, Accept, Accept-Version, X-Api-Version, X-Admin-Token'
 
 // Mutating/write endpoints get a tighter budget than read-only lookups.
-const WRITE_PREFIXES = ['/api/incidents/report', '/api/realtime/broadcast', '/api/admin', '/api/feedback/report', '/api/stops/suggest']
+const WRITE_PREFIXES = [
+  '/api/incidents/report',
+  '/api/realtime/broadcast',
+  '/api/admin',
+  '/api/feedback/report',
+  '/api/stops/suggest',
+  '/api/auth', // magic-link request/verify + logout
+]
 const WINDOW_MS = 60_000
 const READ_LIMIT = 120
 const WRITE_LIMIT = 30
-
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  if (forwarded) return forwarded.split(',')[0].trim()
-  return request.headers.get('x-real-ip') || 'unknown'
-}
 
 export function middleware(request: NextRequest) {
   const origin = request.headers.get('origin')
@@ -92,9 +103,32 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // Admin auth gate — /api/admin/* and /api/errors (error details can be
+  // sensitive: stack traces, DB messages). GET /api/admin/maintenance stays
+  // public: the flags themselves are shown to riders in the status banner.
+  const isAdminApi = path.startsWith('/api/admin') || path === '/api/errors'
+  const isPublicMaintenanceGet = path === '/api/admin/maintenance' && request.method === 'GET'
+  if (isAdminApi && !isPublicMaintenanceGet) {
+    const auth = checkAdminAuth(request)
+    if (!auth.ok) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders })
+    }
+  }
+
+  // Page gate — /admin (and subpages except /admin/debug) need a session;
+  // otherwise send the user to the login page.
+  const isAdminPage = path === '/admin' || path.startsWith('/admin/')
+  if (isAdminPage && path !== '/admin/debug') {
+    const auth = checkAdminAuth(request)
+    if (!auth.ok) {
+      const login = new URL('/goToAdminAuth', request.url)
+      return NextResponse.redirect(login.toString(), 302)
+    }
+  }
+
   const isWrite = WRITE_PREFIXES.some((p) => path.startsWith(p))
   const limit = isWrite ? WRITE_LIMIT : READ_LIMIT
-  const key = `${clientIp(request)}:${isWrite ? path : path.split('/').slice(0, 4).join('/')}`
+  const key = `${clientIp(request.headers)}:${isWrite ? path : path.split('/').slice(0, 4).join('/')}`
 
   const result = RateLimiterStore.check(key, limit, WINDOW_MS)
 

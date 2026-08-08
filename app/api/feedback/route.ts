@@ -11,19 +11,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { BugReports } from '@/lib/api/bug-reports'
 import { CacheService } from '@/lib/api/cache.service'
+import { checkAdminAuth } from '@/lib/api/admin-auth'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 import { getSupabaseAdmin } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
-function isAuthorized(request: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN
-  if (!token) return false
-  return request.headers.get('x-admin-token') === token
-}
-
 export async function GET(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!checkAdminAuth(request).ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
 
@@ -37,7 +32,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!checkAdminAuth(request).ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
   BugReports.clear()
@@ -46,7 +41,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!checkAdminAuth(request).ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
 

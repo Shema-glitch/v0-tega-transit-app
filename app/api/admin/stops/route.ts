@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createStopRow } from '@/lib/api/stops-admin'
+import { checkAdminAuth } from '@/lib/api/admin-auth'
 import { ErrorLog } from '@/lib/api/error-log'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 
@@ -29,14 +30,8 @@ const CreateStopSchema = z.object({
   lon: z.number().finite().gte(-180).lte(180),
 })
 
-function isAuthorized(request: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN
-  if (!token) return false
-  return request.headers.get('x-admin-token') === token
-}
-
 export async function POST(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!checkAdminAuth(request).ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
 

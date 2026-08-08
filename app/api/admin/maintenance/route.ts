@@ -12,15 +12,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
 import { CacheService } from '@/lib/api/cache.service'
+import { checkAdminAuth } from '@/lib/api/admin-auth'
 import { PROCESS_STARTED_AT } from '@/lib/api/process-info'
 
 export const dynamic = 'force-dynamic'
-
-function isAuthorized(request: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN
-  if (!token) return false // refuse to operate with no token configured
-  return request.headers.get('x-admin-token') === token
-}
 
 export async function GET() {
   return NextResponse.json(
@@ -30,7 +25,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!checkAdminAuth(request).ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -38,7 +38,6 @@ const ENDPOINTS: EndpointDef[] = [
   { group: 'System', method: 'GET', path: '/api/status', testPath: '/api/status', description: 'System status with SSE telemetry' },
   { group: 'System', method: 'GET', path: '/api/diagnostics', testPath: '/api/diagnostics', description: 'Per-vehicle health of crowdsourced pings' },
   { group: 'System', method: 'GET', path: '/api/admin/maintenance', testPath: '/api/admin/maintenance', description: 'Active maintenance flags (toggle from /admin)' },
-  { group: 'System', method: 'GET', path: '/api/errors', testPath: '/api/errors', description: 'Recent endpoint failures ledger (shows in the panel above when non-empty; manage from /admin)' },
   { group: 'System', method: 'POST', path: '/api/feedback/report', testPath: '/api/feedback/report', description: 'Rider bug-report submission (public, no auth) — view + resolve from /admin', body: { subject: 'Test report', message: 'This is a test bug report from the dashboard.', pageUrl: 'https://bus-go-track.vercel.app/' } },
 
   // Stops & arrivals
@@ -137,18 +136,6 @@ interface MaintenanceFlag {
   since: number
 }
 
-// Mirrors lib/api/error-log.ts ErrorEntry — the recent-failures ledger.
-interface ErrorEntry {
-  path: string
-  method: string
-  status: number
-  message: string
-  details?: string
-  count: number
-  firstAt: number
-  lastAt: number
-}
-
 // ─── SSE live diagnostic ──────────────────────────────────────────────────────
 // The frontend consumes one long-lived SSE connection carrying several event
 // types multiplexed by a `type` field. When the app "feels dead," the useful
@@ -202,23 +189,12 @@ export default function StatusPage() {
   const [injecting, setInjecting] = useState(false)
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
   const [maintenance, setMaintenance] = useState<MaintenanceFlag[]>([])
-  const [errors, setErrors] = useState<ErrorEntry[]>([])
-  const [errorSource, setErrorSource] = useState<'supabase' | 'memory'>('memory')
 
   const refreshMaintenance = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/maintenance', { cache: 'no-store' })
       const data = await res.json()
       setMaintenance(data.flags ?? [])
-    } catch { /* dashboard still works without this */ }
-  }, [])
-
-  const refreshErrors = useCallback(async () => {
-    try {
-      const res = await fetch('/api/errors', { cache: 'no-store' })
-      const data = await res.json()
-      setErrors(data.errors ?? [])
-      setErrorSource(data.source === 'supabase' ? 'supabase' : 'memory')
     } catch { /* dashboard still works without this */ }
   }, [])
 
@@ -354,12 +330,7 @@ export default function StatusPage() {
   useEffect(() => {
     runAll()
     refreshMaintenance()
-    refreshErrors()
-    // Poll the error ledger so a failure that happens while the dashboard is
-    // open surfaces on its own, without a manual refresh.
-    const id = setInterval(refreshErrors, 15_000)
-    return () => clearInterval(id)
-  }, [runAll, refreshMaintenance, refreshErrors])
+  }, [runAll, refreshMaintenance])
 
   const health = results['/api/health']
   const overall =
@@ -374,15 +345,13 @@ export default function StatusPage() {
       <header className="mb-8">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-2xl text-primary">▍</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/assets/busgo-logo-light.png" alt="BusGo Track" className="h-9 w-auto" />
             <h1 className="text-xl font-bold tracking-tight">BusGo Track API</h1>
             <Badge variant={overall.variant} className="font-bold">
               {overall.label}
             </Badge>
           </div>
-          <a href="/admin" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'h-9 shrink-0 text-xs' })}>
-            Admin →
-          </a>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
           GTFS + realtime transit API for Kigali. The production frontend lives in a separate
@@ -469,57 +438,6 @@ export default function StatusPage() {
         )}
       </header>
 
-      {/* Recent errors ledger — the "what broke while I was away" panel.
-          Only rendered when there's something to show. */}
-      {errors.length > 0 && (
-        <section className="mb-6">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-destructive">
-              ⚠ Recent errors ({errors.length})
-            </h2>
-            <a href="/admin" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'h-7 text-xs' })}>
-              Manage in /admin
-            </a>
-          </div>
-          <Card className="overflow-hidden gap-0 border-destructive/40 py-0">
-            {errors.map((e, i) => {
-              const agoSec = Math.floor((now - e.lastAt) / 1000)
-              const ago =
-                agoSec < 60 ? `${agoSec}s ago`
-                : agoSec < 3600 ? `${Math.floor(agoSec / 60)}m ago`
-                : `${Math.floor(agoSec / 3600)}h ago`
-              return (
-                <div
-                  key={e.path + e.status + e.message}
-                  className={`px-3 py-2 text-xs ${i < errors.length - 1 ? 'border-b border-border' : ''}`}
-                >
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className={`font-bold ${e.status >= 500 ? 'text-destructive' : 'text-amber-600 dark:text-amber-400'}`}>
-                      {e.status}
-                    </span>
-                    <code className="text-primary">{e.method} {e.path}</code>
-                    <span className="text-muted-foreground">{ago}</span>
-                    {e.count > 1 && (
-                      <Badge variant="destructive" className="font-bold">×{e.count}</Badge>
-                    )}
-                  </div>
-                  <div className="mt-1">{e.message}</div>
-                  {e.details && (
-                    <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-muted-foreground">
-                      {e.details}
-                    </pre>
-                  )}
-                </div>
-              )
-            })}
-          </Card>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            {errorSource === 'supabase'
-              ? 'Durable (Supabase) — survives redeploys. Auto-refreshes every 15s.'
-              : 'In-memory only — clears on redeploy. Run supabase/migrations/0001_api_errors.sql to persist. Auto-refreshes every 15s.'}
-          </p>
-        </section>
-      )}
 
       {/* Endpoint groups */}
       {GROUPS.map((group) => (

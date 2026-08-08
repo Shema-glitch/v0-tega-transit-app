@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description:
     'Developer status page for the BusGo Track API: GTFS stops, routes, arrivals, and realtime vehicle streaming for Kigali.',
   icons: {
-    icon: '/icon.svg',
+    icon: '/assets/busgo-favicon-dark.ico',
   },
 }
 

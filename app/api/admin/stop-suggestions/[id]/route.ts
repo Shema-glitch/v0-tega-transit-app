@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { StopSuggestions } from '@/lib/api/stop-suggestions'
 import { createStopRow, updateStopRow, deleteStopRow } from '@/lib/api/stops-admin'
+import { checkAdminAuth } from '@/lib/api/admin-auth'
 import { ErrorLog } from '@/lib/api/error-log'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 
@@ -24,14 +25,8 @@ const PATH = '/api/admin/stop-suggestions/[id]'
 
 const DecisionSchema = z.object({ decision: z.enum(['approve', 'reject']) })
 
-function isAuthorized(request: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN
-  if (!token) return false
-  return request.headers.get('x-admin-token') === token
-}
-
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAuthorized(request)) {
+  if (!checkAdminAuth(request).ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
 

@@ -9,11 +9,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ErrorLog } from '@/lib/api/error-log'
 import { CacheService } from '@/lib/api/cache.service'
+import { checkAdminAuth } from '@/lib/api/admin-auth'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Error entries can carry stack traces and DB messages — admin-only now.
+  const auth = checkAdminAuth(request)
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
+  }
   // Prefer the durable store (survives redeploys); fall back to the in-memory
   // ledger when Supabase is unreachable or the table hasn't been created yet.
   const persisted = await ErrorLog.getPersisted()
@@ -26,8 +32,8 @@ export async function GET() {
 }
 
 export async function DELETE(request: NextRequest) {
-  const token = request.headers.get('x-admin-token')
-  if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) {
+  const auth = checkAdminAuth(request)
+  if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
   ErrorLog.clear()

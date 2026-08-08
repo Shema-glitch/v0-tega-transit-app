@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { updateStopRow, deleteStopRow } from '@/lib/api/stops-admin'
+import { checkAdminAuth } from '@/lib/api/admin-auth'
 import { ErrorLog } from '@/lib/api/error-log'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 
@@ -34,14 +35,8 @@ const UpdateStopSchema = z
     message: 'At least one of name, lat, lon is required',
   })
 
-function isAuthorized(request: NextRequest): boolean {
-  const token = process.env.ADMIN_TOKEN
-  if (!token) return false
-  return request.headers.get('x-admin-token') === token
-}
-
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAuthorized(request)) {
+  if (!checkAdminAuth(request).ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
 
@@ -70,7 +65,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAuthorized(request)) {
+  if (!checkAdminAuth(request).ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
 
