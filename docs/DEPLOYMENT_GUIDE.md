@@ -57,18 +57,31 @@ which is exactly what a realtime streaming API needs.
 
 ## Stopping the Vercel integration
 
-The 49+ failed deployments you may see on GitHub come from Vercel's own
-GitHub App integration, which is still linked to this repo under a different
-Vercel account. That link lives **outside** this repository, so unlink it in
-one of these places:
+The failed deployments you see on GitHub come from Vercel's own GitHub App
+integration, which was linked to this repo under a different Vercel account.
+Deleting the Vercel project stops new deploys, but the **app can still be
+installed** on the repo, and the deployment records it already created stay
+behind in GitHub. Removing the whole thing takes three steps, all in GitHub:
 
-- **Vercel dashboard** (sign in with the account that owns the stale project):
-  open the project → **Settings → Git** → **Disconnect Git repository**
-  (or just delete the project if it's unused). Any deploys it has queued will
-  stop.
-- **GitHub → Settings → Applications** (the account that owns the repo):
-  find **Vercel** → **Configure** → restrict it to only the repositories that
-  should auto-deploy, or revoke access entirely.
+1. **Delete the deployment environments Vercel created** — the "deployments
+   latched onto the repo".
+   Repo → **Settings → Environments** → delete every `vercel-*` entry
+   (each one may have a "Delete this environment" link at the bottom of its
+   page). This clears the deployment list/records on the repo.
 
-After that, GitHub stops showing the failing `Vercel` status check and only
-the Render deployment status remains.
+2. **Remove the Vercel GitHub App's access to this repo** — this stops it from
+   posting any new status checks on pushes/PRs.
+   GitHub → **Settings → Applications** (account level) → under *Installed
+   GitHub Apps* find **Vercel** → **Configure** → deselect this repository
+   under *Repository access*, or **Uninstall** the app entirely. The Vercel
+   project itself was already deleted, so there is nothing left to disconnect
+   on Vercel's side.
+
+3. **Drop any required "Vercel" check** (only if branch protection demands
+   it). Repo → **Settings → Branches** → edit the protection rule for
+   `main` → remove `Vercel` from *Require status checks to pass before
+   merging*.
+
+Old failed `Vercel` checks on **past** commits stay in the history (GitHub
+never rewrites past check records), but no new ones will appear after steps
+1–2, and only the Render deployment status remains going forward.
