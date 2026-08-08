@@ -1,8 +1,10 @@
 /**
  * GET /api/admin/auth-log
  *
- * Recent auth events (magic-link requests, code verifications, logins) from
- * the in-memory audit ring. Requires admin auth (session cookie or token).
+ * Recent auth events (magic-link requests, code verifications, logins).
+ * Reads the durable Supabase audit table first (survives restarts); falls
+ * back to the in-memory ring when Supabase is unreachable. Requires admin
+ * auth (session cookie or token).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -17,7 +19,11 @@ export async function GET(request: NextRequest) {
   if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
-  return NextResponse.json({ events: AuthLog.getRecent() }, { headers: CORS })
+  const persisted = await AuthLog.getPersisted(100)
+  return NextResponse.json(
+    { events: persisted ?? AuthLog.getRecent(), source: persisted ? 'supabase' : 'memory' },
+    { headers: CORS }
+  )
 }
 
 export async function OPTIONS() {

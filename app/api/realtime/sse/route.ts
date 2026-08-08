@@ -42,6 +42,10 @@ const DEFAULT_LNG = 30.0605
 const DEFAULT_RADIUS = 15000
 
 export async function GET(request: NextRequest) {
+  // Durable maintenance flags are hydrated before the stream starts, so the
+  // first `system:maintenance` frame reflects what survived the last restart.
+  await MaintenanceStore.ensureHydrated()
+
   // Connection limiting to prevent OOM
   if (TelemetryService.activeSSEConnections >= MAX_CONNECTIONS) {
     return new Response(JSON.stringify({ error: 'Too Many Connections' }), {

@@ -28,6 +28,8 @@
  *    endpoint off (lib/api/endpoint-registry.ts + MaintenanceStore). This is
  *    what actually makes that real: a disabled endpoint gets a 503 here,
  *    before the route handler ever runs. See docs/ADMIN_DASHBOARD_PRD.md §4.
+ *    Flags are durable (Supabase) and hydrated before any request is judged,
+ *    so a restart never silently re-enables a disabled endpoint.
  *
  * Runs on the Node.js runtime (not edge) so it shares the same in-memory
  * globalThis singleton the route handlers use for everything else.
@@ -38,7 +40,7 @@ import { RateLimiterStore } from '@/lib/api/rate-limiter'
 import { ErrorLog } from '@/lib/api/error-log'
 import { findEndpoint } from '@/lib/api/endpoint-registry'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
-import { checkAdminAuth } from '@/lib/api/admin-auth'
+import { checkAdminAuth, maybeRefreshSessionCookie } from '@/lib/api/admin-auth'
 import { clientIp } from '@/lib/api/client-ip'
 
 export const config = {
@@ -71,7 +73,7 @@ const WINDOW_MS = 60_000
 const READ_LIMIT = 120
 const WRITE_LIMIT = 30
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const origin = request.headers.get('origin')
   const allowed = isAllowedOrigin(origin)
 
@@ -90,7 +92,10 @@ export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
   // Maintenance kill switch — checked before rate limiting so a disabled
-  // endpoint doesn't even spend the caller's rate-limit budget.
+  // endpoint doesn't even spend the caller's rate-limit budget. Hydrate the
+  // durable flags first (fast after the first load) so the first request
+  // after a restart already sees what was disabled before it.
+  await MaintenanceStore.ensureHydrated()
   const endpoint = findEndpoint(path, request.method)
   if (endpoint) {
     const flags = MaintenanceStore.getAll()
@@ -108,22 +113,33 @@ export function middleware(request: NextRequest) {
   // public: the flags themselves are shown to riders in the status banner.
   const isAdminApi = path.startsWith('/api/admin') || path === '/api/errors'
   const isPublicMaintenanceGet = path === '/api/admin/maintenance' && request.method === 'GET'
+  let refreshedCookie: string | null = null
   if (isAdminApi && !isPublicMaintenanceGet) {
     const auth = checkAdminAuth(request)
     if (!auth.ok) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders })
     }
+    // Sliding session: an authenticated request re-issues the cookie (throttled
+    // to every 5 min), so 15 minutes of real inactivity kills it server-side.
+    refreshedCookie = maybeRefreshSessionCookie(request)
   }
 
   // Page gate — /admin (and subpages except /admin/debug) need a session;
-  // otherwise send the user to the login page.
+  // otherwise send the user to the login page. If a session cookie WAS sent
+  // but rejected (idle-expired, past the 8h cap, or tampered), pass the
+  // reason along so the login page can say "your session expired" instead of
+  // silently bouncing.
   const isAdminPage = path === '/admin' || path.startsWith('/admin/')
   if (isAdminPage && path !== '/admin/debug') {
     const auth = checkAdminAuth(request)
     if (!auth.ok) {
       const login = new URL('/goToAdminAuth', request.url)
+      if (auth.reason === 'invalid') {
+        login.searchParams.set('error', 'Your session expired — sign in again.')
+      }
       return NextResponse.redirect(login.toString(), 302)
     }
+    refreshedCookie ??= maybeRefreshSessionCookie(request)
   }
 
   const isWrite = WRITE_PREFIXES.some((p) => path.startsWith(p))
@@ -156,6 +172,7 @@ export function middleware(request: NextRequest) {
 
   const response = NextResponse.next()
   for (const [k, v] of Object.entries(corsHeaders)) response.headers.set(k, v)
+  if (refreshedCookie) response.headers.set('Set-Cookie', refreshedCookie)
   response.headers.set('X-RateLimit-Limit', String(limit))
   response.headers.set('X-RateLimit-Remaining', String(result.remaining))
   return response

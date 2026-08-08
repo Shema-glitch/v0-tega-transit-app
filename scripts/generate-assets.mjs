@@ -135,6 +135,24 @@ async function main() {
       .toFile(`${OUT}/${name}`)
     console.log(`wrote ${name}`)
   }
+
+  // ── Glyph marks for compact headers ─────────────────────────────────────
+  // The full lockup is tall (glyph + wordmark + tagline), so at header sizes
+  // (24–40px) the wordmark becomes unreadable. These are just the bus glyph on
+  // a transparent square, crisp at small sizes for the admin header / the
+  // session-check card.
+  for (const [name, src] of [
+    ['busgo-mark-dark.png', SRC_DARK],
+    ['busgo-mark-light.png', SRC_LIGHT],
+  ]) {
+    const g = await glyphBounds(src)
+    await sharp(src)
+      .extract(g)
+      .resize(160, 160, { fit: 'contain', background: transparent })
+      .png()
+      .toFile(`${OUT}/${name}`)
+    console.log(`wrote ${name}`)
+  }
 }
 
 main().catch((err) => {

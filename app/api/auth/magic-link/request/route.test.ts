@@ -2,14 +2,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { POST } from './route'
 import { getSupabaseServer } from '@/lib/supabase-server'
-import { isAllowlistedAdmin } from '@/lib/api/admin-auth'
+import { isAdminEmailAllowed } from '@/lib/api/admin-emails'
 import { getAuthGuardStatus } from '@/lib/api/auth-guard'
 
 vi.mock('@/lib/supabase-server', () => ({
   getSupabaseServer: vi.fn(),
 }))
-vi.mock('@/lib/api/admin-auth', () => ({
-  isAllowlistedAdmin: vi.fn(),
+vi.mock('@/lib/api/admin-emails', () => ({
+  isAdminEmailAllowed: vi.fn(),
 }))
 vi.mock('@/lib/api/auth-guard', () => ({
   getAuthGuardStatus: vi.fn(() => ({ blocked: false, retryAfterSec: 0 })),
@@ -23,7 +23,7 @@ vi.mock('@/lib/api/client-ip', () => ({
 }))
 
 const mockedServer = vi.mocked(getSupabaseServer)
-const mockedAllowlist = vi.mocked(isAllowlistedAdmin)
+const mockedAllowlist = vi.mocked(isAdminEmailAllowed)
 const mockedGuard = vi.mocked(getAuthGuardStatus)
 
 const signInWithOtp = vi.fn()
@@ -41,13 +41,13 @@ beforeEach(() => {
   signInWithOtp.mockReset()
   signInWithOtp.mockResolvedValue({ data: {}, error: null })
   mockedServer.mockReturnValue({ auth: { signInWithOtp } } as never)
-  mockedAllowlist.mockReturnValue(false)
+  mockedAllowlist.mockResolvedValue(false)
   mockedGuard.mockReturnValue({ blocked: false, retryAfterSec: 0 })
 })
 
 describe('POST /api/auth/magic-link/request', () => {
   it('sends a code for an allowlisted email and reports sent: true', async () => {
-    mockedAllowlist.mockReturnValue(true)
+    mockedAllowlist.mockResolvedValue(true)
     const res = await POST(req({ email: 'admin@busgo.rw' }))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ ok: true, sent: true })
@@ -63,7 +63,7 @@ describe('POST /api/auth/magic-link/request', () => {
   })
 
   it('never calls Supabase for a non-allowlisted email and reveals nothing', async () => {
-    mockedAllowlist.mockReturnValue(false)
+    mockedAllowlist.mockResolvedValue(false)
     const res = await POST(req({ email: 'stranger@example.com' }))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ ok: true, sent: false, detail: 'not-allowlisted' })
@@ -71,7 +71,7 @@ describe('POST /api/auth/magic-link/request', () => {
   })
 
   it('surfaces a Supabase rejection so the admin can fix the email provider', async () => {
-    mockedAllowlist.mockReturnValue(true)
+    mockedAllowlist.mockResolvedValue(true)
     signInWithOtp.mockResolvedValue({ data: {}, error: new Error('Email provider is disabled') })
     const res = await POST(req({ email: 'admin@busgo.rw' }))
     expect(res.status).toBe(200)

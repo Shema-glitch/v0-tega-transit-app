@@ -23,3 +23,6 @@ skills-lock.json
 
 # Supabase CLI local state (project ref/connection info, not secrets to ship)
 supabase/.temp/
+# Agent tool state (local only)
+.claude/
+.freebuff/

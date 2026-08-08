@@ -22,7 +22,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase-server'
-import { isAllowlistedAdmin } from '@/lib/api/admin-auth'
+import { isAdminEmailAllowed } from '@/lib/api/admin-emails'
 import { getAuthGuardStatus, recordAuthFailure } from '@/lib/api/auth-guard'
 import { AuthLog } from '@/lib/api/auth-log'
 import { clientIp } from '@/lib/api/client-ip'
@@ -49,7 +49,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid email address' }, { status: 400, headers: CORS })
   }
 
-  if (!isAllowlistedAdmin(email)) {
+  // Allowlist = ADMIN_EMAILS env seed + the admin_emails Supabase table
+  // (invited from the dashboard). Fails closed to the env list if the DB
+  // is unreachable.
+  if (!(await isAdminEmailAllowed(email))) {
     // Slow down allowlist probing without revealing anything.
     recordAuthFailure(ip)
     AuthLog.record({ action: 'magic-link-request', email, ip, ok: false, detail: 'not allowlisted' })

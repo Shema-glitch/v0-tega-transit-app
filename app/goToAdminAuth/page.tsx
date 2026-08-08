@@ -29,10 +29,11 @@ import {
   MapPin,
   ShieldCheck,
   TriangleAlert,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const RESEND_SECONDS = 45
@@ -62,6 +63,12 @@ function fmtCountdown(sec: number): string {
   return `0:${String(sec).padStart(2, '0')}`
 }
 
+/** mm:ss for session-expiry counts that can exceed a minute. */
+function fmtDuration(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 export default function GoToAdminAuthPage() {
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
@@ -70,14 +77,30 @@ export default function GoToAdminAuthPage() {
   const [verify, setVerify] = useState<VerifyState>({ kind: 'idle' })
   const [resendIn, setResendIn] = useState(0)
 
-  // Already signed in? Straight to the dashboard.
+  // Already signed in? Show a session notice with a live expiry countdown,
+  // then land on the dashboard after a beat (or on click).
+  const [sessionState, setSessionState] = useState<'checking' | 'signed-in' | 'none'>('checking')
+  const [session, setSession] = useState<{ email: string; idleExpiresInSec: number } | null>(null)
+  const [redirectIn, setRedirectIn] = useState(3)
+  const [idleLeft, setIdleLeft] = useState(0)
+
+  // System notices carried in from ?error= (failed magic-link click, or a
+  // session killed mid-use on the dashboard). Shown as a dismissible banner,
+  // separate from inline form validation errors.
+  const [notice, setNotice] = useState<string | null>(null)
+
   useEffect(() => {
     fetch('/api/auth/session', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
-        if (d?.authenticated) window.location.replace('/admin')
+        if (d?.authenticated) {
+          setSession({ email: d.email ?? '', idleExpiresInSec: d.idleExpiresInSec ?? 0 })
+          setSessionState('signed-in')
+        } else {
+          setSessionState('none')
+        }
       })
-      .catch(() => {})
+      .catch(() => setSessionState('none'))
   }, [])
 
   // A failed magic-link click lands here with ?error=… — surface it once.
@@ -85,10 +108,27 @@ export default function GoToAdminAuthPage() {
     const params = new URLSearchParams(window.location.search)
     const err = params.get('error')
     if (err) {
-      setSend({ kind: 'error', message: err })
+      setNotice(err)
       window.history.replaceState({}, '', '/goToAdminAuth')
     }
   }, [])
+
+  // Live countdowns while signed in: idle window left + the 3s auto-redirect.
+  useEffect(() => {
+    if (sessionState !== 'signed-in' || !session) return
+    setIdleLeft(session.idleExpiresInSec)
+    const id = setInterval(() => {
+      setIdleLeft((s) => Math.max(0, s - 1))
+      setRedirectIn((s) => (s > 0 ? s - 1 : 0))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [sessionState, session])
+
+  // Auto-redirect once the countdown hits zero.
+  useEffect(() => {
+    if (sessionState !== 'signed-in' || redirectIn > 0) return
+    window.location.replace('/admin')
+  }, [sessionState, redirectIn])
 
   // Resend countdown ticker (only while > 0).
   useEffect(() => {
@@ -204,7 +244,7 @@ export default function GoToAdminAuthPage() {
 
           <div className="relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-10 w-auto" />
+            <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-20 w-auto xl:h-24" />
           </div>
 
           <div className="relative max-w-md">
@@ -243,13 +283,72 @@ export default function GoToAdminAuthPage() {
         {/* ─── Form panel ─────────────────────────────────────────────────── */}
         <main className="flex items-center justify-center px-5 py-12 sm:px-10">
           <div className="w-full max-w-sm">
-            {/* Mobile logo */}
-            <div className="mb-10 flex justify-center lg:hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-10 w-auto" />
-            </div>
+            {sessionState === 'signed-in' && session ? (
+              /* Already signed in — session notice with a live expiry countdown,
+                 then auto-redirect (or Continue on click). */
+              <div className="flex flex-col items-center text-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-16 w-auto" />
+                <div className="rise-in mt-8 w-full" style={{ '--rise-index': 0 } as CSSProperties}>
+                  <p className="text-xs font-semibold tracking-widest text-emerald-400/90 uppercase">
+                    Admin console
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight">You&apos;re signed in</h2>
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    Signed in as <span className="font-mono text-xs">{session.email}</span>. Taking you to
+                    the dashboard…
+                  </p>
 
-            <div className="rise-in" style={{ '--rise-index': 0 } as CSSProperties}>
+                  <div className="mt-5 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2 text-xs font-medium text-emerald-300">
+                      <span className="status-breathe size-1.5 rounded-full bg-emerald-400" />
+                      Session active — redirecting in {redirectIn}s
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Idle session expires in{' '}
+                      <span className="font-mono text-xs tabular-nums text-foreground">
+                        {fmtDuration(idleLeft)}
+                      </span>{' '}
+                      without activity.
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => window.location.replace('/admin')}
+                    className="mt-4 h-11 w-full text-sm"
+                  >
+                    Continue to dashboard
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Mobile logo */}
+                <div className="mb-10 flex justify-center lg:hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-16 w-auto" />
+                </div>
+
+                {/* System notice — a session killed mid-use, or a failed magic-link
+                    click, arrives as ?error=… and renders here (dismissible). */}
+                {notice && (
+                  <Alert className="mb-4 border-destructive/40 bg-destructive/10">
+                    <TriangleAlert className="size-4 text-destructive" />
+                    <AlertDescription className="pr-6 text-xs">{notice}</AlertDescription>
+                    <AlertAction>
+                      <button
+                        type="button"
+                        onClick={() => setNotice(null)}
+                        aria-label="Dismiss"
+                        className="rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </AlertAction>
+                  </Alert>
+                )}
+
+                <div className="rise-in" style={{ '--rise-index': 0 } as CSSProperties}>
               <p className="text-xs font-semibold tracking-widest text-emerald-400/90 uppercase">
                 Admin console
               </p>
@@ -319,9 +418,13 @@ export default function GoToAdminAuthPage() {
                   )}
                 </Button>
 
-                <p className="mt-5 text-center text-xs text-muted-foreground">
-                  <a href="/" className="underline underline-offset-2 hover:opacity-80">
-                    ← back to the public status page
+                <p className="mt-6 flex justify-center">
+                  <a
+                    href="/"
+                    className="group inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
+                    Back to the public status page
                   </a>
                 </p>
               </form>
@@ -407,7 +510,10 @@ export default function GoToAdminAuthPage() {
                         ? `Resend code in ${fmtCountdown(resendIn)}`
                         : 'Resend code'}
                   </button>
-                  <a href="/" className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                  <a
+                    href="/"
+                    className="font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
                     public status page
                   </a>
                 </div>
@@ -419,6 +525,8 @@ export default function GoToAdminAuthPage() {
                   </AlertDescription>
                 </Alert>
               </div>
+            )}
+              </>
             )}
           </div>
         </main>

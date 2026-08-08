@@ -1,6 +1,6 @@
 /**
  * Smart Caching Service
- * Centralizes cache duration logic for Vercel/Next.js edge caching
+ * Centralizes cache duration logic for Next.js edge/CDN caching
  * prioritizing 'stale-while-revalidate' for perceived realtime speed.
  */
 export class CacheService {

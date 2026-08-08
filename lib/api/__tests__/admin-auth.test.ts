@@ -6,6 +6,8 @@ import {
   createEphemeralToken,
   verifyEphemeralToken,
   isAllowlistedAdmin,
+  maybeRefreshSessionCookie,
+  sessionIdleRemainingMs,
 } from '@/lib/api/admin-auth'
 
 function fakeRequest(headers: Record<string, string | null> = {}) {
@@ -49,6 +51,24 @@ describe('session cookie', () => {
     const cookie = createSessionCookieValue('a@b.com')!
     vi.advanceTimersByTime(8 * 60 * 60 * 1000 + 60_000)
     expect(verifySessionCookieValue(cookie)).toBeNull()
+  })
+
+  it('kills a session left idle past the 15-minute window', () => {
+    vi.useFakeTimers()
+    const cookie = createSessionCookieValue('a@b.com')!
+    vi.advanceTimersByTime(15 * 60 * 1000 + 60_000)
+    expect(verifySessionCookieValue(cookie)).toBeNull()
+    const res = checkAdminAuth(fakeRequest({ cookie: `admin_session=${cookie}` }))
+    expect(res.ok).toBe(false)
+  })
+
+  it('keeps a session alive within the idle window', () => {
+    vi.useFakeTimers()
+    const cookie = createSessionCookieValue('a@b.com')!
+    vi.advanceTimersByTime(10 * 60 * 1000)
+    expect(verifySessionCookieValue(cookie)).toBe('a@b.com')
+    const res = checkAdminAuth(fakeRequest({ cookie: `admin_session=${cookie}` }))
+    expect(res.ok).toBe(true)
   })
 
   it('refuses to mint or verify when no signing secret is configured', () => {
@@ -118,5 +138,75 @@ describe('allowlist', () => {
   it('rejects everything when ADMIN_EMAILS is unset', () => {
     delete process.env.ADMIN_EMAILS
     expect(isAllowlistedAdmin('sonyxperiame1@gmail.com')).toBe(false)
+  })
+})
+
+describe('sessionIdleRemainingMs', () => {
+  it('returns ~15 minutes for a freshly minted session', () => {
+    const cookie = createSessionCookieValue('a@b.com')!
+    const remaining = sessionIdleRemainingMs(fakeRequest({ cookie: `admin_session=${cookie}` }))
+    expect(remaining).not.toBeNull()
+    expect(remaining!).toBeGreaterThan(14 * 60 * 1000)
+    expect(remaining!).toBeLessThanOrEqual(15 * 60 * 1000)
+  })
+
+  it('shrinks as the session ages', () => {
+    vi.useFakeTimers()
+    const cookie = createSessionCookieValue('a@b.com')!
+    vi.advanceTimersByTime(10 * 60 * 1000)
+    const remaining = sessionIdleRemainingMs(fakeRequest({ cookie: `admin_session=${cookie}` }))!
+    expect(remaining).toBeGreaterThan(4 * 60 * 1000)
+    expect(remaining).toBeLessThanOrEqual(5 * 60 * 1000)
+  })
+
+  it('returns null once the idle window has elapsed', () => {
+    vi.useFakeTimers()
+    const cookie = createSessionCookieValue('a@b.com')!
+    vi.advanceTimersByTime(16 * 60 * 1000)
+    expect(sessionIdleRemainingMs(fakeRequest({ cookie: `admin_session=${cookie}` }))).toBeNull()
+  })
+
+  it('returns null with no cookie', () => {
+    expect(sessionIdleRemainingMs(fakeRequest({}))).toBeNull()
+  })
+})
+
+describe('maybeRefreshSessionCookie (sliding expiry)', () => {
+  it('returns null when there is no session cookie', () => {
+    expect(maybeRefreshSessionCookie(fakeRequest({}))).toBeNull()
+    expect(maybeRefreshSessionCookie(fakeRequest({ cookie: 'other=1' }))).toBeNull()
+  })
+
+  it('returns null for a freshly minted session (under the 5-min refresh threshold)', () => {
+    const cookie = createSessionCookieValue('a@b.com')!
+    expect(maybeRefreshSessionCookie(fakeRequest({ cookie: `admin_session=${cookie}` }))).toBeNull()
+  })
+
+  it('returns a refreshed cookie once the session is past the refresh threshold', () => {
+    vi.useFakeTimers()
+    const cookie = createSessionCookieValue('a@b.com')!
+    vi.advanceTimersByTime(6 * 60 * 1000)
+    const refreshed = maybeRefreshSessionCookie(fakeRequest({ cookie: `admin_session=${cookie}` }))
+    expect(refreshed).toContain('admin_session=')
+    expect(refreshed).toContain('HttpOnly')
+    expect(refreshed).toContain('SameSite=Strict')
+    const value = refreshed!.split('=')[1].split(';')[0]
+    expect(verifySessionCookieValue(value)).toBe('a@b.com')
+  })
+
+  it('returns null for a session past the idle window (re-login, not refresh)', () => {
+    vi.useFakeTimers()
+    const cookie = createSessionCookieValue('a@b.com')!
+    vi.advanceTimersByTime(16 * 60 * 1000)
+    expect(maybeRefreshSessionCookie(fakeRequest({ cookie: `admin_session=${cookie}` }))).toBeNull()
+  })
+
+  it('returns null when no signing secret is configured', () => {
+    const cookie = createSessionCookieValue('a@b.com')!
+    vi.useFakeTimers()
+    vi.advanceTimersByTime(6 * 60 * 1000)
+    delete process.env.ADMIN_TOKEN
+    delete process.env.ADMIN_SESSION_SECRET
+    expect(maybeRefreshSessionCookie(fakeRequest({ cookie: `admin_session=${cookie}` }))).toBeNull()
   })
 })

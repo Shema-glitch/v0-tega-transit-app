@@ -131,9 +131,10 @@
   }
 }
 
-/* Admin dashboard micro-interactions (used by app/admin/page.tsx).
+/* Admin dashboard micro-interactions + surfaces (used by app/admin/page.tsx).
    Transform/opacity only (GPU-composited), custom strong ease-out curve, and
-   fully disabled under prefers-reduced-motion. */
+   fully disabled under prefers-reduced-motion. The emerald accent is the one
+   brand color — status greens/ambers/reds are semantic, never decorative. */
 @layer utilities {
   /* Entrance: fade + small rise, staggered via --rise-index (30-80ms steps). */
   .rise-in {
@@ -144,6 +145,46 @@
   /* "Alive" breathing dot for active stat cards. */
   .status-breathe {
     animation: status-breathe 2.4s ease-in-out infinite;
+  }
+
+  /* Film grain — fixed, pointer-events-none, so it never repaints on scroll
+     and never intercepts clicks (design-taste Section 5). */
+  .admin-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  content: '';
+  animation: grain-shift 9s steps(6) infinite;
+  transform: translateZ(0);
+  will-change: transform;
+  background-position: 0 0;
+}
+
+  /* Soft emerald-tinted shadow for the sticky app bar — shadow carries the
+     hue of the surface instead of a flat black drop (redesign Section 5). */
+  .tint-shadow {
+    box-shadow:
+      0 12px 32px -12px rgb(0 0 0 / 0.45),
+      0 1px 0 0 rgb(255 255 255 / 0.04) inset;
+  }
+
+  /* Row-level hover state for dense divided lists. */
+  .row-hover {
+    transition: background-color 160ms ease-out;
+  }
+  .row-hover:hover {
+    background-color: oklch(1 0 0 / 0.03);
+  }
+
+  /* Neutral mono method chip — GET/POST stop being blue/violet, the
+     "AI palette" tell; status carries color, method is structural. */
+  .method-chip {
+    @apply rounded border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-tight text-muted-foreground;
   }
 
   @keyframes rise-in {
@@ -167,9 +208,21 @@
     }
   }
 
+  @keyframes grain-shift {
+    0% { background-position: 0 0; }
+    20% { background-position: -32px 16px; }
+    40% { background-position: 16px -32px; }
+    60% { background-position: -16px -16px; }
+    80% { background-position: 32px 0; }
+    100% { background-position: 0 32px; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .rise-in,
     .status-breathe {
+      animation: none;
+    }
+    .admin-grain {
       animation: none;
     }
   }

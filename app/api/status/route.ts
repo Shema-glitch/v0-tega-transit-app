@@ -8,6 +8,9 @@ import { ErrorLog } from '@/lib/api/error-log'
 
 export async function GET() {
   try {
+    // Durable maintenance flags are hydrated before this public status read,
+    // so a restart never reports a disabled endpoint as healthy.
+    await MaintenanceStore.ensureHydrated()
     // Check DB connection via a quick health ping
     const { error: dbError } = await supabase.from('stops').select('stop_id').limit(1)
 

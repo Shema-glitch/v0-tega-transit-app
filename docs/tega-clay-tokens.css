@@ -1,0 +1,281 @@
+/* ══════════════════════════════════════════════════════════════════════
+   BUSGO TRACK — CLAYMORPHISM DESIGN TOKENS  (drop-in)
+   Soft 3D · warm ivory ground · pastel · rounded · chunky borders
+
+   Source of truth: BusGo_Track/frontend/src/index.css (the live app).
+   This is a self-contained copy for the API dashboard so it can share the
+   same look without importing the frontend build.
+
+   HOW TO USE
+   1. Import once, high up (e.g. top of app/globals.css, ABOVE @tailwind):
+          @import "./tega-clay-tokens.css";
+      or link it in app/layout.tsx.
+   2. Dark mode: this file toggles on the `.dark` class on <html> or <body>
+      (matches the frontend + Tailwind's `darkMode: 'class'`).
+   3. Use the CSS variables directly, or the ready-made component classes
+      at the bottom (.clay-card, .btn-primary, .btn-secondary, .clay-surface).
+
+   Fonts: Fraunces (display) + DM Sans (body). Add to app/layout.tsx via
+   next/font, or keep the @import line below.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300;1,9..144,400&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* ── Core Palette — "Kigali Clay" (warm ivory ground) ── */
+  --clay-bg:            #FBF3EA;
+  --clay-bg-warm:       #F5EBDF;
+  --clay-surface:       #FFFFFF;
+  --clay-surface-alt:   #F7EFE6;
+  --clay-surface-press: #EFE3D6;
+
+  /* ── Brand / Accent ── Hero = teal-green, Secondary = terracotta ── */
+  --clay-teal:          #3DB5A2;
+  --clay-teal-deep:     #2C8E7E;
+  --clay-terracotta:      #E1876C;
+  --clay-terracotta-deep: #CE6B50;
+  --clay-peach:         #EBA48D;
+  --clay-peach-deep:    #CE6B50;
+  --clay-blue:          #8FB8C9;
+  --clay-blue-deep:     #6E9DAE;
+  --clay-mint:          #8FD3A8;
+  --clay-mint-deep:     #6FBE8C;
+  --clay-lilac:         #D8D3E8;
+  --clay-lilac-deep:    #BDB6D6;
+  --clay-coral:         #E08478;
+  --clay-yellow:        #E7B84E;
+  --clay-pink:          #EDC3CE;
+
+  /* ── Text (warm greys, not cool) ── */
+  --clay-text:          #29251F;
+  --clay-text-secondary:#6C6157;
+  --clay-text-muted:    #A99E92;
+
+  /* ── Borders (warm-tinted) ── */
+  --clay-border:        rgba(41,37,31,0.10);
+  --clay-border-strong: rgba(41,37,31,0.16);
+  --clay-border-accent: rgba(61,181,162,0.35);
+
+  /* ── Shadows (double: inner + outer = the clay 3D look) ── */
+  --clay-shadow-outer:    4px 4px 12px rgba(0,0,0,0.08), 1px 1px 3px rgba(0,0,0,0.06);
+  --clay-shadow-inner:    inset -2px -2px 6px rgba(255,255,255,0.9), inset 2px 2px 4px rgba(0,0,0,0.04);
+  --clay-shadow-double:   4px 4px 12px rgba(0,0,0,0.08), 1px 1px 3px rgba(0,0,0,0.06), inset -2px -2px 6px rgba(255,255,255,0.9);
+  --clay-shadow-soft:     2px 2px 8px rgba(0,0,0,0.06);
+  --clay-shadow-float:    6px 6px 20px rgba(0,0,0,0.1), 2px 2px 6px rgba(0,0,0,0.06);
+  --clay-shadow-press:    inset 2px 2px 6px rgba(0,0,0,0.08), inset -1px -1px 3px rgba(255,255,255,0.6);
+
+  /* ── Dimensions ── */
+  --clay-radius:        20px;
+  --clay-radius-sm:     14px;
+  --clay-radius-lg:     24px;
+  --clay-radius-pill:   9999px;
+  --clay-border-width:  3px;   /* chunky — reserve for tactile / focal elements */
+  --clay-border-hair:   1.5px; /* informational surfaces */
+
+  /* ── Elevation tiers — depth encodes importance, not decoration ──
+       0 = flat (text, info rows, nav)     → no shadow
+       1 = resting (cards, panels, chips)  → single soft shadow
+       2 = tactile, reserved (CTAs, focal) → full clay double shadow */
+  --elev-0: none;
+  --elev-1: var(--clay-shadow-soft);
+  --elev-2: var(--clay-shadow-double);
+
+  /* ── Typography ── */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body:    'DM Sans', sans-serif;
+
+  --font-size-label:         13px;
+  --font-size-ui-label:      14px;
+  --font-size-panel-heading: 22px;
+  --font-size-eta-number:    32px;
+  --font-size-section-label: 11px;
+
+  /* ── Animation ── */
+  --clay-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --clay-ease:   cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ── Status (semantic — kept separate from the accent) ── */
+  --color-success: #4FA46A;
+  --color-warning: #E0A63C;
+  --color-error:   #DD5F54;
+  --color-danger:  #DD5F54;
+
+  /* ── Semantic aliases (use these in dashboard components) ── */
+  --color-bg-canvas:           var(--clay-bg);
+  --color-bg-surface:          var(--clay-surface);
+  --color-bg-surface-elevated: var(--clay-surface-alt);
+  --color-text-primary:        var(--clay-text);
+  --color-text-secondary:      var(--clay-text-secondary);
+  --color-text-muted:          var(--clay-text-muted);
+  --color-primary:             var(--clay-teal);
+  --color-primary-dim:         rgba(61,181,162,0.12);
+  --color-border-subtle:       var(--clay-border);
+  --color-border-medium:       var(--clay-border-strong);
+  --color-glass-panel-heavy:   rgba(255,255,255,0.92);
+
+  --shadow-float:     var(--clay-shadow-float);
+  --shadow-sheet:     0 -6px 32px rgba(0,0,0,0.1);
+  --shadow-elevation: var(--clay-shadow-outer);
+
+  --radius-badge:     var(--clay-radius-sm);
+  --radius-card:      var(--clay-radius);
+  --radius-pill:      var(--clay-radius-pill);
+  --radius-input:     var(--clay-radius-sm);
+  --radius-standard:  var(--clay-radius);
+  --radius-hero:      var(--clay-radius-lg);
+}
+
+/* ══════════════════════════════════════════════════════
+   DARK MODE — toggled by `.dark` on <html>/<body>
+   ══════════════════════════════════════════════════════ */
+.dark {
+  --clay-bg:            #1E1A17;
+  --clay-bg-warm:       #241F1B;
+  --clay-surface:       #292320;
+  --clay-surface-alt:   #322A25;
+  --clay-surface-press: #201B18;
+
+  /* Accents brighten slightly on the dark ground to hold their presence */
+  --clay-teal:          #58CDB8;
+  --clay-teal-deep:     #3DB5A2;
+  --clay-terracotta:      #EC9E86;
+  --clay-terracotta-deep: #D6795E;
+  --clay-peach:         #EC9E86;
+  --clay-peach-deep:    #D6795E;
+
+  --clay-text:          #ECE6DE;
+  --clay-text-secondary:#B0A498;
+  --clay-text-muted:    #7A7065;
+
+  --clay-border:        rgba(255,255,255,0.09);
+  --clay-border-strong: rgba(255,255,255,0.15);
+  --clay-border-accent: rgba(88,205,184,0.28);
+
+  --clay-shadow-outer:  4px 4px 12px rgba(0,0,0,0.3), 1px 1px 3px rgba(0,0,0,0.2);
+  --clay-shadow-inner:  inset -2px -2px 6px rgba(255,255,255,0.05), inset 2px 2px 4px rgba(0,0,0,0.2);
+  --clay-shadow-double: 4px 4px 12px rgba(0,0,0,0.3), 1px 1px 3px rgba(0,0,0,0.2), inset -2px -2px 6px rgba(255,255,255,0.05);
+  --clay-shadow-soft:   2px 2px 8px rgba(0,0,0,0.2);
+  --clay-shadow-float:  6px 6px 20px rgba(0,0,0,0.3), 2px 2px 6px rgba(0,0,0,0.2);
+  --clay-shadow-press:  inset 2px 2px 6px rgba(0,0,0,0.3), inset -1px -1px 3px rgba(255,255,255,0.04);
+
+  --color-bg-canvas:           var(--clay-bg);
+  --color-bg-surface:          var(--clay-surface);
+  --color-bg-surface-elevated: var(--clay-surface-alt);
+  --color-text-primary:        var(--clay-text);
+  --color-text-secondary:      var(--clay-text-secondary);
+  --color-text-muted:          var(--clay-text-muted);
+  --color-border-subtle:       var(--clay-border);
+  --color-border-medium:       var(--clay-border-strong);
+  --color-glass-panel-heavy:   rgba(30,26,23,0.92);
+
+  color-scheme: dark;
+}
+
+/* ══════════════════════════════════════════════════════
+   READY-MADE COMPONENT CLASSES  (optional — copy what you need)
+   ══════════════════════════════════════════════════════ */
+
+body {
+  background: var(--clay-bg);
+  color: var(--clay-text);
+  font-family: var(--font-body);
+}
+
+/* Card — the signature clay panel. Lifts on hover. Use for dashboard tiles. */
+.clay-card {
+  background: var(--clay-surface);
+  border: var(--clay-border-width) solid var(--clay-border);
+  border-radius: var(--clay-radius);
+  box-shadow: var(--clay-shadow-double);
+  transition: transform 0.2s var(--clay-bounce), box-shadow 0.2s ease;
+}
+.clay-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--clay-shadow-float), var(--clay-shadow-inner);
+}
+
+/* Surface — quiet resting container (no hover lift). Rows, list wrappers. */
+.clay-surface {
+  background: var(--clay-surface);
+  border: var(--clay-border-hair) solid var(--clay-border);
+  border-radius: var(--clay-radius);
+  box-shadow: var(--elev-1);
+}
+
+/* Primary button — teal, tactile, presses down on click. */
+.btn-primary {
+  background: var(--clay-teal);
+  color: var(--clay-text) !important;
+  padding: 0.85rem 2rem;
+  border-radius: var(--clay-radius-sm);
+  border: var(--clay-border-width) solid var(--clay-teal-deep);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--clay-shadow-outer), inset -2px -2px 6px rgba(255,255,255,0.4);
+  transition: transform 0.2s var(--clay-bounce), box-shadow 0.2s ease, background 0.2s ease;
+}
+.btn-primary:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--clay-shadow-float), inset -2px -2px 6px rgba(255,255,255,0.4);
+  background: var(--clay-teal-deep);
+}
+.btn-primary:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: var(--clay-shadow-press);
+}
+
+/* Secondary button — quiet outline, teal border on hover. */
+.btn-secondary {
+  color: var(--clay-text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.85rem 2rem;
+  border-radius: var(--clay-radius-sm);
+  border: var(--clay-border-hair) solid var(--clay-border-strong);
+  background: var(--clay-surface);
+  box-shadow: var(--elev-0);
+  transition: transform 0.2s var(--clay-bounce), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.btn-secondary:hover {
+  transform: translateY(-1px);
+  border-color: var(--clay-teal);
+  box-shadow: var(--clay-shadow-outer);
+  color: var(--clay-text);
+}
+.btn-secondary:active {
+  transform: translateY(1px);
+  box-shadow: var(--clay-shadow-press);
+}
+
+/* Glass panel — frosted, for sticky headers / floating toolbars. */
+.glass-panel-heavy {
+  background: var(--color-glass-panel-heavy);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--clay-border);
+  box-shadow: var(--elev-1);
+}
+
+/* Status pill — recolor via --pill-color (defaults to teal). */
+.clay-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--clay-radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pill-color, var(--clay-teal-deep));
+  background: color-mix(in srgb, var(--pill-color, var(--clay-teal)) 12%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--pill-color, var(--clay-teal)) 35%, transparent);
+}

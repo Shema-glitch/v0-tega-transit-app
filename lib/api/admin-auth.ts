@@ -21,13 +21,20 @@
 import crypto from 'crypto'
 
 export const SESSION_COOKIE = 'admin_session'
-export const SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 hours
+export const SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 hours absolute cap
+// "Not in use for ~15 min → kill the session". Each authenticated request that
+// passes the idle check re-issues the cookie (throttled to every 5 min), so
+// active use keeps the session alive while a session that sits unused — or a
+// captured cookie replayed later — dies within 15 minutes server-side.
+export const SESSION_IDLE_MS = 15 * 60 * 1000
+export const SESSION_REFRESH_MS = 5 * 60 * 1000 // re-sign at most this often
 const EPHEMERAL_TTL_MS = 5 * 60 * 1000 // 5 minutes
 const EPHEMERAL_PREFIX = 'ephem.'
 const EXP_SLACK_MS = 60_000 // allow clock skew without widening the window much
 
 interface SessionPayload {
   email: string
+  iat: number // last activity — sliding idle window
   exp: number
 }
 
@@ -43,15 +50,16 @@ export function timingSafeEqualStr(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ah, bh)
 }
 
-function sign(payload: Omit<SessionPayload, 'exp'>, ttlMs: number): string | null {
+function sign(email: string, ttlMs: number): string | null {
   const key = secret()
   if (!key) return null
-  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + ttlMs })).toString('base64url')
+  const now = Date.now()
+  const body = Buffer.from(JSON.stringify({ email, iat: now, exp: now + ttlMs })).toString('base64url')
   const sig = crypto.createHmac('sha256', key).update(body).digest('base64url')
   return `${body}.${sig}`
 }
 
-function verify(value: string, ttlMs: number): SessionPayload | null {
+function verify(value: string, ttlMs: number, idleMs?: number): SessionPayload | null {
   const key = secret()
   if (!key) return null
   const dot = value.indexOf('.')
@@ -62,9 +70,16 @@ function verify(value: string, ttlMs: number): SessionPayload | null {
   if (!timingSafeEqualStr(sig, expected)) return null
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as SessionPayload
-    if (typeof payload.email !== 'string' || typeof payload.exp !== 'number') return null
+    if (
+      typeof payload.email !== 'string' ||
+      typeof payload.iat !== 'number' ||
+      typeof payload.exp !== 'number'
+    ) {
+      return null
+    }
     if (payload.exp < Date.now()) return null // expired
     if (payload.exp > Date.now() + ttlMs + EXP_SLACK_MS) return null // tampered/timeless
+    if (idleMs && Date.now() - payload.iat > idleMs) return null // idle → dead
     return payload
   } catch {
     return null
@@ -96,7 +111,7 @@ export function checkAdminAuth(request: AuthRequestLike): AdminAuthResult {
   const cookies = parseCookies(request.headers.get('cookie'))
   const session = cookies[SESSION_COOKIE]
   if (session) {
-    const payload = verify(session, SESSION_TTL_MS)
+    const payload = verify(session, SESSION_TTL_MS, SESSION_IDLE_MS)
     if (payload) return { ok: true, email: payload.email }
   }
 
@@ -114,17 +129,49 @@ export function checkAdminAuth(request: AuthRequestLike): AdminAuthResult {
 }
 
 export function createSessionCookieValue(email: string): string | null {
-  return sign({ email }, SESSION_TTL_MS)
+  return sign(email, SESSION_TTL_MS)
 }
 
-/** For tests / introspection — decodes a session cookie value. */
+/** For tests / introspection — decodes a session cookie value (idle-checked). */
 export function verifySessionCookieValue(value: string): string | null {
-  return verify(value, SESSION_TTL_MS)?.email ?? null
+  return verify(value, SESSION_TTL_MS, SESSION_IDLE_MS)?.email ?? null
 }
 
 export function createEphemeralToken(email: string): string | null {
-  const v = sign({ email }, EPHEMERAL_TTL_MS)
+  const v = sign(email, EPHEMERAL_TTL_MS)
   return v ? `${EPHEMERAL_PREFIX}${v}` : null
+}
+
+/**
+ * Returns a fresh `Set-Cookie` header value when the caller holds a valid
+ * session whose `iat` is older than the refresh threshold (sliding expiry), or
+ * null when there is nothing to refresh (no cookie, stale/idle session, or the
+ * cookie was just re-issued). Middleware attaches the result to authenticated
+ * responses; the login/dashboard session check does the same.
+ */
+export function maybeRefreshSessionCookie(request: AuthRequestLike): string | null {
+  const cookies = parseCookies(request.headers.get('cookie'))
+  const value = cookies[SESSION_COOKIE]
+  if (!value) return null
+  const payload = verify(value, SESSION_TTL_MS, SESSION_IDLE_MS)
+  if (!payload) return null
+  if (Date.now() - payload.iat < SESSION_REFRESH_MS) return null // fresh enough
+  return sessionCookieHeader(payload.email)
+}
+
+/**
+ * Milliseconds until the caller's session would be killed for inactivity
+ * (0 when a valid session's idle window has already elapsed), or null when
+ * there is no valid session. Used by /api/auth/session to tell the login page
+ * how long it has before the idle timer fires.
+ */
+export function sessionIdleRemainingMs(request: AuthRequestLike): number | null {
+  const cookies = parseCookies(request.headers.get('cookie'))
+  const value = cookies[SESSION_COOKIE]
+  if (!value) return null
+  const payload = verify(value, SESSION_TTL_MS, SESSION_IDLE_MS)
+  if (!payload) return null
+  return Math.max(0, SESSION_IDLE_MS - (Date.now() - payload.iat))
 }
 
 export function verifyEphemeralToken(value: string): string | null {

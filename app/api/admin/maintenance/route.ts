@@ -7,7 +7,8 @@
  * `system:maintenance` SSE frame + /api/status) can tell users not to
  * expect it to work right now instead of just erroring silently.
  *
- * In-memory (lib/api/maintenance-store.ts) — clears on redeploy/restart.
+ * Durable: flags write through to Supabase and are hydrated on boot (see
+ * lib/api/maintenance-store.ts), so a redeploy/restart does NOT clear them.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
@@ -18,13 +19,19 @@ import { PROCESS_STARTED_AT } from '@/lib/api/process-info'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  await MaintenanceStore.ensureHydrated()
   return NextResponse.json(
-    { flags: MaintenanceStore.getAll(), processStartedAt: PROCESS_STARTED_AT },
+    {
+      flags: MaintenanceStore.getAll(),
+      processStartedAt: PROCESS_STARTED_AT,
+      ...MaintenanceStore.getDurability(),
+    },
     { headers: CacheService.noCacheHeaders() }
   )
 }
 
 export async function POST(request: NextRequest) {
+  await MaintenanceStore.ensureHydrated()
   if (!checkAdminAuth(request).ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

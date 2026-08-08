@@ -196,6 +196,16 @@ just cluttering an otherwise real, in-use API.
    **not** affect Render, which deploys off its own GitHub webhook. Ignore it
    unless this repo is also actually deployed via Vercel somewhere.
 
+9. **Vercel fully removed from this repo (Render-only).** The stale Vercel
+   GitHub integration kept producing failed deploys (linked to a Vercel
+   account that doesn't own this repo). All Vercel deployment instructions
+   were stripped from the docs and `docs/DEPLOYMENT_GUIDE.md` now documents
+   Render as the only target, including the steps to disconnect the Vercel
+   integration from the Vercel dashboard / GitHub applications. The
+   `VERCEL_PREVIEW_RE` CORS allowlist in `middleware.ts` was deliberately
+   kept — it lets the *frontend* repo's Vercel preview deploys call this API
+   and has nothing to do with deploying this repo.
+
 ---
 
 ## Open items / where to pick up next

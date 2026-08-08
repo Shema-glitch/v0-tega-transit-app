@@ -9,7 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase-server'
-import { isAllowlistedAdmin, sessionCookieHeader } from '@/lib/api/admin-auth'
+import { sessionCookieHeader } from '@/lib/api/admin-auth'
+import { isAdminEmailAllowed } from '@/lib/api/admin-emails'
 import { getAuthGuardStatus, recordAuthFailure, recordAuthSuccess } from '@/lib/api/auth-guard'
 import { AuthLog } from '@/lib/api/auth-log'
 import { clientIp } from '@/lib/api/client-ip'
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid or expired code' }, { status: 401, headers: CORS })
     }
 
-    if (!isAllowlistedAdmin(email)) {
+    if (!(await isAdminEmailAllowed(email))) {
       recordAuthFailure(ip)
       AuthLog.record({ action: 'verify', email, ip, ok: false, detail: 'email not allowlisted' })
       return NextResponse.json({ error: 'Not authorized' }, { status: 403, headers: CORS })
