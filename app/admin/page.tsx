@@ -15,9 +15,29 @@
  * tool, not a bright daytime page.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Share2, Wrench } from 'lucide-react'
-import { ENDPOINT_REGISTRY } from '@/lib/api/endpoint-registry'
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
+import {
+  AlertTriangle,
+  Bug,
+  CheckCircle2,
+  Copy,
+  MapPin,
+  RefreshCw,
+  ShieldAlert,
+  Share2,
+  Wrench,
+  X,
+} from 'lucide-react'
+import { ENDPOINT_REGISTRY, type EndpointRegistryEntry } from '@/lib/api/endpoint-registry'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -26,6 +46,14 @@ import { Card } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  Dialog,
+  DialogBackdrop,
+  DialogDescription,
+  DialogPopup,
+  DialogPortal,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { MAINTENANCE_GUIDE_HTML } from '@/lib/admin/maintenance-guide-html'
 
 // shadcn's own theme doesn't ship semantic success/warning colors (only
@@ -131,6 +159,104 @@ function timeAgo(ms: number, now: number): string {
   return `${Math.floor(sec / 86400)}d ago`
 }
 
+// ─── shared clock ──────────────────────────────────────────────────────────────
+// The dashboard used to re-render the whole tree every second just to keep
+// "Xs ago" labels fresh. One module-level clock + useSyncExternalStore means a
+// single 15s interval and only the components that actually read time re-render.
+let clockNow = Date.now()
+let clockStarted = false
+const clockListeners = new Set<() => void>()
+
+function subscribeClock(listener: () => void) {
+  clockListeners.add(listener)
+  if (!clockStarted) {
+    clockStarted = true
+    setInterval(() => {
+      clockNow = Date.now()
+      clockListeners.forEach((l) => l())
+    }, 15_000)
+  }
+  return () => {
+    clockListeners.delete(listener)
+  }
+}
+
+function useSharedNow(): number {
+  return useSyncExternalStore(subscribeClock, () => clockNow, () => clockNow)
+}
+
+/** Self-refreshing "Xs ago" label — never re-renders its parents. */
+function TimeAgo({ ts }: { ts: number }) {
+  const now = useSharedNow()
+  return <>{timeAgo(ts, now)}</>
+}
+
+// ─── toast (lightweight, zero dependency) ─────────────────────────────────────
+interface ToastItem {
+  id: number
+  message: string
+  kind: 'success' | 'error'
+}
+
+function ToastStack({ toasts }: { toasts: ToastItem[] }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed right-4 bottom-4 z-50 flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2"
+    >
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`rise-in pointer-events-auto flex items-start gap-2 rounded-lg border bg-card px-3 py-2.5 text-sm shadow-lg ${
+            t.kind === 'success' ? 'border-green-500/40' : 'border-destructive/40'
+          }`}
+        >
+          {t.kind === 'success' ? (
+            <CheckCircle2 className={`mt-0.5 size-4 shrink-0 ${STATUS_COLOR.good}`} />
+          ) : (
+            <AlertTriangle className={`mt-0.5 size-4 shrink-0 ${STATUS_COLOR.err}`} />
+          )}
+          <span className="min-w-0 break-words">{t.message}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── skeleton / stat primitives ───────────────────────────────────────────────
+function SkeletonBox({ className }: { className?: string }) {
+  return <span className={`inline-block animate-pulse rounded bg-muted ${className ?? ''}`} />
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  valueClass,
+  pulse = false,
+}: {
+  icon: ReactNode
+  label: string
+  value: ReactNode
+  valueClass?: string
+  pulse?: boolean
+}) {
+  return (
+    <Card className="p-4">
+      <span
+        className={`inline-flex size-6 items-center justify-center rounded-md bg-muted text-muted-foreground ${
+          pulse ? 'status-breathe' : ''
+        }`}
+      >
+        {icon}
+      </span>
+      <div className={`mt-2 text-2xl font-bold tabular-nums ${valueClass ?? ''}`}>{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+    </Card>
+  )
+}
+
 /** Renders as a clickable link if it looks like a URL, plain text otherwise. */
 function PageUrlLink({ url }: { url: string }) {
   let isUrl = false
@@ -214,7 +340,7 @@ export default function AdminPage() {
   const [authState, setAuthState] = useState<'checking' | 'out' | 'in'>('checking')
   const [tokenInput, setTokenInput] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)
-  const [now, setNow] = useState(() => Date.now())
+  const now = useSharedNow()
 
   const [errors, setErrors] = useState<ErrorEntry[]>([])
   const [bugReports, setBugReports] = useState<BugReportEntry[]>([])
@@ -230,6 +356,22 @@ export default function AdminPage() {
   const [issueFilter, setIssueFilter] = useState<'all' | 'errors' | 'bugs' | 'open'>('open')
   const [query, setQuery] = useState('')
 
+  // Action feedback + dialogs (replaces the old window.prompt flow)
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [disableTarget, setDisableTarget] = useState<EndpointRegistryEntry | null>(null)
+  const [disableReason, setDisableReason] = useState('Investigating an issue')
+  const [disabling, setDisabling] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string
+    message: string
+    onConfirm: () => void
+  } | null>(null)
+
+  // Data freshness
+  const [loading, setLoading] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null)
+  const [pollFailed, setPollFailed] = useState(false)
+
   // Captured once on login — "since you last looked" compares against this,
   // not the live-updating localStorage value (which we overwrite right away).
   const lastSeenAtRef = useRef<number | null>(null)
@@ -237,6 +379,12 @@ export default function AdminPage() {
   const authHeaders = useCallback((): Record<string, string> => {
     const token = sessionStorage.getItem('admin-token') || ''
     return { 'x-admin-token': token }
+  }, [])
+
+  const pushToast = useCallback((message: string, kind: ToastItem['kind'] = 'success') => {
+    const id = Date.now() + Math.random()
+    setToasts((t) => [...t, { id, message, kind }])
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000)
   }, [])
 
   const refreshAll = useCallback(async () => {
@@ -266,7 +414,14 @@ export default function AdminPage() {
         errors: errData.source === 'supabase' ? 'supabase' : 'memory',
         bugs: bugData.source === 'supabase' ? 'supabase' : 'memory',
       })
-    } catch { /* transient network hiccup — next 15s poll will retry */ }
+      setLastUpdated(Date.now())
+      setPollFailed(false)
+    } catch {
+      // Transient network hiccup — keep showing last known data, but say so.
+      setPollFailed(true)
+    } finally {
+      setLoading(false)
+    }
   }, [authHeaders])
 
   const resolveStopSuggestion = useCallback(async (id: number, decision: 'approve' | 'reject') => {
@@ -276,7 +431,8 @@ export default function AdminPage() {
       body: JSON.stringify({ decision }),
     })
     refreshAll()
-  }, [authHeaders, refreshAll])
+    pushToast(decision === 'approve' ? 'Suggestion approved — stop updated' : 'Suggestion rejected')
+  }, [authHeaders, pushToast, refreshAll])
 
   const login = useCallback(async () => {
     if (!tokenInput.trim()) return
@@ -300,15 +456,35 @@ export default function AdminPage() {
     setTokenInput('')
   }, [])
 
-  const clearErrors = useCallback(async () => {
-    await fetch('/api/errors', { method: 'DELETE', headers: authHeaders() })
-    refreshAll()
-  }, [authHeaders, refreshAll])
+  const clearErrors = useCallback(() => {
+    setConfirmAction({
+      title: 'Clear all errors?',
+      message:
+        source.errors === 'supabase'
+          ? 'This permanently deletes the durable error ledger in Supabase. There is no undo.'
+          : 'This clears the in-memory error ledger.',
+      onConfirm: async () => {
+        await fetch('/api/errors', { method: 'DELETE', headers: authHeaders() })
+        refreshAll()
+        pushToast('Error ledger cleared')
+      },
+    })
+  }, [authHeaders, pushToast, refreshAll, source.errors])
 
-  const clearBugReports = useCallback(async () => {
-    await fetch('/api/feedback', { method: 'DELETE', headers: authHeaders() })
-    refreshAll()
-  }, [authHeaders, refreshAll])
+  const clearBugReports = useCallback(() => {
+    setConfirmAction({
+      title: 'Clear all bug reports?',
+      message:
+        source.bugs === 'supabase'
+          ? 'This permanently deletes the durable bug-report table in Supabase. There is no undo.'
+          : 'This clears the in-memory bug-report list.',
+      onConfirm: async () => {
+        await fetch('/api/feedback', { method: 'DELETE', headers: authHeaders() })
+        refreshAll()
+        pushToast('Bug reports cleared')
+      },
+    })
+  }, [authHeaders, pushToast, refreshAll, source.bugs])
 
   const resolveBugReport = useCallback(async (id: string) => {
     await fetch('/api/feedback', {
@@ -317,20 +493,42 @@ export default function AdminPage() {
       body: JSON.stringify({ id }),
     })
     refreshAll()
-  }, [authHeaders, refreshAll])
+    pushToast('Bug report marked resolved')
+  }, [authHeaders, pushToast, refreshAll])
 
-  const toggleEndpoint = useCallback(async (id: string, currentlyDisabled: boolean) => {
-    let reason = 'Under maintenance'
-    if (!currentlyDisabled) {
-      reason = window.prompt(`Reason for disabling ${id}:`, 'Investigating an issue') || 'Under maintenance'
-    }
+  // Enabling is the recovery path and stays instant; disabling goes through the
+  // reason dialog so Cancel is always a no-op (the old window.prompt fallback
+  // actually disabled the endpoint even when the user cancelled).
+  const enableEndpoint = useCallback(async (ep: EndpointRegistryEntry) => {
     await fetch('/api/admin/maintenance', {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feature: id, reason, active: !currentlyDisabled }),
+      body: JSON.stringify({ feature: ep.id, reason: '', active: false }),
     })
     refreshAll()
-  }, [authHeaders, refreshAll])
+    pushToast(`Re-enabled ${ep.label}`)
+  }, [authHeaders, pushToast, refreshAll])
+
+  const submitDisable = useCallback(async () => {
+    if (!disableTarget) return
+    setDisabling(true)
+    try {
+      const reason = disableReason.trim() || 'Under maintenance'
+      await fetch('/api/admin/maintenance', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feature: disableTarget.id, reason, active: true }),
+      })
+      refreshAll()
+      setDisableTarget(null)
+      setDisableReason('Investigating an issue')
+      pushToast(`Disabled ${disableTarget.label} — callers now get 503`)
+    } catch {
+      pushToast('Failed to disable endpoint', 'error')
+    } finally {
+      setDisabling(false)
+    }
+  }, [authHeaders, disableReason, disableTarget, pushToast, refreshAll])
 
   // Check for a stored token on load.
   useEffect(() => {
@@ -365,11 +563,6 @@ export default function AdminPage() {
     const id = setInterval(refreshAll, 15_000)
     return () => clearInterval(id)
   }, [authState, refreshAll])
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [])
 
   const issues: IssueItem[] = useMemo(() => {
     const errorItems: IssueItem[] = errors.map((e) => ({
@@ -486,7 +679,7 @@ export default function AdminPage() {
             <AlertTriangle className="size-4 text-amber-500 dark:text-amber-400" />
             <AlertTitle>Process restarted recently</AlertTitle>
             <AlertDescription>
-              This process started {timeAgo(processStartedAt!, now)} — maintenance flags live in memory only, so a
+              This process started <TimeAgo ts={processStartedAt!} /> — maintenance flags live in memory only, so a
               restart silently re-enables everything that was disabled before it. Double-check the Endpoints tab if
               you were mid-incident.
             </AlertDescription>
@@ -495,29 +688,61 @@ export default function AdminPage() {
 
         {/* Stat bar */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Card className="p-4">
-            <div className={`text-2xl font-bold ${openCount > 0 ? STATUS_COLOR.warn : STATUS_COLOR.good}`}>{openCount}</div>
-            <div className="text-xs text-muted-foreground">Open issues</div>
-          </Card>
-          <Card className="p-4">
-            <div className={`text-2xl font-bold ${disabledCount > 0 ? STATUS_COLOR.warn : ''}`}>{disabledCount}</div>
-            <div className="text-xs text-muted-foreground">Endpoints disabled</div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-2xl font-bold">{bugReports.length}</div>
-            <div className="text-xs text-muted-foreground">Total bug reports</div>
-          </Card>
-          <Card className="p-4">
-            <div className={`text-2xl font-bold ${stopSuggestions.length > 0 ? STATUS_COLOR.accent : ''}`}>{stopSuggestions.length}</div>
-            <div className="text-xs text-muted-foreground">Pending stop suggestions</div>
-          </Card>
+          <StatCard
+            icon={<AlertTriangle className="size-3.5" />}
+            label="Open issues"
+            pulse={openCount > 0}
+            valueClass={openCount > 0 ? STATUS_COLOR.warn : STATUS_COLOR.good}
+            value={loading ? <SkeletonBox className="h-7 w-10" /> : openCount}
+          />
+          <StatCard
+            icon={<ShieldAlert className="size-3.5" />}
+            label="Endpoints disabled"
+            pulse={disabledCount > 0}
+            valueClass={disabledCount > 0 ? STATUS_COLOR.warn : undefined}
+            value={loading ? <SkeletonBox className="h-7 w-10" /> : disabledCount}
+          />
+          <StatCard
+            icon={<Bug className="size-3.5" />}
+            label="Total bug reports"
+            value={loading ? <SkeletonBox className="h-7 w-10" /> : bugReports.length}
+          />
+          <StatCard
+            icon={<MapPin className="size-3.5" />}
+            label="Pending stop suggestions"
+            pulse={stopSuggestions.length > 0}
+            valueClass={stopSuggestions.length > 0 ? STATUS_COLOR.accent : undefined}
+            value={loading ? <SkeletonBox className="h-7 w-10" /> : stopSuggestions.length}
+          />
+        </div>
+
+        {/* Data freshness — never let a dead poll look like a healthy dashboard */}
+        <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted-foreground">
+          {pollFailed ? (
+            <span className={STATUS_COLOR.err}>
+              Can&apos;t reach the API — showing data from {lastUpdated ? <TimeAgo ts={lastUpdated} /> : 'earlier'} · retrying…
+            </span>
+          ) : lastUpdated ? (
+            <span>
+              Updated <TimeAgo ts={lastUpdated} />
+            </span>
+          ) : null}
+          <Button
+            onClick={refreshAll}
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1 text-xs"
+            aria-label="Refresh dashboard data"
+          >
+            <RefreshCw className="size-3.5" /> Refresh
+          </Button>
         </div>
 
         {/* Tabs */}
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'issues' | 'endpoints' | 'suggestions' | 'guide')}>
           <TabsList variant="line" className="mb-4 h-auto w-full justify-start gap-1 border-b border-border p-0">
             <TabsTrigger value="issues" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
-              Issues
+              Issues{openCount > 0 ? ` (${openCount})` : ''}
             </TabsTrigger>
             <TabsTrigger value="endpoints" className="h-11 rounded-none px-4 text-sm font-semibold capitalize data-active:after:bg-primary">
               Endpoints
@@ -552,12 +777,25 @@ export default function AdminPage() {
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search path, message, subject…"
-                  className="h-11 min-w-0 flex-1 text-xs"
-                />
+                <div className="relative min-w-0 flex-1">
+                  <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search path, message, subject…"
+                    aria-label="Search issues"
+                    className="h-11 w-full pr-9 text-xs"
+                  />
+                  {query && (
+                    <button
+                      type="button"
+                      onClick={() => setQuery('')}
+                      aria-label="Clear search"
+                      className="absolute top-1/2 right-3 -translate-y-1/2 cursor-pointer rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  )}
+                </div>
                 <Button onClick={clearErrors} variant="destructive" size="sm" className="h-11 text-xs">
                   Clear errors
                 </Button>
@@ -566,7 +804,7 @@ export default function AdminPage() {
                 </Button>
               </div>
 
-              {filteredIssues.length === 0 && isAllClear && (
+              {!loading && filteredIssues.length === 0 && isAllClear && (
                 <div className="flex flex-col items-center gap-2 py-16 text-center">
                   <CheckCircle2 className={`size-10 ${STATUS_COLOR.good}`} />
                   <p className="text-sm font-semibold">All clear</p>
@@ -575,19 +813,30 @@ export default function AdminPage() {
                   </p>
                 </div>
               )}
-              {filteredIssues.length === 0 && !isAllClear && (
+              {!loading && filteredIssues.length === 0 && !isAllClear && (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   Nothing matches this filter.
                 </p>
               )}
 
+              {loading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Card key={i} className="p-3">
+                      <SkeletonBox className="h-4 w-1/3" />
+                      <SkeletonBox className="mt-2 h-3 w-2/3" />
+                    </Card>
+                  ))}
+                </div>
+              ) : (
               <div className="space-y-2">
-                {filteredIssues.map((item) => {
+                {filteredIssues.map((item, idx) => {
                   const isNew = lastSeenAtRef.current !== null && item.timestamp > lastSeenAtRef.current
                   return (
                     <Card
                       key={item.id}
-                      className={`p-3 ${item.resolved ? 'opacity-55' : ''}`}
+                      className={`p-3 rise-in ${item.resolved ? 'opacity-55' : ''}`}
+                      style={{ '--rise-index': Math.min(idx, 10) } as CSSProperties}
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge className={`font-semibold ${item.kind === 'error' ? STATUS_BADGE.err : STATUS_BADGE.accent}`}>
@@ -599,7 +848,9 @@ export default function AdminPage() {
                           </Badge>
                         )}
                         <span className="font-mono text-xs font-semibold">{item.title}</span>
-                        <span className="text-xs text-muted-foreground">{timeAgo(item.timestamp, now)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          <TimeAgo ts={item.timestamp} />
+                        </span>
                         {item.count && item.count > 1 && (
                           <Badge className={`font-semibold ${STATUS_BADGE.warn}`}>
                             ×{item.count}
@@ -620,6 +871,20 @@ export default function AdminPage() {
                             Mark resolved
                           </Button>
                         )}
+                        {item.kind === 'error' && (
+                          <Button
+                            onClick={() => {
+                              void navigator.clipboard.writeText(`${item.title}\n${item.detail}`).catch(() => {})
+                              pushToast('Error details copied')
+                            }}
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 gap-1 text-xs"
+                            title="Copy error details"
+                          >
+                            <Copy className="size-3.5" /> Copy
+                          </Button>
+                        )}
                       </div>
                       <div className="mt-1.5 whitespace-pre-wrap text-xs">{item.detail}</div>
                       {item.meta && (
@@ -631,6 +896,7 @@ export default function AdminPage() {
                   )
                 })}
               </div>
+              )}
 
               <p className="mt-3 text-xs text-muted-foreground">
                 Errors: {source.errors === 'supabase' ? 'durable' : 'in-memory only'} · Bug reports: {source.bugs === 'supabase' ? 'durable' : 'in-memory only'} · auto-refreshes every 15s.
@@ -644,6 +910,12 @@ export default function AdminPage() {
                 Disabling an endpoint here makes it actually return 503 to callers immediately — see docs/ADMIN_DASHBOARD_PRD.md.
                 Meta endpoints (health, status, errors, feedback, admin/*) aren&apos;t listed — you can&apos;t disable the tools that turn things back on.
               </p>
+              {disabledCount === 0 && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="size-4 shrink-0" />
+                  All {ENDPOINT_REGISTRY.length} endpoints are live.
+                </div>
+              )}
               {Object.entries(
                 ENDPOINT_REGISTRY.reduce<Record<string, typeof ENDPOINT_REGISTRY>>((acc, ep) => {
                   (acc[ep.group] ??= []).push(ep)
@@ -667,7 +939,14 @@ export default function AdminPage() {
                           <span className="-m-2 flex shrink-0 items-center rounded-full p-2">
                             <Switch
                               checked={!disabled}
-                              onCheckedChange={() => toggleEndpoint(ep.id, disabled)}
+                              onCheckedChange={() => {
+                                if (disabled) {
+                                  enableEndpoint(ep)
+                                } else {
+                                  setDisableReason('Investigating an issue')
+                                  setDisableTarget(ep)
+                                }
+                              }}
                               className="data-checked:bg-green-600 data-unchecked:bg-destructive"
                             />
                           </span>
@@ -680,7 +959,7 @@ export default function AdminPage() {
                             </div>
                             {flag && (
                               <div className={`mt-0.5 text-xs ${STATUS_COLOR.warn}`}>
-                                Disabled: {flag.reason} · {timeAgo(flag.since, now)}
+                                Disabled: {flag.reason} · <TimeAgo ts={flag.since} />
                               </div>
                             )}
                           </div>
@@ -699,7 +978,7 @@ export default function AdminPage() {
                 Rider-submitted stop corrections. Nothing here has touched the live map yet — approving replays the
                 same write the debug/admin stop editor uses; rejecting just drops it.
               </p>
-              {stopSuggestions.length === 0 && (
+              {!loading && stopSuggestions.length === 0 && (
                 <div className="flex flex-col items-center gap-2 py-16 text-center">
                   <CheckCircle2 className={`size-10 ${STATUS_COLOR.good}`} />
                   <p className="text-sm font-semibold">Queue is empty</p>
@@ -712,11 +991,26 @@ export default function AdminPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge className={`font-semibold ${STATUS_BADGE.accent}`}>{s.type.toUpperCase()}</Badge>
                       <span className="font-mono text-xs font-semibold">
-                        {s.type === 'add' && `"${s.proposed_name}" @ ${s.proposed_lat?.toFixed(5)}, ${s.proposed_lon?.toFixed(5)}`}
+                        {s.type === 'add' && (
+                          <>
+                            &quot;{s.proposed_name}&quot; @{' '}
+                            <a
+                              href={`https://www.google.com/maps?q=${s.proposed_lat},${s.proposed_lon}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`inline-flex items-center gap-1 underline-offset-2 hover:underline ${STATUS_COLOR.accent}`}
+                            >
+                              {s.proposed_lat?.toFixed(5)}, {s.proposed_lon?.toFixed(5)}
+                              <MapPin className="size-3" />
+                            </a>
+                          </>
+                        )}
                         {s.type === 'rename' && `stop ${s.stop_id} → "${s.proposed_name}"`}
                         {s.type === 'delete' && `delete stop ${s.stop_id}`}
                       </span>
-                      <span className="text-xs text-muted-foreground">{timeAgo(new Date(s.created_at).getTime(), now)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        <TimeAgo ts={new Date(s.created_at).getTime()} />
+                      </span>
                       <div className="ml-auto flex gap-2">
                         <Button
                           onClick={() => resolveStopSuggestion(s.id, 'approve')}
@@ -761,6 +1055,73 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Disable-endpoint dialog — replaces the old window.prompt flow, whose
+          Cancel fallback silently disabled the endpoint anyway. Cancel is a
+          genuine no-op now. */}
+      <Dialog open={disableTarget !== null} onOpenChange={(open) => { if (!open && !disabling) setDisableTarget(null) }}>
+        <DialogPortal>
+          <DialogBackdrop />
+          <DialogPopup>
+            <DialogTitle className="text-base font-semibold">Disable {disableTarget?.label}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Callers will get <code className="rounded bg-muted px-1 py-0.5 text-xs">503</code> until you re-enable
+              it. Flags are in-memory only — a redeploy re-enables everything.
+            </DialogDescription>
+            <div className="mt-4">
+              <label htmlFor="disable-reason" className="mb-1.5 block text-xs font-semibold">
+                Reason (shown to callers)
+              </label>
+              <Input
+                id="disable-reason"
+                value={disableReason}
+                onChange={(e) => setDisableReason(e.target.value)}
+                placeholder="e.g. Investigating an issue"
+                className="h-10 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDisableTarget(null)} disabled={disabling} className="h-9 text-xs">
+                Cancel
+              </Button>
+              <Button variant="destructive" size="sm" onClick={submitDisable} disabled={disabling} className="h-9 text-xs">
+                {disabling ? 'Disabling…' : 'Disable endpoint'}
+              </Button>
+            </div>
+          </DialogPopup>
+        </DialogPortal>
+      </Dialog>
+
+      {/* Confirm dialog for bulk clears (durable Supabase data has no undo) */}
+      <Dialog open={confirmAction !== null} onOpenChange={(open) => { if (!open) setConfirmAction(null) }}>
+        <DialogPortal>
+          <DialogBackdrop />
+          <DialogPopup>
+            <DialogTitle className="text-base font-semibold">{confirmAction?.title}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">{confirmAction?.message}</DialogDescription>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)} className="h-9 text-xs">
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-9 text-xs"
+                onClick={() => {
+                  const action = confirmAction
+                  setConfirmAction(null)
+                  action?.onConfirm()
+                }}
+              >
+                Confirm
+              </Button>
+            </div>
+          </DialogPopup>
+        </DialogPortal>
+      </Dialog>
+
+      <ToastStack toasts={toasts} />
     </div>
   )
 }
