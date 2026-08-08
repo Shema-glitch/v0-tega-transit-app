@@ -346,7 +346,7 @@ export default function StatusPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/assets/busgo-logo-light.png" alt="BusGo Track" className="h-9 w-auto" />
+            <img src="/assets/busgo-logo-light-sm.png" alt="BusGo Track" className="h-9 w-auto" />
             <h1 className="text-xl font-bold tracking-tight">BusGo Track API</h1>
             <Badge variant={overall.variant} className="font-bold">
               {overall.label}

@@ -593,7 +593,7 @@ export default function AdminPage() {
       <div className="dark flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
         <Card className="flex w-full max-w-sm items-center gap-3 p-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/assets/busgo-logo-dark.png" alt="BusGo Track" className="h-9 w-auto" />
+          <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-9 w-auto" />
           <p className="text-sm text-muted-foreground">
             {authState === 'checking' ? 'Checking session…' : 'Redirecting to admin login…'}
           </p>
@@ -609,7 +609,7 @@ export default function AdminPage() {
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/assets/busgo-logo-dark.png" alt="BusGo Track" className="h-8 w-auto" />
+            <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-8 w-auto" />
             <h1 className="text-base font-bold font-heading sm:text-lg">Admin</h1>
             <Badge
               variant="outline"

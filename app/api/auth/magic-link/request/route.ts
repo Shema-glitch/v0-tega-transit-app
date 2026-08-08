@@ -1,11 +1,23 @@
 /**
  * POST /api/auth/magic-link/request  { email }
  *
- * Step 1 of the admin login: asks Supabase Auth to email a 6-digit code to
- * the admin's address. Only allowlisted emails (ADMIN_EMAILS) actually get a
- * code — the response is identical for every well-formed request so the
- * allowlist can't be enumerated, and non-allowlisted probes still count
- * against the per-IP brute-force guard.
+ * Step 1 of the admin login: asks Supabase Auth to email a 6-digit code (and a
+ * magic link) to the admin's address.
+ *
+ * Response contract (so the login page can show real error boundaries):
+ *   - { ok: true,  sent: true }                 allowlisted + Supabase accepted
+ *   - { ok: true,  sent: false, detail: 'not-allowlisted' }   not an admin address
+ *   - { ok: true,  sent: false, detail, message }  allowlisted but Supabase
+ *                                                   rejected the send (email
+ *                                                   provider disabled, SMTP
+ *                                                   misconfigured, signups
+ *                                                   off…) — the admin sees
+ *                                                   this and can fix it / retry
+ *   - { ok: false, error, retryAfterSec }        rate limited (429) or bad input
+ *
+ * Note: `sent: true/false` distinguishes allowlisted addresses, which slightly
+ * relaxes the anti-enumeration posture for a deliberate UX win — the admin gets
+ * to know whether the email service actually accepted the request.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -37,27 +49,42 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid email address' }, { status: 400, headers: CORS })
   }
 
-  if (isAllowlistedAdmin(email)) {
-    try {
-      const supabase = getSupabaseServer()
-      await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
-      AuthLog.record({ action: 'magic-link-request', email, ip, ok: true })
-    } catch (err) {
-      AuthLog.record({
-        action: 'magic-link-request',
-        email,
-        ip,
-        ok: false,
-        detail: err instanceof Error ? err.message : String(err),
-      })
-    }
-  } else {
+  if (!isAllowlistedAdmin(email)) {
+    // Slow down allowlist probing without revealing anything.
+    recordAuthFailure(ip)
     AuthLog.record({ action: 'magic-link-request', email, ip, ok: false, detail: 'not allowlisted' })
-    recordAuthFailure(ip) // slow down allowlist probing without revealing anything
+    return NextResponse.json({ ok: true, sent: false, detail: 'not-allowlisted' }, { headers: CORS })
   }
 
-  // Generic success — never reveal whether the email is allowlisted.
-  return NextResponse.json({ ok: true }, { headers: CORS })
+  // Allowlisted — actually ask Supabase to send. The magic link in the email
+  // points at our callback so a link-click also logs the admin in.
+  const origin = request.nextUrl.origin
+  try {
+    const supabase = getSupabaseServer()
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${origin}/api/auth/callback`,
+      },
+    })
+    if (error) {
+      AuthLog.record({ action: 'magic-link-request', email, ip, ok: false, detail: error.message })
+      return NextResponse.json(
+        { ok: true, sent: false, detail: 'email-service', message: error.message },
+        { headers: CORS }
+      )
+    }
+    AuthLog.record({ action: 'magic-link-request', email, ip, ok: true })
+    return NextResponse.json({ ok: true, sent: true }, { headers: CORS })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    AuthLog.record({ action: 'magic-link-request', email, ip, ok: false, detail: message })
+    return NextResponse.json(
+      { ok: true, sent: false, detail: 'email-service', message },
+      { headers: CORS }
+    )
+  }
 }
 
 export async function OPTIONS() {
