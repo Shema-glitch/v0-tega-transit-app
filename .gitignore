@@ -6,16 +6,30 @@ __v0_jsx-dev-runtime.ts
 .v0-trash/
 .vercel/
 
-# Environment variables
-.env*.local
+# Environment variables — NEVER commit real values. Every variant holds
+# secrets (Supabase service_role, Upstash tokens, admin session keys):
+# .env, .env.local, .env.development, .env.production, .env.test, ...
+.env
+.env.*
+# ...but keep an example template commit-able
+!.env.example
 
-# Common ignores
+# Build artifacts & caches
 node_modules
 .next/
+*.tsbuildinfo
+coverage/
+.eslintcache
+*.log
+npm-debug.log*
+
+# OS / editor junk
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
 
 # Security & Sensitive Documents
-.env
 *.pdf
 *Settings page.md
 .agents/
@@ -23,6 +37,13 @@ skills-lock.json
 
 # Supabase CLI local state (project ref/connection info, not secrets to ship)
 supabase/.temp/
+
 # Agent tool state (local only)
 .claude/
 .freebuff/
+
+# Stray local files — not part of the project
+# Claude Code conversation transcript dumped at the repo root
+2026-07-26-184311-this-is-the-alast-conovo_api.txt
+# npm lockfile — this project uses pnpm (see pnpm-lock.yaml)
+package-lock.json
