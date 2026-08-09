@@ -234,13 +234,16 @@ Sections: **Issues** (errors + bug reports) · **Endpoints** (toggle each endpoi
 ## Testing
 
 ```bash
-pnpm test        # vitest — 178 tests: middleware, caches, auth, routes, services
+pnpm test        # vitest — 203 tests: middleware, caches, auth, routes, metrics, services
 pnpm lint        # eslint
 pnpm build       # next build with typechecking ON — type errors fail the deploy
-pnpm load-test   # autocannon, LOCALHOST ONLY
+pnpm load-test        # autocannon, LOCALHOST ONLY
+pnpm load-test:scale  # concurrent search + arrivals + SSE with cache hit-rate, LOCALHOST ONLY
 ```
 
 `scripts/load-test.mjs` measures real per-endpoint throughput with `autocannon`. **Never point it at the deployed URL** — the free Render tier is ~0.1 vCPU, so a real load test against production *is* a DoS against it. Run it against `pnpm build && pnpm start` locally (`--connections=50 --duration=20` to tune).
+
+`scripts/load-test-scale.mjs` models the actual "hundreds of riders" scenario: a concurrent worker pool hammers search + arrivals while a bank of SSE connections streams vehicle positions, then reports per-endpoint p50/p95/p99 and the **cache hit rate** during the run (reads `/api/admin/metrics` with your `ADMIN_TOKEN`; set the env var or it's picked up from `.env.local`). Same localhost-only guard.
 
 ---
 
@@ -265,6 +268,7 @@ Render-only. The `render.yaml` blueprint provisions the web service; every push 
 | [`docs/DESIGN_TOKENS.md`](docs/DESIGN_TOKENS.md) | Design system tokens |
 | [`docs/PROJECT_LOG.md`](docs/PROJECT_LOG.md) | Change history |
 | [`/version-log-2026-08-09.html`](public/version-log-2026-08-09.html) | Scaling-batch changelog + frontend consumption guide (also live on the deployed API) |
+| [`/CHANGELOG.md`](CHANGELOG.md) | Release index — one-line summary per release, linking to the version log |
 
 ---
 
