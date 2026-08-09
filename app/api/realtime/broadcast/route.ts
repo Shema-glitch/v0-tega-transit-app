@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { LiveVehicleStore } from '@/lib/api/live-store'
+import { publishVehiclePing } from '@/lib/api/live-sync'
 import { bareRouteId } from '@/lib/api/geo'
 import { ErrorLog } from '@/lib/api/error-log'
 import { z } from 'zod'
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Speed anomaly detected. Ping rejected.' }, { status: 422 })
     }
 
-    LiveVehicleStore.ingest({
+    const ping = {
       vehicleId: data.vehicle_id,
       routeId: bareRouteId(data.route_id),
       clientId: data.client_id,
@@ -58,7 +59,12 @@ export async function POST(request: NextRequest) {
       occupancy: data.occupancy,
       operator: data.operator,
       driver: data.driver,
-    })
+    }
+
+    // Apply locally always (so a Redis outage never drops a ping), then
+    // share with every other instance's store.
+    LiveVehicleStore.ingest(ping)
+    publishVehiclePing(ping)
 
     return NextResponse.json({ success: true, status: 'Ingested' })
   } catch (error) {

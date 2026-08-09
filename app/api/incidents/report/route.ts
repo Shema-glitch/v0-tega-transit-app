@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { LiveVehicleStore } from '@/lib/api/live-store'
+import { publishIncident } from '@/lib/api/live-sync'
 import { IncidentSchema } from '@/lib/api/validation'
 import { bareRouteId } from '@/lib/api/geo'
 import { ErrorLog } from '@/lib/api/error-log'
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     const routeKey = data.route_id ? bareRouteId(data.route_id) : 'general'
     const id = `${data.vehicle_id ?? data.client_id}-${incidentType}-${routeKey}`
 
-    LiveVehicleStore.reportIncident({
+    const incident = {
       id,
       vehicle_id: data.vehicle_id,
       route_id: data.route_id ? bareRouteId(data.route_id) : undefined,
@@ -47,7 +48,11 @@ export async function POST(request: NextRequest) {
       lat: data.latitude,
       lon: data.longitude,
       destination_stop_id: data.destination_stop_id
-    })
+    }
+
+    // Apply locally always, then share with every other instance's store.
+    LiveVehicleStore.reportIncident(incident)
+    publishIncident(incident)
 
     return NextResponse.json({ success: true, status: 'Incident Reported' })
   } catch (error) {

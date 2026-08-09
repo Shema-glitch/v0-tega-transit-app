@@ -10,14 +10,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { VehicleSchema } from '@/lib/api/validation'
 import { CacheService } from '@/lib/api/cache.service'
 import { realtimeHub } from '@/lib/api/realtime-hub'
-import { withLatencyTracking } from '@/lib/api/telemetry.service'
+import { withRequestMetrics } from '@/lib/api/request-metrics'
 import { bareRouteId } from '@/lib/api/geo'
 import { ErrorLog } from '@/lib/api/error-log'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  return withLatencyTracking(() => handleGet(request))
+  return withRequestMetrics('vehicles.live', () => handleGet(request))
 }
 
 async function handleGet(request: NextRequest) {

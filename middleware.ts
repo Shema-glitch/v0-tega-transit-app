@@ -38,6 +38,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { RateLimiterStore } from '@/lib/api/rate-limiter'
 import { ErrorLog } from '@/lib/api/error-log'
+import { RequestMetrics } from '@/lib/api/request-metrics'
 import { findEndpoint } from '@/lib/api/endpoint-registry'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
 import { checkAdminAuth, maybeRefreshSessionCookie } from '@/lib/api/admin-auth'
@@ -91,16 +92,33 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname
 
+  // Load-metrics group: the stable registry id when the endpoint is known
+  // ("routes.shape"), else the rate-limit grouping (write = full path, read =
+  // first 4 path segments) so synthetic/undocumented paths still aggregate
+  // instead of exploding the group count.
+  const endpoint = findEndpoint(path, request.method)
+  const isWrite = WRITE_PREFIXES.some((p) => path.startsWith(p))
+  const metricsGroup = endpoint
+    ? endpoint.id
+    : isWrite
+      ? path
+      : path.split('/').slice(0, 4).join('/')
+
+  const recordRequest = () => {
+    if (path.startsWith('/api')) RequestMetrics.recordRequest(metricsGroup)
+  }
+
   // Maintenance kill switch — checked before rate limiting so a disabled
   // endpoint doesn't even spend the caller's rate-limit budget. Hydrate the
   // durable flags first (fast after the first load) so the first request
   // after a restart already sees what was disabled before it.
   await MaintenanceStore.ensureHydrated()
-  const endpoint = findEndpoint(path, request.method)
   if (endpoint) {
     const flags = MaintenanceStore.getAll()
     const flag = flags.find((f) => f.feature === endpoint.id)
     if (flag) {
+      recordRequest()
+      RequestMetrics.record(metricsGroup, 503)
       return NextResponse.json(
         { error: 'Endpoint temporarily disabled', reason: flag.reason, since: flag.since },
         { status: 503, headers: corsHeaders }
@@ -117,6 +135,8 @@ export async function middleware(request: NextRequest) {
   if (isAdminApi && !isPublicMaintenanceGet) {
     const auth = checkAdminAuth(request)
     if (!auth.ok) {
+      recordRequest()
+      RequestMetrics.record(metricsGroup, 401)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders })
     }
     // Sliding session: an authenticated request re-issues the cookie (throttled
@@ -142,13 +162,14 @@ export async function middleware(request: NextRequest) {
     refreshedCookie ??= maybeRefreshSessionCookie(request)
   }
 
-  const isWrite = WRITE_PREFIXES.some((p) => path.startsWith(p))
   const limit = isWrite ? WRITE_LIMIT : READ_LIMIT
   const key = `${clientIp(request.headers)}:${isWrite ? path : path.split('/').slice(0, 4).join('/')}`
 
-  const result = RateLimiterStore.check(key, limit, WINDOW_MS)
+  const result = await RateLimiterStore.check(key, limit, WINDOW_MS)
 
   if (!result.allowed) {
+    recordRequest()
+    RequestMetrics.record(metricsGroup, 429, { rateLimited: true })
     ErrorLog.record({
       path,
       method: request.method,
@@ -169,6 +190,8 @@ export async function middleware(request: NextRequest) {
       }
     )
   }
+
+  recordRequest()
 
   const response = NextResponse.next()
   for (const [k, v] of Object.entries(corsHeaders)) response.headers.set(k, v)

@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   compress: true, // Enforce Gzip/Brotli
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // Type errors fail the build on purpose — Render's deploy should go red
+  // loudly instead of shipping a bundle that tsc already knows is broken.
   images: {
     unoptimized: true,
   },

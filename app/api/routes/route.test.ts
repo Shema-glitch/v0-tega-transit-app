@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { GET } from './route'
 import * as supabaseServerMock from '@/lib/supabase-server'
+import { __resetCacheForTests } from '@/lib/api/ttl-cache'
 
 vi.mock('@/lib/supabase-server', () => {
   const state: { rows: unknown[]; error: { message: string } | null } = { rows: [], error: null }
@@ -30,10 +31,12 @@ describe('GET /api/routes', () => {
   beforeEach(() => {
     __setRows([])
     __setError(null)
+    // The route now TTL-caches the mapped list (1 h); isolate tests from it.
+    __resetCacheForTests()
   })
 
   it('returns an empty array when there are no routes (never errors on empty)', async () => {
-    const res = await GET({} as never)
+    const res = await GET()
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([])
   })
@@ -42,7 +45,7 @@ describe('GET /api/routes', () => {
     __setRows([
       { route_id: '101', route_short_name: '101', route_long_name: 'Downtown - Airport', route_desc: null, route_color: '4ECDC4', route_text_color: null, route_type: null },
     ])
-    const res = await GET({} as never)
+    const res = await GET()
     const body = await res.json()
     expect(body).toEqual([
       {
@@ -59,7 +62,7 @@ describe('GET /api/routes', () => {
 
   it('returns 500 with a details message when Supabase errors', async () => {
     __setError({ message: 'relation "routes" does not exist' })
-    const res = await GET({} as never)
+    const res = await GET()
     expect(res.status).toBe(500)
     const body = await res.json()
     expect(body.error).toBe('Database error')

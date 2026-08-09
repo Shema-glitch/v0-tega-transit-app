@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAllStops } from '@/lib/api/stops-cache'
 import { haversineMeters } from '@/lib/api/geo'
 import { CacheService } from '@/lib/api/cache.service'
+import { withRequestMetrics } from '@/lib/api/request-metrics'
 
 // Hubs with coordinates — the route handler resolves these to real GTFS stop_ids
 const HUB_DEFINITIONS = [
@@ -36,6 +37,10 @@ const HUB_DEFINITIONS = [
 ]
 
 export async function GET() {
+  return withRequestMetrics('gtfs.hubs', () => handleGet())
+}
+
+async function handleGet() {
   try {
     const allStops = await getAllStops()
 

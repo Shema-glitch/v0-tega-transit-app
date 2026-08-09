@@ -22,6 +22,7 @@ import { z } from 'zod'
 import { StopSuggestions } from '@/lib/api/stop-suggestions'
 import { ErrorLog } from '@/lib/api/error-log'
 import { CORS, corsPreflight } from '@/lib/api/cors'
+import { withRequestMetrics } from '@/lib/api/request-metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +49,10 @@ const SuggestionSchema = z
   })
 
 export async function POST(request: NextRequest) {
+  return withRequestMetrics('stops.suggest', () => handlePost(request))
+}
+
+async function handlePost(request: NextRequest) {
   try {
     const body = await request.json()
     const parsed = SuggestionSchema.safeParse(body)

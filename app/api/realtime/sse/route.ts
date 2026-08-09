@@ -26,7 +26,7 @@
 
 import { NextRequest } from 'next/server'
 import { haversineMeters, bareRouteId } from '@/lib/api/geo'
-import { TelemetryService } from '@/lib/api/telemetry.service'
+import { TelemetryService, MAX_SSE_CONNECTIONS } from '@/lib/api/telemetry.service'
 import { Vehicle } from '@/lib/api/validation'
 import { LiveVehicleStore } from '@/lib/api/live-store'
 import { realtimeHub, HubVehicle } from '@/lib/api/realtime-hub'
@@ -34,7 +34,7 @@ import { MaintenanceStore } from '@/lib/api/maintenance-store'
 
 export const dynamic = 'force-dynamic'
 
-const MAX_CONNECTIONS = 100
+const MAX_CONNECTIONS = MAX_SSE_CONNECTIONS
 // Kigali city center — used when a client omits lat/lng so the stream isn't
 // silently empty forever (docs/BACKEND_HANDOFF.md #5).
 const DEFAULT_LAT = -1.9536

@@ -2,6 +2,12 @@
  * Lightweight Telemetry Service
  * Tracks critical realtime infrastructure health and usage metrics in-memory.
  */
+
+// SSE connection ceiling. Defensive OOM guard — per-client SSE state is a
+// few KB (delta Map + viewer sets), so a few hundred connections fit fine on
+// a standard instance; raise it via MAX_SSE_CONNECTIONS once you're on a
+// paid instance (see docs/DEPLOYMENT_GUIDE.md §Scaling).
+export const MAX_SSE_CONNECTIONS = Number(process.env.MAX_SSE_CONNECTIONS) || 250
 class TelemetryTracker {
   activeSSEConnections: number = 0
   totalSSEMessagesSent: number = 0

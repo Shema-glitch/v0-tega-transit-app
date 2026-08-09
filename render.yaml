@@ -4,6 +4,14 @@ services:
     env: node
     buildCommand: pnpm install && pnpm build
     startCommand: pnpm start
+    # Single-instance by design: shared in-memory state (rate limiter,
+    # request metrics, realtime hub, telemetry) means horizontal scale-out
+    # needs externalized state first — see docs/DEPLOYMENT_GUIDE.md §Scaling.
+    # If/when this moves to a paid instance, uncomment to keep Render from
+    # sleeping the service:
+    # scaling:
+    #   minInstances: 1
+    #   maxInstances: 1
     envVars:
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
@@ -18,4 +26,11 @@ services:
       - key: ADMIN_EMAILS
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Optional — Upstash Redis for the shared TTL cache + rate limiter
+      # (see docs/DEPLOYMENT_GUIDE.md §Redis). Without it everything degrades
+      # to in-memory automatically.
+      - key: REDIS_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
         sync: false

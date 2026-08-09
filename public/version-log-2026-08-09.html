@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BusGo Track — API Version Log · 2026-08-09</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0b;
+    --card: #131315;
+    --border: #26262a;
+    --text: #e4e4e7;
+    --dim: #9a9aa2;
+    --emerald: #34d399;
+    --emerald-dim: rgba(52, 211, 153, 0.12);
+    --amber: #fbbf24;
+    --red: #f87171;
+    --blue: #60a5fa;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.65;
+    padding: 32px 20px 64px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 28px; }
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--emerald); font-weight: 700;
+  }
+  h1 { font-size: 28px; line-height: 1.15; letter-spacing: -0.02em; margin: 6px 0 8px; }
+  .subtitle { color: var(--dim); margin: 0; }
+  h2 {
+    font-size: 15px; letter-spacing: -0.01em; margin: 36px 0 12px;
+    padding-left: 10px; border-left: 3px solid var(--emerald);
+  }
+  h3 { font-size: 13px; margin: 20px 0 8px; }
+  p { margin: 8px 0; }
+  .mono { font-family: var(--mono); font-size: 12.5px; }
+  code {
+    font-family: var(--mono); font-size: 12px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 5px;
+  }
+  pre {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto;
+    margin: 10px 0;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; margin: 12px 0;
+  }
+  .card h3 { margin-top: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; letter-spacing: 0.04em; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 5px; margin-right: 6px; vertical-align: 1px;
+  }
+  .badge-fe { background: rgba(96,165,250,0.15); color: var(--blue); }
+  .badge-be { background: var(--emerald-dim); color: var(--emerald); }
+  .badge-both { background: rgba(251,191,36,0.15); color: var(--amber); }
+  .badge-new { background: rgba(248,113,113,0.15); color: var(--red); }
+  .ok { color: var(--emerald); font-weight: 600; }
+  .warn { color: var(--amber); font-weight: 600; }
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  .muted { color: var(--dim); }
+  a { color: var(--emerald); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--dim); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">BusGo Track · API · Version Log</div>
+  <h1>Scaling &amp; observability batch</h1>
+  <p class="subtitle">2026-08-09 · backend repo <span class="mono">v0-tega-transit-app</span> · deployed on Render — <span class="mono">tega-transit-api.onrender.com</span></p>
+</header>
+
+<p>This batch makes the API ready for <strong>hundreds of simultaneous users</strong>: static GTFS data is now cached in memory (and Redis), every request is counted into a per-endpoint metrics ring the admin watches live, and the cache headers actually work. Read the <em>For frontend developers</em> section below — it changes how you should fetch.</p>
+
+<h2>What shipped</h2>
+
+<div class="grid">
+  <div class="card">
+    <h3><span class="badge badge-be">API</span>Per-endpoint load metrics</h3>
+    <p class="muted">Every <span class="mono">/api</span> request is counted in middleware; handlers record status + latency. New <span class="mono">GET /api/admin/metrics</span> (admin-only) + a live <strong>Load</strong> section in the console: requests/min, p50/p95 latency, 429 trips, SSE gauge, cache hit rate.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-be">API</span>TTL cache + single-flight</h3>
+    <p class="muted">Shapes, sequences, search, routes are served from memory (1h–1d); arrivals get a 5s micro-cache. Concurrent callers share <em>one</em> Supabase query per key. Failures are never cached.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-both">SHARED</span>Redis L2 <span class="badge badge-new">NEW</span></h3>
+    <p class="muted">Optional <span class="mono">REDIS_URL</span>: cache warmth survives restarts + spans instances, and the per-IP rate limiter becomes shared. Degrades to in-memory automatically when unset.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-both">SHARED</span>Live store pub/sub <span class="badge badge-new">NEW</span></h3>
+    <p class="muted">Broadcast pings + incident reports are shared across instances via Redis pub/sub (<span class="mono">tega:live-vehicle</span> / <span class="mono">tega:incident</span>). SSE subscribers on <em>any</em> instance see vehicles reported anywhere. Idempotent applies, backoff reconnect, silent no-op without Redis. The Load section shows <span class="mono">redis shared · pub/sub</span>.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-both">SHARED</span>Cache headers work now</h3>
+    <p class="muted">Static endpoints carry <span class="mono">max-age</span> (browser cache) + <span class="mono">s-maxage</span> (CDN-ready). Returning riders skip the server entirely.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-be">API</span>SSE cap raised</h3>
+    <p class="muted">Concurrent SSE connections: <span class="mono">100 → 250</span>, overridable with <span class="mono">MAX_SSE_CONNECTIONS</span>. Over the cap → <span class="mono">503</span>.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-be">API</span>Build hardening</h3>
+    <p class="muted">Type errors now <strong>fail</strong> the Render build instead of shipping silently. Public status page is read-only — checks + SSE monitor moved behind admin auth.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-be">API</span>Load alerts <span class="badge badge-new">NEW</span></h3>
+    <p class="muted">The Load section flags spikes automatically: request rate over <span class="mono">120/min</span> or rate-limit trips over <span class="mono">10</span> in the window trips an amber/red alert with a recent-episodes list. Thresholds overridable via <span class="mono">LOAD_ALERT_RPM_THRESHOLD</span> / <span class="mono">LOAD_ALERT_429_THRESHOLD</span>.</p>
+  </div>
+</div>
+
+<p class="muted">Also live from earlier batches: durable maintenance flags + auth audit log (migrations 0010–0011), 90-day uptime bars (<span class="mono">/api/uptime</span>, 0012), admin invites (0009), admin console rebuilt on shadcn with a sidebar.</p>
+
+<h2>For frontend developers — consuming the API at scale</h2>
+
+<h3><span class="badge badge-fe">FRONTEND</span> 1. Cold starts still exist (free tier)</h3>
+<div class="card">
+  <p>Render's free instance sleeps after ~15 min idle; the first request after a gap can take <strong>20–50s</strong>. Keep the layered strategy:</p>
+  <ol>
+    <li>Fire <span class="mono">GET /api/health</span> on mount as a wake-up ping (don't await it).</li>
+    <li>Render skeletons immediately — never a blank map.</li>
+    <li>Serve the bundled <span class="mono">kigali_stops.json</span> snapshot while the API wakes.</li>
+    <li>Show a "waking the server…" banner when the first request exceeds 5s.</li>
+  </ol>
+</div>
+
+<h3><span class="badge badge-fe">FRONTEND</span> 2. Cache-aware fetching (the big one)</h3>
+<div class="card">
+  <p>Static data is now cached server-side AND in your users' browsers:</p>
+  <table>
+    <tr><th>Endpoint</th><th>Fresh for</th><th>What this means for you</th></tr>
+    <tr><td class="mono">/api/routes, /api/gtfs/routes, /api/search/suggest</td><td>1h</td><td>Don't poll. Fetch once per session and reuse.</td></tr>
+    <tr><td class="mono">/api/routes/{id}/shape, /sequence</td><td>1 day</td><td>Cache per route forever; invalidate on a GTFS update.</td></tr>
+    <tr><td class="mono">/api/stops, /api/gtfs/stops, /api/gtfs/hubs</td><td>in-memory snapshot</td><td>Fetch once per session.</td></tr>
+    <tr><td class="mono">/api/stops/{id}/arrivals</td><td>5s micro-cache</td><td>Polling every 30–60s is plenty; 5s is the floor.</td></tr>
+    <tr><td class="mono">/api/vehicles/live</td><td>uncached (live)</td><td>Polling fallback only — prefer SSE.</td></tr>
+  </table>
+  <p class="muted">Search: debounce 300ms, cache suggestions by query in React Query (staleTime ≥ 1h). Server-side, the same query from 100 users costs <em>one</em> PostGIS call.</p>
+</div>
+
+<h3><span class="badge badge-fe">FRONTEND</span> 3. SSE — connect once, scope, reconnect</h3>
+<div class="card">
+  <pre><code>const sse = new EventSource(
+  `/api/realtime/sse?lat=${lat}&amp;lng=${lng}&amp;radius=3000&amp;routes=${routes.join(',')}`
+)
+sse.addEventListener('message', (e) =&gt; {
+  const { type, vehicles } = JSON.parse(e.data)
+  if (type === 'vehicle:update') vehicles.forEach((v) =&gt; updateMarker(v.id, v))
+})
+sse.onerror = () =&gt; setTimeout(() =&gt; sse.close(), 5000) // let EventSource auto-reconnect</code></pre>
+  <ul>
+    <li>Deltas only carry <span class="mono">id, lat, lon, brg, spd</span> — merge, don't replace.</li>
+    <li>Scope with <span class="mono">routes=</span> and <span class="mono">direction=</span> to cut payloads for a stop-watch view.</li>
+    <li><span class="mono">503</span> from SSE = connection cap (250). Retry with exponential backoff (1s → 2s → 4s…), and fall back to polling <span class="mono">/api/vehicles/live</span>.</li>
+    <li>One shared hub feeds every client — your connection count doesn't multiply DB load.</li>
+  </ul>
+</div>
+
+<h3><span class="badge badge-fe">FRONTEND</span> 4. Respect rate limits</h3>
+<div class="card">
+  <p>Per IP, per minute: <strong>120 reads</strong> (per route-group), <strong>30 writes</strong>. On a <span class="mono">429</span>, honor <span class="mono">Retry-After</span> and back off. The headers <span class="mono">X-RateLimit-Limit</span> / <span class="mono">X-RateLimit-Remaining</span> tell you where you stand. A healthy session (SSE + stop lookups + a search every few seconds) is a tiny fraction of this — only aggressive polling or retry loops trip it.</p>
+</div>
+
+<h3><span class="badge badge-fe">FRONTEND</span> 5. 503 ≠ broken — read the body</h3>
+<div class="card">
+  <p>Two kinds of <span class="mono">503</span>:</p>
+  <ul>
+    <li><strong>Maintenance disable</strong> — the admin turned an endpoint off mid-incident. Body: <span class="mono">{ error, reason, since }</span>. Show the reason to riders; retry every 15–30s.</li>
+    <li><strong>SSE capacity</strong> — connection cap. Back off + poll fallback.</li>
+  </ul>
+</div>
+
+<h3><span class="badge badge-both">SHARED</span> 6. Uptime bars on the public status page</h3>
+<div class="card">
+  <p>The status page reads <span class="mono">GET /api/uptime</span> — 90 days of per-endpoint daily buckets (green/amber/red/gray). If you build your own status UI, use this endpoint; the "re-run checks" + SSE monitor buttons are <strong>admin-only</strong> now (POST <span class="mono">/api/admin/diagnostics/check</span>) — never call them from the public app.</p>
+</div>
+
+<h2>Quick reference</h2>
+<table>
+  <tr><th>Thing</th><th>Value</th></tr>
+  <tr><td>Base URL</td><td class="mono">https://tega-transit-api.onrender.com/api</td></tr>
+  <tr><td>Uptime history</td><td class="mono">GET /api/uptime</td></tr>
+  <tr><td>Read rate limit</td><td class="mono">120/min/IP per route-group</td></tr>
+  <tr><td>Write rate limit</td><td class="mono">30/min/IP</td></tr>
+  <tr><td>SSE cap</td><td class="mono">250 concurrent</td></tr>
+  <tr><td>Full API reference</td><td><a href="https://github.com/Shema-glitch/v0-tega-transit-app/blob/main/docs/API_DOCS.md">docs/API_DOCS.md</a></td></tr>
+</table>
+
+<footer>
+  BusGo Track API · generated 2026-08-09 · questions → the backend maintainer (this repo's Issues tab).
+</footer>
+
+</div>
+</body>
+</html>

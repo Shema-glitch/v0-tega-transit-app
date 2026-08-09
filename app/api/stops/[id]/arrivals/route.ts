@@ -26,7 +26,14 @@ import { haversineMeters } from '@/lib/api/geo'
 import { findStopIdsNear } from '@/lib/api/stops-cache'
 import { ErrorLog } from '@/lib/api/error-log'
 import { CORS, corsPreflight } from '@/lib/api/cors'
-import { withLatencyTracking } from '@/lib/api/telemetry.service'
+import { withRequestMetrics } from '@/lib/api/request-metrics'
+import { cacheWrap } from '@/lib/api/ttl-cache'
+
+// Micro-cache window for arrival payloads. A popular stop's concurrent
+// checkers collapse onto ONE stop_times query (single-flight), and everyone
+// within 5 s reads the same snapshot — fresh enough for ETAs, a fraction of
+// the Supabase load (see docs/DEPLOYMENT_GUIDE.md §Scaling).
+const ARRIVALS_MICRO_CACHE_MS = 5000
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,7 +58,7 @@ export async function GET(
   request: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  return withLatencyTracking(() => handleGet(request, ctx))
+  return withRequestMetrics('stops.arrivals', () => handleGet(request, ctx))
 }
 
 async function handleGet(
@@ -97,6 +104,10 @@ async function handleGet(
     const stopLat = stopRow.stop_lat as number
     const stopLon = stopRow.stop_lon as number
 
+    // ── 2-4. Build the arrival payload (live merge + schedule join + sort),
+    //         micro-cached for 5 s. 404s are decided above, before the cache,
+    //         so a newly-imported stop never stays "not found" for 5 s.
+    const payload = await cacheWrap(`arrivals:${stopId}`, ARRIVALS_MICRO_CACHE_MS, async () => {
     // ── 2. Merge live crowdsourced vehicles ────────────────────────────────────
     const liveBuses = LiveVehicleStore.getVehicles()
     const liveArrivals = liveBuses.map((bus, i) => {
@@ -210,26 +221,26 @@ async function handleGet(
       (a, b) => a.etaMin - b.etaMin
     )
 
-    // ── 5. Respond ─────────────────────────────────────────────────────────────
     // Valid stop with no arrivals → 200 + empty array (NOT 404)
-    return NextResponse.json(
-      {
-        stopId,
-        arrivals,
-        metadata: {
-          timestamp: new Date().toISOString(),
-          engine: 'eta_v2_predictive',
-          stopName: stopRow.stop_name,
-        },
+    return {
+      stopId,
+      arrivals,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        engine: 'eta_v2_predictive',
+        stopName: stopRow.stop_name,
       },
-      {
-        status: 200,
-        headers: {
-          ...CORS,
-          ...(CacheService.liveHeaders() as Record<string, string>),
-        },
-      }
-    )
+    }
+    }) // end cacheWrap
+
+    // ── 5. Respond ─────────────────────────────────────────────────────────────
+    return NextResponse.json(payload, {
+      status: 200,
+      headers: {
+        ...CORS,
+        ...(CacheService.liveHeaders() as Record<string, string>),
+      },
+    })
   } catch (err) {
     console.error('[GET /api/stops/[id]/arrivals] Unexpected error:', err)
     ErrorLog.record({ path: '/api/stops/{id}/arrivals', method: 'GET', status: 500, message: err instanceof Error ? err.message : 'Unknown error' })

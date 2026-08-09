@@ -24,9 +24,18 @@ import path from 'path'
 import { parse } from 'csv-parse/sync'
 import { getCanonicalStops } from '@/lib/api/stops-cache'
 import { CacheService } from '@/lib/api/cache.service'
+import { withRequestMetrics } from '@/lib/api/request-metrics'
 
 const DEFAULT_LIMIT = 200
 const MAX_LIMIT = 2000
+
+// csv-parse types rows as unknown[] — describe the GTFS columns we read.
+interface GtfsStopRow {
+  stop_id: string
+  stop_name?: string
+  stop_lat?: string
+  stop_lon?: string
+}
 
 /**
  * Name validation: reject garbage / meaningless stop names.
@@ -55,6 +64,10 @@ function parsePaging(searchParams: URLSearchParams) {
 }
 
 export async function GET(request: Request) {
+  return withRequestMetrics('gtfs.stops', () => handleGet(request))
+}
+
+async function handleGet(request: Request) {
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q')?.toLowerCase() ?? null
   const { limit, offset } = parsePaging(searchParams)
@@ -82,18 +95,18 @@ export async function GET(request: Request) {
       const filePath = path.join(process.cwd(), 'kigali_gtfs', 'stops.txt')
       if (fs.existsSync(filePath)) {
         const fileContent = fs.readFileSync(filePath, 'utf-8')
-        const records = parse(fileContent, { columns: true, skip_empty_lines: true })
+        const records = parse(fileContent, { columns: true, skip_empty_lines: true }) as GtfsStopRow[]
 
         const matching = records
-          .map((stop: any) => ({
+          .map((stop) => ({
             id: String(stop.stop_id),
-            name: (stop.stop_name as string) ?? '',
-            lat: parseFloat(stop.stop_lat),
-            lon: parseFloat(stop.stop_lon),
+            name: stop.stop_name ?? '',
+            lat: parseFloat(stop.stop_lat ?? ''),
+            lon: parseFloat(stop.stop_lon ?? ''),
             type: 'stop' as const,
           }))
           .filter(
-            (s: any) =>
+            (s) =>
               !isNaN(s.lat) &&
               !isNaN(s.lon) &&
               isValidStopName(s.name) &&

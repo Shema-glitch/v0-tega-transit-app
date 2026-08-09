@@ -1,26 +1,31 @@
 /**
  * Smart Caching Service
- * Centralizes cache duration logic for Next.js edge/CDN caching
+ * Centralizes cache duration logic for edge/CDN caching
  * prioritizing 'stale-while-revalidate' for perceived realtime speed.
+ *
+ * Every directive here carries BOTH `max-age` (browser cache — this is what
+ * actually sheds load on plain Render, where no shared cache exists) and
+ * `s-maxage` (shared/CDN cache — honored once Cloudflare or similar sits in
+ * front; see docs/DEPLOYMENT_GUIDE.md §Scaling).
  */
 export class CacheService {
   /**
    * Headers for fully static data (e.g. Route Shapes)
-   * Cache for 1 day, revalidate background
+   * Browser: 1 h. CDN/edge: 1 day, revalidate background.
    */
   static staticHeaders(): HeadersInit {
     return {
-      'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=43200',
+      'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=43200',
     }
   }
 
   /**
    * Headers for semi-static data (e.g. Search Suggestions)
-   * Cache for 1 hour
+   * Browser: 5 min. CDN/edge: 1 hour.
    */
   static suggestionHeaders(): HeadersInit {
     return {
-      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+      'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
     }
   }
 

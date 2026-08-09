@@ -59,6 +59,7 @@ import {
 import { MAINTENANCE_GUIDE_HTML } from '@/lib/admin/maintenance-guide-html'
 import UptimeBars, { type UptimeDay } from '@/components/uptime-bars'
 import SseMonitor from '@/components/admin/sse-monitor'
+import LoadPanel from '@/components/admin/load-panel'
 import { AppSidebar, type ConsoleSection } from '@/components/app-sidebar'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -411,6 +412,30 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<number | null>(null)
   const [pollFailed, setPollFailed] = useState(false)
+
+  // Active load-alert count for the sidebar's red dot. Polled independently
+  // of the Load section so a spike surfaces no matter which section is open
+  // (the poll also keeps threshold evaluation running while Load is closed).
+  const [activeAlerts, setActiveAlerts] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      try {
+        const res = await fetch('/api/admin/metrics', { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setActiveAlerts(data.alerts?.active?.length ?? 0)
+      } catch {
+        // Silent — the sidebar dot is best-effort; the Load panel errors loudly.
+      }
+    }
+    check()
+    const id = setInterval(check, 20_000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [])
 
   // Admin email allowlist (invite/revoke — see lib/api/admin-emails.ts)
   // Mirrors lib/api/uptime-tracker.ts EndpointUptime.
@@ -835,7 +860,7 @@ export default function AdminPage() {
         <AppSidebar
           variant="inset"
           active={tab}
-          counts={{ issues: openCount, suggestions: stopSuggestions.length }}
+          counts={{ issues: openCount, suggestions: stopSuggestions.length, loadAlerts: activeAlerts }}
           onNavigate={(s) => setTab(s)}
           onLogout={logout}
         />
@@ -1447,6 +1472,8 @@ export default function AdminPage() {
             </section>
           )}
 
+        {tab === 'load' && <LoadPanel />}
+
         {tab === 'guide' && (
             <section>
               <p className="mb-3 text-xs text-muted-foreground">
@@ -1457,6 +1484,18 @@ export default function AdminPage() {
                 <iframe
                   title="Maintenance & QA Guide"
                   srcDoc={MAINTENANCE_GUIDE_HTML}
+                  sandbox="allow-scripts allow-same-origin"
+                  className="h-[75vh] w-full border-0 bg-background"
+                />
+              </Card>
+              <p className="mt-5 mb-3 text-xs text-muted-foreground">
+                Version log — what shipped in the latest batch and how the frontend should consume the API at
+                scale. Also served at <span className="font-mono">/version-log-2026-08-09.html</span> for the frontend team.
+              </p>
+              <Card className="overflow-hidden p-0">
+                <iframe
+                  title="API Version Log 2026-08-09"
+                  src="/version-log-2026-08-09.html"
                   sandbox="allow-scripts allow-same-origin"
                   className="h-[75vh] w-full border-0 bg-background"
                 />

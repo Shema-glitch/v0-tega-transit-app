@@ -12,8 +12,13 @@ import { LiveVehicleStore } from '@/lib/api/live-store'
 import { CacheService } from '@/lib/api/cache.service'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 import { bareRouteId } from '@/lib/api/geo'
+import { withRequestMetrics } from '@/lib/api/request-metrics'
 
 export async function GET(request: NextRequest) {
+  return withRequestMetrics('incidents.active', () => handleGet(request))
+}
+
+async function handleGet(request: NextRequest) {
   // Optional ?routes=101,105 — mirrors the SSE stream's scoping so a client
   // merging this snapshot with a scoped stream doesn't re-import the clutter
   // the stream just filtered out. Route-less incidents always pass.

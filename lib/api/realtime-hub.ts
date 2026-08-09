@@ -17,6 +17,7 @@
 
 import { kigaliRoutes, kigaliRouteGeometries } from '../kigali-gtfs'
 import { LiveVehicleStore, LiveVehicle } from './live-store'
+import { attachLiveSync } from './live-sync'
 import { truncateGeo } from './compression'
 import { bareRouteId, haversineMeters } from './geo'
 
@@ -310,3 +311,8 @@ if (!g[HUB_KEY]) {
 }
 
 export const realtimeHub: RealtimeHub = g[HUB_KEY]!
+
+// Redis pub/sub bridge: importing the hub is what makes an instance part of
+// the cross-instance live-store fan-out (pings/incidents reported anywhere
+// reach SSE subscribers here). No-op when Redis is unconfigured.
+attachLiveSync()

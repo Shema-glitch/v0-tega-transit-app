@@ -23,7 +23,7 @@ import { getCanonicalStops } from '@/lib/api/stops-cache'
 import { ErrorLog } from '@/lib/api/error-log'
 import { haversineMeters } from '@/lib/api/geo'
 import { CORS, corsPreflight } from '@/lib/api/cors'
-import { withLatencyTracking } from '@/lib/api/telemetry.service'
+import { withRequestMetrics } from '@/lib/api/request-metrics'
 
 function parseFloatOrNull(v: string | null): number | null {
   if (v === null) return null
@@ -39,7 +39,7 @@ function clampInt(raw: string | null, defaultVal: number, max: number): number {
 }
 
 export async function GET(request: NextRequest) {
-  return withLatencyTracking(() => handleGet(request))
+  return withRequestMetrics('stops.list', () => handleGet(request))
 }
 
 async function handleGet(request: NextRequest) {

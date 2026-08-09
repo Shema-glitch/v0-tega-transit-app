@@ -3,8 +3,21 @@ import { SpatialService } from '@/lib/api/spatial.service'
 import { SearchSuggestSchema } from '@/lib/api/validation'
 import { CacheService } from '@/lib/api/cache.service'
 import { ErrorLog } from '@/lib/api/error-log'
+import { withRequestMetrics } from '@/lib/api/request-metrics'
+import { cacheWrap } from '@/lib/api/ttl-cache'
+
+// Search suggestions hit PostGIS pg_trgm fuzzy matching on Supabase — the
+// single most expensive query per keystroke in the API. Suggestions barely
+// change between GTFS imports, so each (query, limit) pair is cached for an
+// hour with single-flight: a hundred people typing "ki" share ONE query
+// until the TTL rolls. See docs/DEPLOYMENT_GUIDE.md §Scaling.
+const SUGGEST_TTL_MS = 60 * 60 * 1000 // 1 hour, matching suggestionHeaders
 
 export async function GET(request: NextRequest) {
+  return withRequestMetrics('search.suggest', () => handleGet(request))
+}
+
+async function handleGet(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const rawQuery = {
@@ -19,10 +32,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Call Spatial/Search Service (uses PostGIS pg_trgm fuzzy matching behind the scenes)
-    const suggestions = await SpatialService.searchStops(query.data.q, query.data.limit)
+    const suggestions = await cacheWrap(
+      `suggest:${query.data.q}:${query.data.limit}`,
+      SUGGEST_TTL_MS,
+      () => SpatialService.searchStops(query.data.q, query.data.limit)
+    )
 
     return NextResponse.json(
-      { 
+      {
         suggestions,
         metadata: {
           totalCount: suggestions.length,
