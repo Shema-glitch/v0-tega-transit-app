@@ -17,6 +17,7 @@ import { Activity, Database, Gauge, Radio, RefreshCw, ShieldAlert, Timer } from 
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 interface LoadAlert {
   kind: 'requests_per_min' | 'rate_limited'
@@ -281,101 +282,110 @@ export default function LoadPanel() {
 
           {/* Per-endpoint breakdown */}
           <Card className="overflow-hidden gap-0 py-0">
-            <div className="border-b border-border px-4 py-2.5">
-              <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                Endpoints by load
-              </p>
-            </div>
-            {metrics.groups.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-sm font-semibold text-muted-foreground">No traffic in this window</p>
-                <p className="mx-auto mt-1 max-w-[45ch] text-xs text-muted-foreground/80">
-                  Requests will appear here as riders hit the API. The read-only probe sweep counts too.
-                </p>
-              </div>
-            ) : (
-              metrics.groups.map((g, i) => {
-                const total = g.status2xx + g.status3xx + g.status4xx + g.status5xx
-                const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0)
-                return (
-                  <div
-                    key={g.group}
-                    className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 ${
-                      i < metrics.groups.length - 1 ? 'border-b border-border' : ''
-                    }`}
-                  >
-                    <div className="min-w-0 w-44 shrink-0">
-                      <p className="truncate font-mono text-xs tabular-nums">{g.group}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {g.requestsPerMin} req/min
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Endpoint</TableHead>
+                  <TableHead>Requests</TableHead>
+                  <TableHead className="w-[30%]">Status mix</TableHead>
+                  <TableHead className="text-right">Latency p50 / p95</TableHead>
+                  <TableHead className="text-right">429</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {metrics.groups.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-10 text-center">
+                      <p className="text-sm font-semibold text-muted-foreground">No traffic in this window</p>
+                      <p className="mx-auto mt-1 max-w-[45ch] text-xs text-muted-foreground/80">
+                        Requests will appear here as riders hit the API. The read-only probe sweep counts too.
                       </p>
-                    </div>
-                    {/* Status mini-bar — 2xx / 4xx / 5xx proportional */}
-                    <div className="flex h-1.5 min-w-24 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full bg-green-500/80 transition-all"
-                        style={{ width: `${pct(g.status2xx + g.status3xx)}%` }}
-                      />
-                      <div
-                        className="h-full bg-amber-500/80 transition-all"
-                        style={{ width: `${pct(g.status4xx)}%` }}
-                      />
-                      <div
-                        className="h-full bg-red-500/80 transition-all"
-                        style={{ width: `${pct(g.status5xx)}%` }}
-                      />
-                    </div>
-                    <span className="w-20 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-                      {g.p50Ms}/{g.p95Ms} ms
-                    </span>
-                    {g.rateLimited > 0 ? (
-                      <Badge className="bg-amber-500/15 font-mono text-[10px] tabular-nums text-amber-500 border-transparent">
-                        {g.rateLimited}× 429
-                      </Badge>
-                    ) : (
-                      <span className="w-14 shrink-0" />
-                    )}
-                  </div>
-                )
-              })
-            )}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  metrics.groups.map((g) => {
+                    const total = g.status2xx + g.status3xx + g.status4xx + g.status5xx
+                    const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0)
+                    return (
+                      <TableRow key={g.group}>
+                        <TableCell>
+                          <p className="truncate font-mono text-xs tabular-nums">{g.group}</p>
+                          <p className="text-[11px] text-muted-foreground">{g.requestsPerMin} req/min</p>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs tabular-nums">{fmt(g.requests)}</TableCell>
+                        {/* Status mini-bar — 2xx / 4xx / 5xx proportional */}
+                        <TableCell>
+                          <div className="flex h-1.5 min-w-24 max-w-56 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full bg-green-500/80 transition-[width]"
+                              style={{ width: `${pct(g.status2xx + g.status3xx)}%` }}
+                            />
+                            <div
+                              className="h-full bg-amber-500/80 transition-[width]"
+                              style={{ width: `${pct(g.status4xx)}%` }}
+                            />
+                            <div
+                              className="h-full bg-red-500/80 transition-[width]"
+                              style={{ width: `${pct(g.status5xx)}%` }}
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                          {g.p50Ms}/{g.p95Ms} ms
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {g.rateLimited > 0 ? (
+                            <Badge className="border-transparent bg-amber-500/15 font-mono text-[10px] tabular-nums text-amber-500">
+                              {g.rateLimited}×
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
           </Card>
 
           {/* Recent alert episodes — triggered + resolved, newest first */}
           {alerts && alerts.recent.length > 0 ? (
             <Card className="mt-4 overflow-hidden gap-0 py-0">
-              <div className="border-b border-border px-4 py-2.5">
-                <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                  Recent load alerts
-                </p>
-              </div>
-              {alerts.recent.slice(0, 8).map((a, i) => (
-                <div
-                  key={`${a.kind}-${a.at}-${i}`}
-                  className={`flex items-center gap-3 px-4 py-2 ${
-                    i < Math.min(alerts.recent.length, 8) - 1 ? 'border-b border-border' : ''
-                  }`}
-                >
-                  {a.state === 'triggered' ? (
-                    <ShieldAlert
-                      className={`size-3.5 shrink-0 ${
-                        a.severity === 'critical' ? 'text-red-500' : 'text-amber-500'
-                      }`}
-                    />
-                  ) : (
-                    <span className="ml-1.5 mr-1 size-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs">
-                      <span className="font-semibold">{a.state === 'triggered' ? 'Triggered' : 'Resolved'}</span>{' '}
-                      · {alertLabel(a)}
-                    </p>
-                  </div>
-                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
-                    {fmtTime(a.at)}
-                  </span>
-                </div>
-              ))}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>State</TableHead>
+                    <TableHead>Alert</TableHead>
+                    <TableHead className="text-right">When</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {alerts.recent.slice(0, 8).map((a, i) => (
+                    <TableRow key={`${a.kind}-${a.at}-${i}`}>
+                      <TableCell>
+                        {a.state === 'triggered' ? (
+                          <ShieldAlert
+                            className={`size-3.5 ${
+                              a.severity === 'critical' ? 'text-red-500' : 'text-amber-500'
+                            }`}
+                          />
+                        ) : (
+                          <span className="ml-1 mr-1 inline-block size-1.5 rounded-full bg-muted-foreground/50" />
+                        )}
+                      </TableCell>
+                      <TableCell className="truncate text-xs">
+                        <span className="font-semibold">{a.state === 'triggered' ? 'Triggered' : 'Resolved'}</span>
+                        <span className="text-muted-foreground"> · {alertLabel(a)}</span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                        {fmtTime(a.at)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </Card>
           ) : null}
 

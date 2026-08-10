@@ -17,7 +17,7 @@
  * the authenticator dialog and retries once (see app/admin/page.tsx).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -40,6 +40,9 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 interface StopEntry {
   id: string
@@ -212,10 +215,6 @@ export function StopsPanel({
   const visibleActive = useMemo(() => pageItems.filter((s) => s.status === 'active'), [pageItems])
   const allVisibleSelected = visibleActive.length > 0 && visibleActive.every((s) => selected.has(s.id))
   const someVisibleSelected = visibleActive.some((s) => selected.has(s.id))
-  const selectAllRef = useRef<HTMLInputElement | null>(null)
-  useEffect(() => {
-    if (selectAllRef.current) selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected
-  }, [someVisibleSelected, allVisibleSelected])
   const toggleSelectAll = useCallback(() => {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -509,22 +508,26 @@ export function StopsPanel({
             <label htmlFor="merge-survivor" className="mb-1 block text-[11px] font-semibold text-muted-foreground">
               Survivor stop
             </label>
-            <select
-              id="merge-survivor"
-              value={survivorId}
-              onChange={(e) => {
-                setSurvivorId(e.target.value)
+            <Select
+              value={survivorId || null}
+              onValueChange={(v) => {
+                setSurvivorId(v ?? '')
                 setPreview(null)
               }}
-              className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="">Pick the stop that survives…</option>
-              {survivorOptions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} — {s.id}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="h-10 w-full text-xs" aria-label="Survivor stop">
+                <SelectValue placeholder="Pick the stop that survives…" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {survivorOptions.map((s) => (
+                  <SelectItem key={s.id} value={s.id} className="text-xs">
+                    <span className="truncate">
+                      {s.name} — <span className="font-mono text-[10px] text-muted-foreground">{s.id}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label htmlFor="merge-reason" className="mb-1 block text-[11px] font-semibold text-muted-foreground">
@@ -606,66 +609,69 @@ export function StopsPanel({
             aria-label="Search stops"
             className="h-9 text-xs"
           />
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value))
-              setPage(1)
+          <Select
+            value={String(pageSize)}
+            onValueChange={(v) => {
+              if (v) {
+                setPageSize(Number(v))
+                setPage(1)
+              }
             }}
-            aria-label="Rows per page"
-            className="h-9 shrink-0 rounded-md border border-input bg-transparent px-2 font-mono text-[11px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {PAGE_SIZES.map((n) => (
-              <option key={n} value={n}>
-                {n} / page
-              </option>
-            ))}
-          </select>
+            <SelectTrigger size="sm" className="w-[5.5rem] shrink-0 font-mono text-[11px]" aria-label="Rows per page">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZES.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n} / page
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Filters + sort */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2">
-          <div className="flex items-center gap-0.5 rounded-lg border border-border p-0.5">
+          <ToggleGroup
+            variant="outline"
+            size="sm"
+            value={statusFilter === 'all' ? [] : [statusFilter]}
+            onValueChange={(v) => {
+              setStatusFilter((v[0] as StopEntry['status']) ?? 'all')
+              setPage(1)
+            }}
+            className="gap-0.5"
+          >
             {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.v}
-                type="button"
-                onClick={() => {
-                  setStatusFilter(f.v)
-                  setPage(1)
-                }}
-                className={`h-7 rounded-md px-2.5 text-[11px] font-medium transition-colors ${
-                  statusFilter === f.v ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
+              <ToggleGroupItem key={f.v} value={f.v} className="h-7 px-2.5 text-[11px]">
                 {f.l}
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
           <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={hubOnly}
-              onChange={(e) => {
-                setHubOnly(e.target.checked)
+              onCheckedChange={(c) => {
+                setHubOnly(c)
                 setPage(1)
               }}
-              className="size-3.5 accent-blue-500"
             />
             Hubs only
           </label>
           <div className="ml-auto flex items-center gap-1.5">
-            <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
-              aria-label="Sort stops by"
-              className="h-7 rounded-md border border-input bg-transparent px-2 text-[11px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="name">Sort: name</option>
-              <option value="id">Sort: id</option>
-              <option value="status">Sort: status</option>
-              <option value="edited">Sort: last edited</option>
-            </select>
+            <span className="text-[11px] text-muted-foreground">Sort</span>
+            <Select value={sortKey} onValueChange={(v) => v && setSortKey(v as SortKey)}>
+              <SelectTrigger size="sm" className="h-7 text-[11px]" aria-label="Sort stops by">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="id">ID</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+                <SelectItem value="edited">Last edited</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               size="sm"
               variant="outline"
@@ -726,16 +732,14 @@ export function StopsPanel({
           <>
             {/* Select-all row */}
             <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
-              <input
-                ref={selectAllRef}
-                type="checkbox"
+              <Checkbox
                 checked={allVisibleSelected}
-                onChange={toggleSelectAll}
+                indeterminate={someVisibleSelected && !allVisibleSelected}
+                onCheckedChange={toggleSelectAll}
                 disabled={visibleActive.length === 0 || busy}
                 aria-label={
                   allVisibleSelected ? 'Deselect all active stops on this page' : 'Select all active stops on this page'
                 }
-                className="size-4 accent-emerald-500 disabled:opacity-40"
               />
               <span className="text-[11px] text-muted-foreground">
                 {allVisibleSelected ? 'Deselect all' : 'Select all'} active on this page
@@ -755,13 +759,12 @@ export function StopsPanel({
                   className="rise-in flex flex-wrap items-center gap-2 px-3 py-2.5 pl-4"
                   style={{ '--rise-index': Math.min(idx, 8) } as CSSProperties}
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={isVictim}
-                    onChange={() => toggleSelected(s.id)}
+                    onCheckedChange={() => toggleSelected(s.id)}
                     disabled={s.status !== 'active' || busy}
                     aria-label={`Select ${s.name} as a merge victim`}
-                    className="size-4 shrink-0 accent-emerald-500 disabled:opacity-40"
+                    className="shrink-0"
                   />
                   <Badge className={`w-16 shrink-0 justify-center font-mono text-[10px] ${STATUS_BADGE[s.status]}`}>
                     {s.status === 'active' ? 'ACTIVE' : s.status === 'merged' ? 'MERGED' : 'HIDDEN'}

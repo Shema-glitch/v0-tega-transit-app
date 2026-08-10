@@ -46,10 +46,13 @@ import { ENDPOINT_REGISTRY, type EndpointRegistryEntry } from '@/lib/api/endpoin
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { Toaster } from '@/components/ui/sonner'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   Dialog,
   DialogBackdrop,
@@ -232,39 +235,6 @@ function TimeAgo({ ts }: { ts: number }) {
   return <>{timeAgo(ts, now)}</>
 }
 
-// ─── toast (lightweight, zero dependency) ─────────────────────────────────────
-interface ToastItem {
-  id: number
-  message: string
-  kind: 'success' | 'error'
-}
-
-function ToastStack({ toasts }: { toasts: ToastItem[] }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="fixed right-4 bottom-4 z-50 flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2"
-    >
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          className={`rise-in pointer-events-auto flex items-start gap-2 rounded-lg border bg-card px-3 py-2.5 text-sm shadow-lg ${
-            t.kind === 'success' ? 'border-green-500/40' : 'border-destructive/40'
-          }`}
-        >
-          {t.kind === 'success' ? (
-            <CheckCircle2 className={`mt-0.5 size-4 shrink-0 ${STATUS_COLOR.good}`} />
-          ) : (
-            <AlertTriangle className={`mt-0.5 size-4 shrink-0 ${STATUS_COLOR.err}`} />
-          )}
-          <span className="min-w-0 break-words">{t.message}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 // ─── skeleton / stat primitives ───────────────────────────────────────────────
 function SkeletonBox({ className }: { className?: string }) {
   return <span className={`inline-block animate-pulse rounded bg-muted ${className ?? ''}`} />
@@ -351,7 +321,7 @@ function CopyGuideLinkButton() {
       onClick={copy}
       variant="outline"
       size="sm"
-      className="h-9 gap-1.5 text-xs"
+      className="hidden h-9 gap-1.5 text-xs lg:inline-flex"
       title={COMMUNITY_GUIDE_URL}
     >
       <Share2 className="size-3.5" />
@@ -378,7 +348,7 @@ function LaunchDebugModeButton() {
   }, [])
 
   return (
-    <Button onClick={launch} variant="outline" size="sm" className="h-9 gap-1.5 text-xs">
+    <Button onClick={launch} variant="outline" size="sm" className="hidden h-9 gap-1.5 text-xs lg:inline-flex">
       <Wrench className="size-3.5" />
       Open app in Debug Mode
     </Button>
@@ -405,7 +375,6 @@ export default function AdminPage() {
   const [query, setQuery] = useState('')
 
   // Action feedback + dialogs (replaces the old window.prompt flow)
-  const [toasts, setToasts] = useState<ToastItem[]>([])
   const [disableTarget, setDisableTarget] = useState<EndpointRegistryEntry | null>(null)
   const [disableReason, setDisableReason] = useState('Investigating an issue')
   const [disabling, setDisabling] = useState(false)
@@ -499,10 +468,11 @@ export default function AdminPage() {
   // not the live-updating localStorage value (which we overwrite right away).
   const lastSeenAtRef = useRef<number | null>(null)
 
-  const pushToast = useCallback((message: string, kind: ToastItem['kind'] = 'success') => {
-    const id = Date.now() + Math.random()
-    setToasts((t) => [...t, { id, message, kind }])
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000)
+  // Toast via shadcn Sonner — keeps the exact same call-site interface, so
+  // every onNotify/pushToast consumer works unchanged.
+  const pushToast = useCallback((message: string, kind: 'success' | 'error' = 'success') => {
+    if (kind === 'error') toast.error(message)
+    else toast.success(message)
   }, [])
 
   // ─── Live notification feed ───────────────────────────────────────────────
@@ -1035,7 +1005,7 @@ export default function AdminPage() {
   // the brief 'checking' moment so there's no flash of the dashboard.
   if (authState !== 'in') {
     return (
-      <div className="dark flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
+      <div className="dark flex min-h-[100dvh] items-center justify-center bg-background px-4 text-foreground">
         <Card className="flex w-full max-w-sm items-center gap-3 p-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/assets/busgo-mark-dark.png" alt="BusGo Track" className="h-10 w-auto" />
@@ -1049,9 +1019,11 @@ export default function AdminPage() {
 
   // ─── Dashboard ─────────────────────────────────────────────────────────────
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
+    <div className="dark min-h-[100dvh] bg-background text-foreground">
       {/* Fixed film grain — one paint layer, never intercepts input (see .admin-grain). */}
       <div aria-hidden className="admin-grain" />
+      {/* shadcn Sonner toasts — dark to match the console, bottom-right like the old stack. */}
+      <Toaster theme="dark" position="bottom-right" richColors />
 
       {/* shadcn dashboard-01 shell: sidebar nav + inset content. The sections
           that were top tabs now live in the sidebar (see components/app-sidebar.tsx)
@@ -1187,25 +1159,15 @@ export default function AdminPage() {
         {tab === 'issues' && (
             <section>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <ToggleGroup
-                  value={[issueFilter]}
-                  onValueChange={(vals) => {
-                    const next = vals[0] as typeof issueFilter | undefined
-                    if (next) setIssueFilter(next)
-                  }}
-                  variant="outline"
-                  className="flex-wrap overflow-x-auto rounded-lg border border-border p-1"
-                >
-                  {(['open', 'all', 'errors', 'bugs'] as const).map((f) => (
-                    <ToggleGroupItem
-                      key={f}
-                      value={f}
-                      className="h-9 min-h-9 whitespace-nowrap rounded px-2.5 text-xs font-semibold capitalize"
-                    >
-                      {f}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                <Tabs value={issueFilter} onValueChange={(v) => setIssueFilter(v as typeof issueFilter)}>
+                  <TabsList variant="line" className="h-9">
+                    {(['open', 'all', 'errors', 'bugs'] as const).map((f) => (
+                      <TabsTrigger key={f} value={f} className="h-8 px-3 text-xs font-semibold capitalize">
+                        {f}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
                 <div className="relative min-w-0 flex-1">
                   <Input
                     value={query}
@@ -1261,79 +1223,92 @@ export default function AdminPage() {
                   ))}
                 </div>
               ) : (
-              <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-                {filteredIssues.map((item, idx) => {
-                  const isNew = lastSeenAtRef.current !== null && item.timestamp > lastSeenAtRef.current
-                  return (
-                    <div
-                      key={item.id}
-                      className={`row-hover rise-in relative flex flex-col gap-1.5 px-4 py-3 pl-5 ${item.resolved ? 'opacity-55' : ''}`}
-                      style={{ '--rise-index': Math.min(idx, 10) } as CSSProperties}
-                    >
-                      {/* Severity rail — errors red, bugs emerald. */}
-                      <span
-                        className={`absolute inset-y-0 left-0 w-[2px] ${
-                          item.kind === 'error' ? 'bg-destructive/70' : 'bg-emerald-500/70'
-                        }`}
-                      />
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={`font-semibold ${item.kind === 'error' ? STATUS_BADGE.err : STATUS_BADGE.accent}`}>
-                          {item.kind === 'error' ? 'ERROR' : 'BUG'}
-                        </Badge>
-                        {isNew && (
-                          <Badge className={`font-semibold ${STATUS_BADGE.accent}`}>
-                            since you last looked
-                          </Badge>
-                        )}
-                        <span className="font-mono text-xs font-semibold">{item.title}</span>
-                        <span className="text-xs text-muted-foreground">
-                          <TimeAgo ts={item.timestamp} />
-                        </span>
-                        {item.count && item.count > 1 && (
-                          <Badge className={`font-semibold ${STATUS_BADGE.warn}`}>
-                            ×{item.count}
-                          </Badge>
-                        )}
-                        {item.resolved && (
-                          <Badge className={`font-semibold ${STATUS_BADGE.dim}`}>
-                            resolved
-                          </Badge>
-                        )}
-                        {item.onResolve && !item.resolved && (
-                          <Button
-                            onClick={item.onResolve}
-                            variant="outline"
-                            size="sm"
-                            className={`ml-auto h-8 text-xs ${STATUS_COLOR.good}`}
-                          >
-                            Mark resolved
-                          </Button>
-                        )}
-                        {item.kind === 'error' && (
-                          <Button
-                            onClick={() => {
-                              void navigator.clipboard.writeText(`${item.title}\n${item.detail}`).catch(() => {})
-                              pushToast('Error details copied')
-                            }}
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 gap-1 text-xs"
-                            title="Copy error details"
-                          >
-                            <Copy className="size-3.5" /> Copy
-                          </Button>
-                        )}
-                      </div>
-                      <div className="text-xs whitespace-pre-wrap">{item.detail}</div>
-                      {item.meta && (
-                        <div className="text-xs text-muted-foreground">
-                          from: <PageUrlLink url={item.meta} />
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+              <Card className="overflow-hidden p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Kind</TableHead>
+                      <TableHead>Issue</TableHead>
+                      <TableHead className="text-right">Occurrences</TableHead>
+                      <TableHead>Last seen</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredIssues.map((item) => {
+                      const isNew = lastSeenAtRef.current !== null && item.timestamp > lastSeenAtRef.current
+                      return (
+                        <TableRow key={item.id} className={item.resolved ? 'opacity-55' : ''}>
+                          <TableCell>
+                            <Badge
+                              className={`font-semibold ${item.kind === 'error' ? STATUS_BADGE.err : STATUS_BADGE.accent}`}
+                            >
+                              {item.kind === 'error' ? 'ERROR' : 'BUG'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs font-semibold">{item.title}</span>
+                              {isNew && (
+                                <Badge className={`font-semibold ${STATUS_BADGE.accent}`}>
+                                  since you last looked
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="mt-0.5 text-xs whitespace-pre-wrap">{item.detail}</div>
+                            {item.meta && (
+                              <div className="text-xs text-muted-foreground">
+                                from: <PageUrlLink url={item.meta} />
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {item.count && item.count > 1 ? (
+                              <Badge className={`font-semibold ${STATUS_BADGE.warn}`}>×{item.count}</Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">{item.count ?? 1}</span>
+                            )}
+                            {item.resolved && (
+                              <Badge className={`ml-1.5 font-semibold ${STATUS_BADGE.dim}`}>resolved</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            <TimeAgo ts={item.timestamp} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1.5">
+                              {item.onResolve && !item.resolved && (
+                                <Button
+                                  onClick={item.onResolve}
+                                  variant="outline"
+                                  size="sm"
+                                  className={`h-8 text-xs ${STATUS_COLOR.good}`}
+                                >
+                                  Mark resolved
+                                </Button>
+                              )}
+                              {item.kind === 'error' && (
+                                <Button
+                                  onClick={() => {
+                                    void navigator.clipboard.writeText(`${item.title}\n${item.detail}`).catch(() => {})
+                                    pushToast('Error details copied')
+                                  }}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1 text-xs"
+                                  title="Copy error details"
+                                >
+                                  <Copy className="size-3.5" /> Copy
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </Card>
               )}
 
               <p className="mt-3 text-xs text-muted-foreground">
@@ -1353,7 +1328,7 @@ export default function AdminPage() {
                     onClick={runChecks}
                     disabled={checksRunning}
                     size="sm"
-                    className="h-9 gap-1.5 bg-emerald-500 text-xs font-semibold text-emerald-950 shadow-[0_8px_20px_-8px_oklch(0.696_0.17_162.48/0.6)] transition-all hover:bg-emerald-400 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+                    className="h-9 gap-1.5 bg-emerald-500 text-xs font-semibold text-emerald-950 shadow-[0_8px_20px_-8px_oklch(0.696_0.17_162.48/0.6)] transition-[transform,background-color] hover:bg-emerald-400 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
                   >
                     {checksRunning ? (
                       <Loader2 className="size-3.5 animate-spin" />
@@ -1595,55 +1570,86 @@ export default function AdminPage() {
                 )}
               </Card>
 
-              <div className="mt-4 space-y-2">
-                {admins.map((a) => (
-                  <Card key={a.email} className="flex flex-wrap items-center gap-3 p-3">
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold">{a.email}</span>
-                    <Badge
-                      className={`font-semibold ${a.source === 'env' ? STATUS_BADGE.dim : STATUS_BADGE.accent}`}
-                    >
-                      {a.source === 'env' ? 'env · ADMIN_EMAILS' : 'invited'}
-                    </Badge>
-                    <Badge
-                      className={`font-semibold ${
-                        a.role === 'curator' ? 'bg-blue-500/15 text-blue-400' : 'bg-emerald-500/15 text-emerald-400'
-                      }`}
-                    >
-                      {a.role === 'curator' ? 'CURATOR' : 'ADMIN'}
-                    </Badge>
-                    {a.source === 'supabase' && (
-                      <span className="text-xs text-muted-foreground">
-                        by {a.invitedBy ?? 'unknown'}
-                        {a.createdAt ? (
-                          <>
-                            {' '}· <TimeAgo ts={a.createdAt} />
-                          </>
-                        ) : null}
-                      </span>
+              <Card className="mt-4 overflow-hidden p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Added</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {admins.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-8 text-center text-xs text-muted-foreground">
+                          No admins yet — invite the first one above.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      admins.map((a) => (
+                        <TableRow key={a.email}>
+                          <TableCell className="font-mono text-xs font-semibold">{a.email}</TableCell>
+                          <TableCell>
+                            <Badge
+                              className={`font-semibold ${a.source === 'env' ? STATUS_BADGE.dim : STATUS_BADGE.accent}`}
+                            >
+                              {a.source === 'env' ? 'env · ADMIN_EMAILS' : 'invited'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={`font-semibold ${
+                                a.role === 'curator' ? 'bg-blue-500/15 text-blue-400' : 'bg-emerald-500/15 text-emerald-400'
+                              }`}
+                            >
+                              {a.role === 'curator' ? 'CURATOR' : 'ADMIN'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {a.source === 'supabase' ? (
+                              <>
+                                by {a.invitedBy ?? 'unknown'}
+                                {a.createdAt ? (
+                                  <>
+                                    {' '}· <TimeAgo ts={a.createdAt} />
+                                  </>
+                                ) : null}
+                              </>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {a.source === 'supabase' && (
+                              <div className="flex justify-end gap-1.5">
+                                <Button
+                                  onClick={() => toggleCuratorRole(a.email, a.role)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs"
+                                >
+                                  {a.role === 'curator' ? 'Make admin' : 'Make curator'}
+                                </Button>
+                                <Button
+                                  onClick={() => revokeAdmin(a.email)}
+                                  variant="outline"
+                                  size="sm"
+                                  className={`h-8 text-xs ${STATUS_COLOR.err}`}
+                                >
+                                  Revoke
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
                     )}
-                    {a.source === 'supabase' && (
-                      <>
-                        <Button
-                          onClick={() => toggleCuratorRole(a.email, a.role)}
-                          variant="outline"
-                          size="sm"
-                          className="h-9 text-xs"
-                        >
-                          {a.role === 'curator' ? 'Make admin' : 'Make curator'}
-                        </Button>
-                        <Button
-                          onClick={() => revokeAdmin(a.email)}
-                          variant="outline"
-                          size="sm"
-                          className={`h-9 text-xs ${STATUS_COLOR.err}`}
-                        >
-                          Revoke
-                        </Button>
-                      </>
-                    )}
-                  </Card>
-                ))}
-              </div>
+                  </TableBody>
+                </Table>
+              </Card>
             </section>
           )}
 
@@ -1672,34 +1678,40 @@ export default function AdminPage() {
                   </p>
                 </Card>
               ) : (
-                <Card className="overflow-hidden gap-0 py-0">
-                  {authLog.map((ev, i) => (
-                    <div
-                      key={`${ev.at}-${i}`}
-                      className={`flex items-center gap-3 px-3 py-2.5 ${
-                        i < authLog.length - 1 ? 'border-b border-border' : ''
-                      }`}
-                    >
-                      {ev.ok ? (
-                        <CheckCircle2 className="size-4 shrink-0 text-green-600 dark:text-green-400" />
-                      ) : (
-                        <X className="size-4 shrink-0 text-destructive" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-semibold">
-                          {ev.action}
-                          {ev.email ? <span className="text-muted-foreground"> · {ev.email}</span> : null}
-                        </div>
-                        <div className="truncate text-[11px] text-muted-foreground">
-                          {ev.ip}
-                          {ev.detail ? ` · ${ev.detail}` : null}
-                        </div>
-                      </div>
-                      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                        <TimeAgo ts={ev.at} />
-                      </span>
-                    </div>
-                  ))}
+                <Card className="overflow-hidden p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>IP</TableHead>
+                        <TableHead className="text-right">When</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {authLog.map((ev, i) => (
+                        <TableRow key={`${ev.at}-${i}`}>
+                          <TableCell>
+                            {ev.ok ? (
+                              <CheckCircle2 className="size-4 text-green-600 dark:text-green-400" />
+                            ) : (
+                              <X className="size-4 text-destructive" />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-xs font-semibold">{ev.action}</div>
+                            {ev.detail && <div className="text-[11px] text-muted-foreground">{ev.detail}</div>}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{ev.email ?? '—'}</TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{ev.ip}</TableCell>
+                          <TableCell className="text-right text-[11px] tabular-nums text-muted-foreground">
+                            <TimeAgo ts={ev.at} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </Card>
               )}
             </section>
@@ -1882,8 +1894,6 @@ export default function AdminPage() {
           </DialogPopup>
         </DialogPortal>
       </Dialog>
-
-      <ToastStack toasts={toasts} />
     </div>
   )
 }
