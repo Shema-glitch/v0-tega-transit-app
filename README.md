@@ -101,7 +101,7 @@ pnpm install
 | `ADMIN_TOKEN` | ✅ | HMAC session secret (fallback) + legacy header token |
 | `ADMIN_SESSION_SECRET` | optional | Separate HMAC secret for admin sessions |
 | `ADMIN_EMAILS` | ✅ | Comma-separated emails allowed to log in |
-| `ADMIN_PUBLIC_URL` | optional | Public base URL used for email-embedded magic links (set to the Render URL; falls back to the request origin) |
+| `ADMIN_PUBLIC_URL` | optional | Public base URL used for email-embedded magic links and auth redirects (set to the Render URL; falls back to `RENDER_EXTERNAL_URL`, then the request origin) |
 | `FRONTEND_ORIGIN` | optional | CORS allowlist origin (defaults to the deployed frontend) |
 | `MAX_SSE_CONNECTIONS` | optional | SSE cap (default 250) |
 | `REDIS_URL` / `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | optional | Upstash Redis — shared TTL cache + rate limiter + live-store pub/sub. Without it, everything degrades to in-memory automatically |

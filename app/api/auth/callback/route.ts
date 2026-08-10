@@ -16,16 +16,22 @@ import { getSupabaseServer } from '@/lib/supabase-server'
 import { isAllowlistedAdmin, sessionCookieHeader } from '@/lib/api/admin-auth'
 import { AuthLog } from '@/lib/api/auth-log'
 import { clientIp } from '@/lib/api/client-ip'
+import { publicBaseUrl } from '@/lib/api/public-url'
 
 export const dynamic = 'force-dynamic'
 
 const LOGIN_URL = '/goToAdminAuth'
 
+/**
+ * Redirects to the login page off the PUBLIC base URL, never the request's
+ * own origin — on Render the proxy can present the request with an internal
+ * host (localhost:10000), and an error redirect built from that would bounce
+ * the admin to an unreachable URL instead of the real site.
+ */
 function redirectToLogin(url: URL, error: string) {
-  url.pathname = LOGIN_URL
-  url.search = ''
-  url.searchParams.set('error', error)
-  return NextResponse.redirect(url)
+  const login = new URL(LOGIN_URL, publicBaseUrl(url.origin))
+  login.searchParams.set('error', error)
+  return NextResponse.redirect(login)
 }
 
 /** Exchanges the verification token for a user email, or null if the link is malformed. */
@@ -73,7 +79,7 @@ export async function GET(request: NextRequest) {
       return redirectToLogin(url, 'Auth is not configured on the server yet.')
     }
     AuthLog.record({ action: 'magic-link-login', email, ip, ok: true })
-    const res = NextResponse.redirect(new URL('/admin', url))
+    const res = NextResponse.redirect(new URL('/admin', publicBaseUrl(url.origin)))
     res.headers.set('Set-Cookie', cookie)
     return res
   } catch (err) {

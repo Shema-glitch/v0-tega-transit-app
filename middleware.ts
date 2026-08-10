@@ -38,6 +38,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { RateLimiterStore } from '@/lib/api/rate-limiter'
 import { ErrorLog } from '@/lib/api/error-log'
+import { publicBaseUrl } from '@/lib/api/public-url'
 import { RequestMetrics } from '@/lib/api/request-metrics'
 import { findEndpoint } from '@/lib/api/endpoint-registry'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
@@ -153,7 +154,7 @@ export async function middleware(request: NextRequest) {
   if (isAdminPage && path !== '/admin/debug') {
     const auth = checkAdminAuth(request)
     if (!auth.ok) {
-      const login = new URL('/goToAdminAuth', request.url)
+      const login = new URL('/goToAdminAuth', publicBaseUrl(request.nextUrl.origin))
       if (auth.reason === 'invalid') {
         login.searchParams.set('error', 'Your session expired — sign in again.')
       }
