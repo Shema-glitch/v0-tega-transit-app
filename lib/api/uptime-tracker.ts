@@ -41,6 +41,10 @@ export interface EndpointProbe {
   method: 'GET' | 'POST'
   /** Display label — the registry label for registry entries, else the path. */
   label: string
+  /** Plain-English service name for the public status page. */
+  title: string
+  /** One-line, non-technical description of what the service does. */
+  description: string
   group: string
   url: string
   body?: object
@@ -60,59 +64,59 @@ const STOP_ID = '24626187'
 
 const PROBES: EndpointProbe[] = [
   // Meta (not disable-able, but the bars look wrong without them)
-  { id: 'meta.health', method: 'GET', label: '/api/health', group: 'System', url: '/api/health' },
-  { id: 'meta.status', method: 'GET', label: '/api/status', group: 'System', url: '/api/status' },
-  { id: 'meta.diagnostics', method: 'GET', label: '/api/diagnostics', group: 'System', url: '/api/diagnostics' },
+  { id: 'meta.health', method: 'GET', label: '/api/health', title: 'Health check', description: 'Core service health', group: 'System', url: '/api/health' },
+  { id: 'meta.status', method: 'GET', label: '/api/status', title: 'Status summary', description: 'Current overall status', group: 'System', url: '/api/status' },
+  { id: 'meta.diagnostics', method: 'GET', label: '/api/diagnostics', title: 'Diagnostics', description: 'Deep system checks', group: 'System', url: '/api/diagnostics' },
   {
-    id: 'meta.maintenance', method: 'GET', label: '/api/admin/maintenance', group: 'System', url: '/api/admin/maintenance',
+    id: 'meta.maintenance', method: 'GET', label: '/api/admin/maintenance', title: 'Maintenance flags', description: 'Which services are disabled', group: 'System', url: '/api/admin/maintenance',
     adminOnly: true,
   },
   {
-    id: 'meta.feedback', method: 'POST', label: '/api/feedback/report', group: 'System', url: '/api/feedback/report',
+    id: 'meta.feedback', method: 'POST', label: '/api/feedback/report', title: 'Feedback reports', description: 'Bug and feedback intake', group: 'System', url: '/api/feedback/report',
     body: { subject: 'Uptime probe', message: 'Automated probe from the uptime tracker.', pageUrl: 'https://bus-go-track.vercel.app/' },
     writePath: true,
   },
 
   // Stops & Arrivals
-  { id: 'stops.list', method: 'GET', label: '/api/stops', group: 'Stops & Arrivals', url: '/api/stops?lat=-1.9403&lng=30.0618&radius=3000&limit=5' },
-  { id: 'stops.arrivals', method: 'GET', label: '/api/stops/{id}/arrivals', group: 'Stops & Arrivals', url: `/api/stops/${STOP_ID}/arrivals` },
-  { id: 'search.suggest', method: 'GET', label: '/api/search/suggest', group: 'Stops & Arrivals', url: '/api/search/suggest?q=kimironko' },
+  { id: 'stops.list', method: 'GET', label: '/api/stops', title: 'Bus stops', description: 'Every bus stop in Kigali', group: 'Stops & Arrivals', url: '/api/stops?lat=-1.9403&lng=30.0618&radius=3000&limit=5' },
+  { id: 'stops.arrivals', method: 'GET', label: '/api/stops/{id}/arrivals', title: 'Live arrivals', description: 'Real-time arrivals for a stop', group: 'Stops & Arrivals', url: `/api/stops/${STOP_ID}/arrivals` },
+  { id: 'search.suggest', method: 'GET', label: '/api/search/suggest', title: 'Search suggestions', description: 'Find stops and routes as you type', group: 'Stops & Arrivals', url: '/api/search/suggest?q=kimironko' },
 
   // GTFS Static
-  { id: 'gtfs.stops', method: 'GET', label: '/api/gtfs/stops', group: 'GTFS Static', url: '/api/gtfs/stops?q=nyabugogo' },
-  { id: 'gtfs.stop.routes', method: 'GET', label: '/api/gtfs/stops/{id}/routes', group: 'GTFS Static', url: `/api/gtfs/stops/${STOP_ID}/routes` },
-  { id: 'gtfs.hubs', method: 'GET', label: '/api/gtfs/hubs', group: 'GTFS Static', url: '/api/gtfs/hubs' },
-  { id: 'gtfs.routes', method: 'GET', label: '/api/gtfs/routes', group: 'GTFS Static', url: '/api/gtfs/routes' },
-  { id: 'routes.list', method: 'GET', label: '/api/routes', group: 'GTFS Static', url: '/api/routes' },
-  { id: 'routes.shape', method: 'GET', label: '/api/routes/{id}/shape', group: 'GTFS Static', url: '/api/routes/101/shape' },
-  { id: 'routes.sequence', method: 'GET', label: '/api/routes/{id}/sequence', group: 'GTFS Static', url: '/api/routes/101/sequence' },
+  { id: 'gtfs.stops', method: 'GET', label: '/api/gtfs/stops', title: 'Stop directory', description: 'Look up any stop by name', group: 'GTFS Static', url: '/api/gtfs/stops?q=nyabugogo' },
+  { id: 'gtfs.stop.routes', method: 'GET', label: '/api/gtfs/stops/{id}/routes', title: 'Routes at a stop', description: 'Which routes serve a stop', group: 'GTFS Static', url: `/api/gtfs/stops/${STOP_ID}/routes` },
+  { id: 'gtfs.hubs', method: 'GET', label: '/api/gtfs/hubs', title: 'Interchange hubs', description: 'Major transfer stations', group: 'GTFS Static', url: '/api/gtfs/hubs' },
+  { id: 'gtfs.routes', method: 'GET', label: '/api/gtfs/routes', title: 'Route directory', description: 'The full route catalogue', group: 'GTFS Static', url: '/api/gtfs/routes' },
+  { id: 'routes.list', method: 'GET', label: '/api/routes', title: 'Route list', description: 'Every route with its details', group: 'GTFS Static', url: '/api/routes' },
+  { id: 'routes.shape', method: 'GET', label: '/api/routes/{id}/shape', title: 'Route paths', description: 'The map path a route follows', group: 'GTFS Static', url: '/api/routes/101/shape' },
+  { id: 'routes.sequence', method: 'GET', label: '/api/routes/{id}/sequence', title: 'Stop sequence', description: 'The order stops are served', group: 'GTFS Static', url: '/api/routes/101/sequence' },
 
   // Realtime
-  { id: 'vehicles.live', method: 'GET', label: '/api/vehicles/live', group: 'Realtime', url: '/api/vehicles/live' },
+  { id: 'vehicles.live', method: 'GET', label: '/api/vehicles/live', title: 'Live buses', description: 'Where buses are right now', group: 'Realtime', url: '/api/vehicles/live' },
   // SSE never terminates — fetch just the headers with a short abort so the
   // "is it serving?" answer is cheap and the connection is closed promptly.
-  { id: 'realtime.sse', method: 'GET', label: '/api/realtime/sse', group: 'Realtime', url: '/api/realtime/sse?lat=-1.9403&lng=30.0618&radius=5000' },
+  { id: 'realtime.sse', method: 'GET', label: '/api/realtime/sse', title: 'Live stream', description: 'Continuous live position updates', group: 'Realtime', url: '/api/realtime/sse?lat=-1.9403&lng=30.0618&radius=5000' },
   {
-    id: 'realtime.broadcast', method: 'POST', label: '/api/realtime/broadcast', group: 'Realtime', url: '/api/realtime/broadcast',
+    id: 'realtime.broadcast', method: 'POST', label: '/api/realtime/broadcast', title: 'Vehicle broadcast', description: 'Publish a live vehicle ping', group: 'Realtime', url: '/api/realtime/broadcast',
     body: { vehicle_id: 'uptime-probe', route_id: '101', client_id: 'uptime-tracker', latitude: -1.9403, longitude: 30.0618, speed_kmh: 25, heading: 90 },
     writePath: true,
   },
   {
-    id: 'incidents.report', method: 'POST', label: '/api/incidents/report', group: 'Realtime', url: '/api/incidents/report',
+    id: 'incidents.report', method: 'POST', label: '/api/incidents/report', title: 'Incident reports', description: 'Report a delay or disruption', group: 'Realtime', url: '/api/incidents/report',
     body: { vehicle_id: 'uptime-probe', route_id: '101', client_id: 'uptime-tracker', incident_type: 'traffic_delay', latitude: -1.9403, longitude: 30.0618 },
     writePath: true,
   },
-  { id: 'incidents.active', method: 'GET', label: '/api/incidents/active', group: 'Realtime', url: '/api/incidents/active' },
+  { id: 'incidents.active', method: 'GET', label: '/api/incidents/active', title: 'Alerts & incidents', description: 'Current delays and disruptions', group: 'Realtime', url: '/api/incidents/active' },
 
   // Community
   {
-    id: 'stops.suggest', method: 'POST', label: '/api/stops/suggest', group: 'Community', url: '/api/stops/suggest',
+    id: 'stops.suggest', method: 'POST', label: '/api/stops/suggest', title: 'Stop suggestions', description: 'Propose a stop edit', group: 'Community', url: '/api/stops/suggest',
     body: { stop_id: STOP_ID, proposed_name: null, proposed_lat: -1.9403, proposed_lon: 30.0618, reason: 'Uptime probe', client_id: 'uptime-tracker' },
     writePath: true,
   },
 
   // Deprecated
-  { id: 'arrivals.legacy', method: 'GET', label: '/api/arrivals', group: 'Deprecated', url: '/api/arrivals' },
+  { id: 'arrivals.legacy', method: 'GET', label: '/api/arrivals', title: 'Legacy arrivals', description: 'Deprecated — replaced by live arrivals', group: 'Deprecated', url: '/api/arrivals' },
 ]
 
 // Registry order for display: registry entries first (canonical), meta probes
@@ -138,6 +142,8 @@ export interface EndpointUptime {
   id: string
   method: 'GET' | 'POST'
   label: string
+  title: string
+  description: string
   group: string
   /** Percentage of samples that were fully ok across the requested window. */
   uptimePct: number
@@ -287,6 +293,8 @@ class Tracker {
         id: p.id,
         method: p.method,
         label: p.label,
+        title: p.title,
+        description: p.description,
         group: p.group,
         uptimePct,
         samples,

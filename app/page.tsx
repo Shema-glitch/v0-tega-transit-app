@@ -28,6 +28,8 @@ interface UptimeEndpoint {
   id: string
   method: 'GET' | 'POST'
   label: string
+  title: string
+  description: string
   group: string
   uptimePct: number
   samples: number
@@ -47,8 +49,14 @@ interface StatusFlag {
   since: number
 }
 
-const DEPRECATED: Record<string, { replacement: string }> = {
-  'arrivals.legacy': { replacement: '/api/stops/{id}/arrivals' },
+// The public page speaks plain English — internal group ids map to friendly
+// section headings, and only user-facing read services are shown (write
+// endpoints, system probes, and deprecated paths stay off the public board).
+const GROUP_HEADINGS: Record<string, string> = {
+  'Stops & Arrivals': 'Stops & arrivals',
+  'GTFS Static': 'Routes & schedules',
+  Realtime: 'Live updates',
+  Community: 'Community',
 }
 
 const LAST_BADGE: Record<'ok' | 'degraded' | 'down', { label: string; className: string }> = {
@@ -110,7 +118,14 @@ export default function StatusPage() {
     }
   }, [])
 
-  const groups = uptime ? Array.from(new Set(uptime.map((e) => e.group))) : []
+  // Only user-facing read services belong on the public board. Write
+  // endpoints (broadcast, reports, suggestions), system probes, and
+  // deprecated paths are admin-facing — showing them here is jargon for
+  // riders and exposes API surface nobody needs to see.
+  const visible = uptime
+    ? uptime.filter((e) => e.method === 'GET' && e.group !== 'System' && e.group !== 'Deprecated')
+    : []
+  const groups = Array.from(new Set(visible.map((e) => e.group)))
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
@@ -120,22 +135,21 @@ export default function StatusPage() {
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/assets/busgo-logo-light-sm.png" alt="BusGo Track" className="h-14 w-auto" />
-            <h1 className="text-xl font-bold tracking-tight">BusGo Track API</h1>
+            <h1 className="text-xl font-bold tracking-tight">BusGo Track</h1>
             <Badge variant={overall.variant} className="font-bold">
               {overall.label}
             </Badge>
           </div>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          GTFS + realtime transit API for Kigali. The production frontend lives in a separate
-          repository — this page is the public status board.
+          Live status for BusGo Track — stops, schedules, and live bus updates across Kigali.
         </p>
         {maintenance.length > 0 && (
           <Alert className="mt-3 border-amber-500/40 bg-amber-500/10">
             <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
-            <AlertTitle>Endpoint{maintenance.length > 1 ? 's' : ''} disabled</AlertTitle>
+            <AlertTitle>Some services are temporarily unavailable</AlertTitle>
             <AlertDescription>
-              {maintenance.length} endpoint{maintenance.length > 1 ? 's' : ''} currently disabled — see /admin for details.
+              We are carrying out maintenance right now and expect things back to normal shortly.
             </AlertDescription>
           </Alert>
         )}
@@ -145,32 +159,29 @@ export default function StatusPage() {
       {uptime === null ? (
         <Card className="p-6 text-sm text-muted-foreground">Loading uptime history…</Card>
       ) : (
-        groups.map((group) => (
-          <section key={group} className="mb-8">
-            <div className="mb-2 flex items-baseline justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{group}</h2>
-              <span className="text-[10px] text-muted-foreground">
-                Uptime over the past {DAYS} days · {group.toLowerCase()}
-              </span>
-            </div>
-            <Card className="overflow-hidden gap-0 py-0">
-              {uptime
-                .filter((e) => e.group === group)
-                .map((ep, i, arr) => {
-                  const dep = DEPRECATED[ep.id]
-                  return (
+        groups.map((group) => {
+          const heading = GROUP_HEADINGS[group] ?? group
+          return (
+            <section key={group} className="mb-8">
+              <div className="mb-2 flex items-baseline justify-between">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{heading}</h2>
+                <span className="text-[10px] text-muted-foreground">
+                  Uptime over the past {DAYS} days · {heading.toLowerCase()}
+                </span>
+              </div>
+              <Card className="overflow-hidden gap-0 py-0">
+                {visible
+                  .filter((e) => e.group === group)
+                  .map((ep, i, arr) => (
                     <div
                       key={ep.id}
-                      className={`px-4 py-3 ${i < arr.length - 1 ? 'border-b border-border' : ''} ${dep ? 'opacity-60' : ''}`}
+                      className={`px-4 py-3 ${i < arr.length - 1 ? 'border-b border-border' : ''}`}
                     >
                       <div className="mb-1.5 flex items-center gap-3">
-                        <span className="method-chip w-10 shrink-0 text-center">{ep.method}</span>
-                        <code className={`min-w-0 flex-1 truncate text-xs ${dep ? 'line-through' : ''}`}>{ep.label}</code>
-                        {dep && (
-                          <Badge variant="secondary" className="shrink-0 text-[10px] font-bold">
-                            DEPRECATED
-                          </Badge>
-                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">{ep.title}</p>
+                          <p className="truncate text-xs text-muted-foreground">{ep.description}</p>
+                        </div>
                         {ep.last && (
                           <Badge className={`shrink-0 text-[10px] font-bold ${LAST_BADGE[ep.last].className}`}>
                             {LAST_BADGE[ep.last].label}
@@ -178,26 +189,21 @@ export default function StatusPage() {
                         )}
                       </div>
                       <UptimeBars buckets={ep.buckets} uptimePct={ep.uptimePct} />
-                      {dep && (
-                        <p className="mt-1 text-[10px] text-muted-foreground">
-                          Deprecated — use <code>{dep.replacement}</code> instead.
-                        </p>
-                      )}
                     </div>
-                  )
-                })}
-            </Card>
-            {/* Axis — all rows above share the same window. */}
-            <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-              <span>{DAYS} days ago</span>
-              <span>Today</span>
-            </div>
-          </section>
-        ))
+                  ))}
+              </Card>
+              {/* Axis — all rows above share the same window. */}
+              <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                <span>{DAYS} days ago</span>
+                <span>Today</span>
+              </div>
+            </section>
+          )
+        })
       )}
 
       <footer className="mt-10 text-center text-xs text-muted-foreground">
-        BusGo Track API · GTFS data: Kigali · SSE stream at <code>/api/realtime/sse</code>
+        BusGo Track · Live transit data for Kigali, Rwanda
       </footer>
     </main>
   )
