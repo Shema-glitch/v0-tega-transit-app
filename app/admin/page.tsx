@@ -31,11 +31,13 @@ import {
   CheckCircle2,
   Copy,
   Database,
+  KeyRound,
   Loader2,
   MapPin,
   RefreshCw,
   ShieldAlert,
   Share2,
+  TriangleAlert,
   UserPlus,
   Wrench,
   X,
@@ -60,7 +62,9 @@ import { MAINTENANCE_GUIDE_HTML } from '@/lib/admin/maintenance-guide-html'
 import UptimeBars, { type UptimeDay } from '@/components/uptime-bars'
 import SseMonitor from '@/components/admin/sse-monitor'
 import LoadPanel from '@/components/admin/load-panel'
-import { AppSidebar, type ConsoleSection } from '@/components/app-sidebar'
+import { SettingsPanel } from '@/components/admin/settings-panel'
+import { StopsPanel } from '@/components/admin/stops-panel'
+import { AppSidebar, type ConsoleSection, type AdminRole } from '@/components/app-sidebar'
 import { Separator } from '@/components/ui/separator'
 import {
   SidebarInset,
@@ -144,6 +148,7 @@ interface MaintenanceFlag {
 interface AdminEmailEntry {
   email: string
   source: 'env' | 'supabase'
+  role: 'admin' | 'curator'
   invitedBy?: string
   createdAt?: number
 }
@@ -393,7 +398,8 @@ export default function AdminPage() {
     bugs: 'memory',
   })
 
-  const [tab, setTab] = useState<ConsoleSection>('issues')
+  const [tab, setTab] = useState<ConsoleSection>('stops')
+  const [role, setRole] = useState<AdminRole | null>(null)
   const [issueFilter, setIssueFilter] = useState<'all' | 'errors' | 'bugs' | 'open'>('open')
   const [query, setQuery] = useState('')
 
@@ -407,6 +413,14 @@ export default function AdminPage() {
     message: string
     onConfirm: () => void
   } | null>(null)
+
+  // TOTP challenge — a sensitive action came back 403 'totp-required'. The
+  // dialog verifies a fresh authenticator code (which re-issues the session
+  // cookie with a totpAt claim), then the original action is retried once.
+  const [totpPrompt, setTotpPrompt] = useState<{ resolve: (ok: boolean) => void } | null>(null)
+  const [totpCode, setTotpCode] = useState('')
+  const [totpVerifying, setTotpVerifying] = useState(false)
+  const [totpError, setTotpError] = useState<string | null>(null)
 
   // Data freshness
   const [loading, setLoading] = useState(true)
@@ -483,9 +497,51 @@ export default function AdminPage() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000)
   }, [])
 
+  // Wraps a sensitive admin write: on 403 'totp-required' it asks for a fresh
+  // authenticator code (which primes the session cookie), then retries once.
+  const totpAwareFetch = useCallback(async (url: string, init?: RequestInit): Promise<Response> => {
+    const res = await fetch(url, init)
+    if (res.status !== 403) return res
+    const data = await res.json().catch(() => ({}))
+    if (data?.error !== 'totp-required') return res
+    const ok = await new Promise<boolean>((resolve) => setTotpPrompt({ resolve }))
+    if (!ok) return res
+    return fetch(url, init)
+  }, [])
+
+  const submitTotpCode = useCallback(async () => {
+    if (!/^\d{6}$/.test(totpCode)) {
+      setTotpError('Enter the 6-digit code from your authenticator app.')
+      return
+    }
+    setTotpVerifying(true)
+    setTotpError(null)
+    try {
+      const res = await fetch('/api/admin/settings/totp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', code: totpCode }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setTotpError(data?.error ?? 'That code was not accepted.')
+        return
+      }
+      const resolve = totpPrompt?.resolve
+      setTotpPrompt(null)
+      setTotpCode('')
+      resolve?.(true)
+      pushToast('Identity confirmed — sensitive actions unlocked')
+    } catch {
+      setTotpError('Could not reach the API. Try again.')
+    } finally {
+      setTotpVerifying(false)
+    }
+  }, [totpCode, totpPrompt, pushToast])
+
   const refreshAll = useCallback(async () => {
     try {
-      const [errRes, bugRes, maintRes, suggRes, adminsRes, authLogRes, uptimeRes] = await Promise.all([
+      const [errRes, bugRes, maintRes, suggRes, adminsRes, authLogRes, uptimeRes, meRes] = await Promise.all([
         fetch('/api/errors', { cache: 'no-store' }),
         fetch('/api/feedback', { cache: 'no-store' }),
         fetch('/api/admin/maintenance', { cache: 'no-store' }),
@@ -493,7 +549,11 @@ export default function AdminPage() {
         fetch('/api/admin/admins', { cache: 'no-store' }),
         fetch('/api/admin/auth-log', { cache: 'no-store' }),
         fetch('/api/uptime', { cache: 'no-store' }),
+        fetch('/api/admin/me', { cache: 'no-store' }),
       ])
+      // Role re-read every refresh — a revoke takes effect immediately.
+      const meData = await meRes.json().catch(() => ({}))
+      if (meRes.ok && meData?.role) setRole(meData.role)
       if (bugRes.status === 401) {
         // The server killed the session (idle window elapsed, 8h cap, or it
         // was revoked) — say so instead of silently bouncing to login.
@@ -572,7 +632,7 @@ export default function AdminPage() {
     }
     setInviting(true)
     try {
-      const res = await fetch('/api/admin/admins', {
+      const res = await totpAwareFetch('/api/admin/admins', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: addr }),
@@ -590,7 +650,23 @@ export default function AdminPage() {
       setInviting(false)
       refreshAll()
     }
-  }, [inviteEmail, pushToast, refreshAll])
+  }, [inviteEmail, pushToast, refreshAll, totpAwareFetch])
+
+  const toggleCuratorRole = useCallback(
+    async (email: string, currentRole: string) => {
+      const grant = currentRole !== 'curator'
+      const res = await totpAwareFetch(grant ? '/api/admin/curators' : `/api/admin/curators?email=${encodeURIComponent(email)}`, {
+        method: grant ? 'POST' : 'DELETE',
+        headers: grant ? { 'Content-Type': 'application/json' } : undefined,
+        body: grant ? JSON.stringify({ email }) : undefined,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) pushToast(data?.error ?? 'Could not update the role', 'error')
+      else pushToast(grant ? `${email} is now a curator` : `${email} is back to full admin`)
+      refreshAll()
+    },
+    [pushToast, refreshAll, totpAwareFetch]
+  )
 
   const revokeAdmin = useCallback(
     (email: string) => {
@@ -599,7 +675,7 @@ export default function AdminPage() {
         message:
           'They will no longer be able to sign in to this dashboard. Their Supabase auth account stays — only dashboard access is removed.',
         onConfirm: async () => {
-          const res = await fetch(`/api/admin/admins?email=${encodeURIComponent(email)}`, { method: 'DELETE' })
+          const res = await totpAwareFetch(`/api/admin/admins?email=${encodeURIComponent(email)}`, { method: 'DELETE' })
           const data = await res.json().catch(() => ({}))
           if (!res.ok) pushToast(data?.error ?? 'Could not revoke that email', 'error')
           else pushToast(`${email} revoked`)
@@ -607,18 +683,23 @@ export default function AdminPage() {
         },
       })
     },
-    [pushToast, refreshAll]
+    [pushToast, refreshAll, totpAwareFetch]
   )
 
   const resolveStopSuggestion = useCallback(async (id: number, decision: 'approve' | 'reject') => {
-    await fetch(`/api/admin/stop-suggestions/${id}`, {
+    const res = await totpAwareFetch(`/api/admin/stop-suggestions/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ decision }),
     })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      pushToast(data?.error ?? 'Could not update that suggestion', 'error')
+      return
+    }
     refreshAll()
     pushToast(decision === 'approve' ? 'Suggestion approved — stop updated' : 'Suggestion rejected')
-  }, [pushToast, refreshAll])
+  }, [pushToast, refreshAll, totpAwareFetch])
 
   const logout = useCallback(async () => {
     setLogoutReason(null) // explicit sign-out needs no reason banner
@@ -672,25 +753,35 @@ export default function AdminPage() {
   // reason dialog so Cancel is always a no-op (the old window.prompt fallback
   // actually disabled the endpoint even when the user cancelled).
   const enableEndpoint = useCallback(async (ep: EndpointRegistryEntry) => {
-    await fetch('/api/admin/maintenance', {
+    const res = await totpAwareFetch('/api/admin/maintenance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ feature: ep.id, reason: '', active: false }),
     })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      pushToast(data?.error ?? 'Failed to re-enable endpoint', 'error')
+      return
+    }
     refreshAll()
     pushToast(`Re-enabled ${ep.label}`)
-  }, [pushToast, refreshAll])
+  }, [pushToast, refreshAll, totpAwareFetch])
 
   const submitDisable = useCallback(async () => {
     if (!disableTarget) return
     setDisabling(true)
     try {
       const reason = disableReason.trim() || 'Under maintenance'
-      await fetch('/api/admin/maintenance', {
+      const res = await totpAwareFetch('/api/admin/maintenance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feature: disableTarget.id, reason, active: true }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        pushToast(data?.error ?? 'Failed to disable endpoint', 'error')
+        return
+      }
       refreshAll()
       setDisableTarget(null)
       setDisableReason('Investigating an issue')
@@ -700,7 +791,7 @@ export default function AdminPage() {
     } finally {
       setDisabling(false)
     }
-  }, [disableReason, disableTarget, pushToast, refreshAll])
+  }, [disableReason, disableTarget, pushToast, refreshAll, totpAwareFetch])
 
   // Check the HttpOnly session cookie on load.
   useEffect(() => {
@@ -709,6 +800,16 @@ export default function AdminPage() {
       .then((d) => setAuthState(d?.authenticated ? 'in' : 'out'))
       .catch(() => setAuthState('out'))
   }, [])
+
+  // Role-gated nav: if a (possibly demoted) curator lands on an admin-only
+  // section, fall back to the stops panel — and the first load lands on stops
+  // for curators instead of Issues.
+  const ADMIN_ONLY_SECTIONS: ConsoleSection[] = ['issues', 'endpoints', 'load', 'admins', 'guide']
+  useEffect(() => {
+    if (role !== 'curator') return
+    if (ADMIN_ONLY_SECTIONS.includes(tab)) setTab('stops')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, tab])
 
   // No session → the login page at /goToAdminAuth owns the flow now. Carry the
   // reason (if any) so a session killed mid-use explains itself there.
@@ -860,6 +961,7 @@ export default function AdminPage() {
         <AppSidebar
           variant="inset"
           active={tab}
+          role={role}
           counts={{ issues: openCount, suggestions: stopSuggestions.length, loadAlerts: activeAlerts }}
           onNavigate={(s) => setTab(s)}
           onLogout={logout}
@@ -1388,6 +1490,13 @@ export default function AdminPage() {
                     >
                       {a.source === 'env' ? 'env · ADMIN_EMAILS' : 'invited'}
                     </Badge>
+                    <Badge
+                      className={`font-semibold ${
+                        a.role === 'curator' ? 'bg-blue-500/15 text-blue-400' : 'bg-emerald-500/15 text-emerald-400'
+                      }`}
+                    >
+                      {a.role === 'curator' ? 'CURATOR' : 'ADMIN'}
+                    </Badge>
                     {a.source === 'supabase' && (
                       <span className="text-xs text-muted-foreground">
                         by {a.invitedBy ?? 'unknown'}
@@ -1399,14 +1508,24 @@ export default function AdminPage() {
                       </span>
                     )}
                     {a.source === 'supabase' && (
-                      <Button
-                        onClick={() => revokeAdmin(a.email)}
-                        variant="outline"
-                        size="sm"
-                        className={`h-9 text-xs ${STATUS_COLOR.err}`}
-                      >
-                        Revoke
-                      </Button>
+                      <>
+                        <Button
+                          onClick={() => toggleCuratorRole(a.email, a.role)}
+                          variant="outline"
+                          size="sm"
+                          className="h-9 text-xs"
+                        >
+                          {a.role === 'curator' ? 'Make admin' : 'Make curator'}
+                        </Button>
+                        <Button
+                          onClick={() => revokeAdmin(a.email)}
+                          variant="outline"
+                          size="sm"
+                          className={`h-9 text-xs ${STATUS_COLOR.err}`}
+                        >
+                          Revoke
+                        </Button>
+                      </>
                     )}
                   </Card>
                 ))}
@@ -1474,6 +1593,10 @@ export default function AdminPage() {
 
         {tab === 'load' && <LoadPanel />}
 
+        {tab === 'settings' && <SettingsPanel onNotify={pushToast} />}
+
+        {tab === 'stops' && <StopsPanel role={role ?? 'curator'} onNotify={pushToast} onTotpFetch={totpAwareFetch} />}
+
         {tab === 'guide' && (
             <section>
               <p className="mb-3 text-xs text-muted-foreground">
@@ -1537,6 +1660,81 @@ export default function AdminPage() {
               </Button>
               <Button variant="destructive" size="sm" onClick={submitDisable} disabled={disabling} className="h-9 text-xs">
                 {disabling ? 'Disabling…' : 'Disable endpoint'}
+              </Button>
+            </div>
+          </DialogPopup>
+        </DialogPortal>
+      </Dialog>
+
+      {/* TOTP challenge — a sensitive action needs a fresh authenticator code */}
+      <Dialog
+        open={totpPrompt !== null}
+        onOpenChange={(open) => {
+          if (!open && !totpVerifying) {
+            totpPrompt?.resolve(false)
+            setTotpPrompt(null)
+            setTotpCode('')
+            setTotpError(null)
+          }
+        }}
+      >
+        <DialogPortal>
+          <DialogBackdrop />
+          <DialogPopup>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <KeyRound className="size-4 text-emerald-400" />
+              Authenticator code required
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              This action is sensitive and needs a fresh code from Google Authenticator. It unlocks
+              sensitive actions for 5 minutes.
+            </DialogDescription>
+            <div className="mt-4">
+              <label htmlFor="totp-challenge-code" className="mb-1.5 block text-xs font-semibold">
+                Authenticator code
+              </label>
+              <Input
+                id="totp-challenge-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={totpCode}
+                onChange={(e) => {
+                  setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                  setTotpError(null)
+                }}
+                placeholder="000000"
+                className="h-11 text-center font-mono text-lg tracking-[0.45em]"
+                autoFocus
+              />
+              {totpError && (
+                <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                  <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                  {totpError}
+                </p>
+              )}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  totpPrompt?.resolve(false)
+                  setTotpPrompt(null)
+                  setTotpCode('')
+                  setTotpError(null)
+                }}
+                disabled={totpVerifying}
+                className="h-9 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={submitTotpCode}
+                disabled={totpVerifying || totpCode.length !== 6}
+                className="h-9 text-xs"
+              >
+                {totpVerifying ? <Loader2 className="size-3.5 animate-spin" /> : 'Confirm code'}
               </Button>
             </div>
           </DialogPopup>

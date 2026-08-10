@@ -133,6 +133,61 @@ connected — and `redis shared · pub/sub` once the live-store bridge is up. Wi
 degrades to the in-memory behavior automatically — an outage never breaks
 reads.
 
+### Admin auth: magic codes, confirmation-first, and TOTP
+
+**Magic-link redirects use the public URL, never the request origin.** The
+emailed link points at `ADMIN_PUBLIC_URL` (fallback: the request's own
+origin). Set `ADMIN_PUBLIC_URL` to the Render URL — otherwise an email
+requested while testing on localhost bounces the admin off localhost when
+they click it.
+
+**Supabase URL configuration.** The callback endpoint must be listed in
+Supabase → Authentication → URL Configuration → **Redirect URLs**:
+`https://tega-transit-api.onrender.com/api/auth/callback`. Also set the
+**Site URL** to the Render URL so confirmation emails use it as their base.
+
+**First login waits for confirmation.** With "Confirm email" enabled in
+Supabase Auth, a brand-new address gets a one-time confirmation email
+before OTP codes flow. The login page detects this (the request route checks
+whether the address exists in Supabase Auth) and explains it instead of
+pretending a code is on the way. Click the confirmation link once, then
+request a code as usual. The address only needs this once.
+
+**Google Authenticator second factor (optional, per admin).** The admin
+console's **Settings** section lets the signed-in admin enroll a TOTP
+secret. Once enabled, sensitive actions — stop create/rename/delete/merge,
+maintenance toggles, admin invite/revoke/role changes, suggestion approval
+— require a fresh authenticator code (sent as `x-totp-code` or confirmed
+in the console, which primes the session for a 5-minute grace window). The
+shared `ADMIN_TOKEN` path is exempt by design: it's already a single-holder
+credential. Enrollment is two-phase (pending secret → valid code →
+active) and disabling requires a valid code, so a hijacked session cannot
+switch the second factor off. Secrets live in the `admin_totp` Supabase
+table (migration `0013`), locked to `service_role` like every other admin
+table. Run `supabase db push` (or your usual migration flow) to apply it.
+
+### Curator tier (map editors)
+
+Migration `0014` adds the curator role + merge machinery (`CURATOR_GOVERNANCE.md`):
+
+- **Roles** live on the `admin_emails` allowlist (`role text`, `admin`/`curator`).
+  Env-seeded `ADMIN_EMAILS` addresses and the shared `x-admin-token` are always
+  admin. Roles are re-read from the DB on every request, so revoking a curator
+  takes effect immediately. The sidebar is role-gated — curators never see
+  People / Endpoints / Load / Guide.
+- **Map & Stops** (curator+): full stop list with soft-state badges, edit
+  (rename/move/hub), merge with a dry-run preview of the exact affected
+  `stop_times` + pending suggestions, one-shot undo from the snapshot, and a
+  server-side duplicate detector feeding "Suggested merges". Hide/restore are
+  admin-only; there are no hard deletes except the explicit admin `DELETE`.
+- **Reads never break**: public stop search, the stops cache, and arrivals
+  resolve `COALESCE(merged_into_id, stop_id)` and filter hidden/merged, with a
+  defensive fallback if the migration hasn't been applied yet.
+- **Apply order matters**: run migration `0014` before deploying this code —
+  the read-layer code falls back gracefully, but the curator endpoints need the
+  RPCs (they're `SECURITY DEFINER` + service_role-only, like every other admin
+  function).
+
 ### Putting a CDN/WAF in front (when abuse or traffic justifies it)
 
 The in-app rate limiter stops scripts and single-IP scraping, but not a

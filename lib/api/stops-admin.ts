@@ -54,6 +54,31 @@ export async function updateStopRow(
   return { ok: true }
 }
 
+/**
+ * Full patch (curator tier): rename/move plus is_hub, recording the actor.
+ * Goes through admin_update_stop_full (migration 0014) which coalesces nulls
+ * and stamps edited_by/edited_at.
+ */
+export async function updateStopRowFull(
+  id: string,
+  actor: string,
+  patch: { name?: string; lat?: number; lon?: number; isHub?: boolean }
+): Promise<WriteResult> {
+  const supabase = getSupabaseAdmin()
+  const { data, error } = await supabase.rpc('admin_update_stop_full', {
+    p_stop_id: id,
+    p_name: patch.name ?? null,
+    p_lat: patch.lat ?? null,
+    p_lon: patch.lon ?? null,
+    p_is_hub: patch.isHub ?? null,
+    p_actor: actor,
+  })
+  if (error) return { ok: false, error: error.message }
+  if (!data || data.length === 0) return { ok: false, error: 'Stop not found', notFound: true }
+  invalidateStopsCache()
+  return { ok: true }
+}
+
 export async function deleteStopRow(id: string): Promise<WriteResult> {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase.rpc('admin_delete_stop', { p_stop_id: id })

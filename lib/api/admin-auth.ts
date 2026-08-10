@@ -32,10 +32,12 @@ const EPHEMERAL_TTL_MS = 5 * 60 * 1000 // 5 minutes
 const EPHEMERAL_PREFIX = 'ephem.'
 const EXP_SLACK_MS = 60_000 // allow clock skew without widening the window much
 
-interface SessionPayload {
+export interface SessionPayload {
   email: string
   iat: number // last activity — sliding idle window
   exp: number
+  /** When the holder last proved a TOTP code (see lib/api/admin-totp.ts). */
+  totpAt?: number
 }
 
 function secret(): string | null {
@@ -50,11 +52,13 @@ export function timingSafeEqualStr(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ah, bh)
 }
 
-function sign(email: string, ttlMs: number): string | null {
+function sign(email: string, ttlMs: number, totpAt?: number): string | null {
   const key = secret()
   if (!key) return null
   const now = Date.now()
-  const body = Buffer.from(JSON.stringify({ email, iat: now, exp: now + ttlMs })).toString('base64url')
+  const payload: SessionPayload = { email, iat: now, exp: now + ttlMs }
+  if (typeof totpAt === 'number') payload.totpAt = totpAt
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
   const sig = crypto.createHmac('sha256', key).update(body).digest('base64url')
   return `${body}.${sig}`
 }
@@ -73,7 +77,8 @@ function verify(value: string, ttlMs: number, idleMs?: number): SessionPayload |
     if (
       typeof payload.email !== 'string' ||
       typeof payload.iat !== 'number' ||
-      typeof payload.exp !== 'number'
+      typeof payload.exp !== 'number' ||
+      (payload.totpAt !== undefined && typeof payload.totpAt !== 'number')
     ) {
       return null
     }
@@ -128,8 +133,8 @@ export function checkAdminAuth(request: AuthRequestLike): AdminAuthResult {
   return { ok: false, reason: session || token ? 'invalid' : 'no-credential' }
 }
 
-export function createSessionCookieValue(email: string): string | null {
-  return sign(email, SESSION_TTL_MS)
+export function createSessionCookieValue(email: string, totpAt?: number): string | null {
+  return sign(email, SESSION_TTL_MS, totpAt)
 }
 
 /** For tests / introspection — decodes a session cookie value (idle-checked). */
@@ -156,7 +161,7 @@ export function maybeRefreshSessionCookie(request: AuthRequestLike): string | nu
   const payload = verify(value, SESSION_TTL_MS, SESSION_IDLE_MS)
   if (!payload) return null
   if (Date.now() - payload.iat < SESSION_REFRESH_MS) return null // fresh enough
-  return sessionCookieHeader(payload.email)
+  return sessionCookieHeader(payload.email, payload.totpAt) // preserve the TOTP claim
 }
 
 /**
@@ -179,6 +184,19 @@ export function verifyEphemeralToken(value: string): string | null {
   return verify(value.slice(EPHEMERAL_PREFIX.length), EPHEMERAL_TTL_MS)?.email ?? null
 }
 
+/**
+ * Decodes the caller's session cookie (idle-checked) and returns the payload,
+ * or null when there is no valid session. The sensitive-op TOTP gate uses this
+ * to read the `totpAt` claim — when the holder proved an authenticator code
+ * recently, destructive actions are allowed without a fresh code.
+ */
+export function readSessionCookiePayload(request: AuthRequestLike): SessionPayload | null {
+  const cookies = parseCookies(request.headers.get('cookie'))
+  const value = cookies[SESSION_COOKIE]
+  if (!value) return null
+  return verify(value, SESSION_TTL_MS, SESSION_IDLE_MS)
+}
+
 export function isAllowlistedAdmin(email: string | null | undefined): boolean {
   if (!email) return false
   const list = (process.env.ADMIN_EMAILS || '')
@@ -188,8 +206,8 @@ export function isAllowlistedAdmin(email: string | null | undefined): boolean {
   return list.includes(email.trim().toLowerCase())
 }
 
-export function sessionCookieHeader(email: string): string | null {
-  const value = createSessionCookieValue(email)
+export function sessionCookieHeader(email: string, totpAt?: number): string | null {
+  const value = createSessionCookieValue(email, totpAt)
   if (!value) return null
   const secure = process.env.NODE_ENV === 'production'
   return `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(

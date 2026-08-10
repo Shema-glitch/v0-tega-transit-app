@@ -19,6 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAdminAuth } from '@/lib/api/admin-auth'
+import { requireRole } from '@/lib/api/curators'
 import { UptimeTracker } from '@/lib/api/uptime-tracker'
 import { CacheService } from '@/lib/api/cache.service'
 import { CORS, corsPreflight } from '@/lib/api/cors'
@@ -29,6 +30,9 @@ export async function POST(request: NextRequest) {
   const auth = checkAdminAuth(request)
   if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
+  }
+  if (!(await requireRole(request, auth.email, 'admin')).ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: CORS })
   }
 
   try {

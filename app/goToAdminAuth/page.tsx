@@ -26,6 +26,7 @@ import {
   KeyRound,
   Loader2,
   Mail,
+  MailCheck,
   MapPin,
   ShieldCheck,
   TriangleAlert,
@@ -76,6 +77,10 @@ export default function GoToAdminAuthPage() {
   const [send, setSend] = useState<SendState>({ kind: 'idle' })
   const [verify, setVerify] = useState<VerifyState>({ kind: 'idle' })
   const [resendIn, setResendIn] = useState(0)
+  // First-time addresses get a one-time confirmation email before codes flow
+  // (Supabase "Confirm email" is on). When set, the form explains that instead
+  // of pretending a code is on its way.
+  const [confirmFirst, setConfirmFirst] = useState(false)
 
   // Already signed in? Show a session notice with a live expiry countdown,
   // then land on the dashboard after a beat (or on click).
@@ -161,6 +166,14 @@ export default function GoToAdminAuthPage() {
         return
       }
       if (data?.sent === true) {
+        if (data?.step === 'confirm') {
+          // New to Supabase Auth — a confirmation email went out, not a code.
+          setConfirmFirst(true)
+          setSend({ kind: 'sent' })
+          setResendIn(RESEND_SECONDS)
+          return
+        }
+        setConfirmFirst(false)
         setStep('code')
         setSend({ kind: 'sent' })
         setResendIn(RESEND_SECONDS)
@@ -380,6 +393,7 @@ export default function GoToAdminAuthPage() {
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value)
+                      setConfirmFirst(false)
                       if (send.kind !== 'sending') setSend({ kind: 'idle' })
                     }}
                     placeholder="you@example.com"
@@ -389,7 +403,19 @@ export default function GoToAdminAuthPage() {
                   <Mail className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
 
-                {send.kind === 'sent' && (
+                {confirmFirst && send.kind === 'sent' && (
+                  <div className="mt-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2.5">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
+                      <MailCheck className="size-3.5" /> One-time confirmation sent to {maskEmail(email)}
+                    </p>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                      This address is new — click the confirmation link in the email once (it lands you
+                      back on this sign-in page), then send the code again. After that, codes come
+                      straight to your inbox.
+                    </p>
+                  </div>
+                )}
+                {send.kind === 'sent' && !confirmFirst && (
                   <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400">
                     <CheckCircle2 className="size-3.5" /> Code sent — check your inbox.
                   </p>

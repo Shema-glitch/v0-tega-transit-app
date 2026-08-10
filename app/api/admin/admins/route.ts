@@ -14,6 +14,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAdminAuth, isAllowlistedAdmin } from '@/lib/api/admin-auth'
+import { requireRole } from '@/lib/api/curators'
+import { requireTotpForAction } from '@/lib/api/admin-totp'
 import { inviteAdminEmail, listAdminEmails, revokeAdminEmail } from '@/lib/api/admin-emails'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 
@@ -22,8 +24,12 @@ export const dynamic = 'force-dynamic'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function GET(request: NextRequest) {
-  if (!checkAdminAuth(request).ok) {
+  const auth = checkAdminAuth(request)
+  if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
+  }
+  if (!(await requireRole(request, auth.email, 'admin')).ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: CORS })
   }
   const result = await listAdminEmails()
   return NextResponse.json(result, { headers: CORS })
@@ -33,6 +39,17 @@ export async function POST(request: NextRequest) {
   const auth = checkAdminAuth(request)
   if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
+  }
+  // Inviting/revoking changes who can reach this dashboard — a hijacked
+  // session could lock the owner out, so it needs TOTP.
+  if (!(await requireRole(request, auth.email, 'admin')).ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: CORS })
+  }
+  if (!(await requireTotpForAction(request, auth.email)).ok) {
+    return NextResponse.json(
+      { error: 'totp-required', message: 'Enter your authenticator code to continue.' },
+      { status: 403, headers: CORS }
+    )
   }
 
   const body = await request.json().catch(() => null)
@@ -59,8 +76,18 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!checkAdminAuth(request).ok) {
+  const auth = checkAdminAuth(request)
+  if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
+  }
+  if (!(await requireRole(request, auth.email, 'admin')).ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: CORS })
+  }
+  if (!(await requireTotpForAction(request, auth.email)).ok) {
+    return NextResponse.json(
+      { error: 'totp-required', message: 'Enter your authenticator code to continue.' },
+      { status: 403, headers: CORS }
+    )
   }
 
   const email = (request.nextUrl.searchParams.get('email') || '').trim().toLowerCase()

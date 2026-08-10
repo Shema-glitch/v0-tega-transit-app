@@ -101,6 +101,7 @@ pnpm install
 | `ADMIN_TOKEN` | ✅ | HMAC session secret (fallback) + legacy header token |
 | `ADMIN_SESSION_SECRET` | optional | Separate HMAC secret for admin sessions |
 | `ADMIN_EMAILS` | ✅ | Comma-separated emails allowed to log in |
+| `ADMIN_PUBLIC_URL` | optional | Public base URL used for email-embedded magic links (set to the Render URL; falls back to the request origin) |
 | `FRONTEND_ORIGIN` | optional | CORS allowlist origin (defaults to the deployed frontend) |
 | `MAX_SSE_CONNECTIONS` | optional | SSE cap (default 250) |
 | `REDIS_URL` / `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | optional | Upstash Redis — shared TTL cache + rate limiter + live-store pub/sub. Without it, everything degrades to in-memory automatically |
@@ -110,13 +111,22 @@ pnpm install
 
 ```bash
 pnpm dev        # http://localhost:3000
-pnpm test       # 178 tests, vitest
+pnpm test       # 225 tests, vitest
 pnpm lint       # eslint
 pnpm build      # production build (type errors fail it on purpose)
 pnpm load-test  # autocannon against localhost only — see "Testing"
 ```
 
 `/` is the public status page (uptime bars, read-only). `/admin` is the console (login via magic code to `ADMIN_EMAILS`).
+
+### Curator tier (map editors)
+
+A second role below full admin (see `CURATOR_GOVERNANCE.md` and migration `0014`):
+
+- **`admin`** — everything. **`curator`** — map work only: list stops, rename/move/hub, **merge + undo**, detect duplicates, review stop suggestions, own audit view. Curators never see People / Endpoints / Load / Guide, and the sidebar hides those sections for them.
+- **Merges** are one transactional RPC: stop_times references rewrite to the survivor, pending suggestions retarget, victims go `merged` with `merged_into_id`, and a before-snapshot journal enables **one-shot undo** (stop-write endpoints under `/api/admin/stops/merge`). Public reads resolve `COALESCE(merged_into_id, stop_id)` and filter hidden/merged — old cached stop ids and deep links keep working.
+- **Hide/restore** are admin-only soft operations — no hard deletes ever. Roles are re-read from the DB on every request, so a revoke is immediate. All curator writes are TOTP-gated when the actor has a second factor.
+- Grant/revoke from the **People** tab (admin-only, audit-logged).
 
 ---
 

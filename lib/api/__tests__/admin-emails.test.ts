@@ -97,7 +97,7 @@ describe('listAdminEmails', () => {
     })
     const { admins, dbOk } = await listAdminEmails()
     expect(dbOk).toBe(false)
-    expect(admins).toEqual([{ email: 'sonyxperiame1@gmail.com', source: 'env' }])
+    expect(admins).toEqual([{ email: 'sonyxperiame1@gmail.com', source: 'env', role: 'admin' }])
   })
 })
 

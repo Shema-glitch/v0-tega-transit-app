@@ -16,11 +16,13 @@ import {
   Activity,
   BookOpen,
   Bug,
+  CircleDot,
   ExternalLink,
   Gauge,
   LogOut,
   MapPin,
   ScrollText,
+  Settings,
   ShieldCheck,
 } from 'lucide-react'
 import {
@@ -36,7 +38,18 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 
-export type ConsoleSection = 'issues' | 'endpoints' | 'suggestions' | 'admins' | 'audit' | 'guide' | 'load'
+export type ConsoleSection =
+  | 'issues'
+  | 'endpoints'
+  | 'suggestions'
+  | 'stops'
+  | 'admins'
+  | 'audit'
+  | 'guide'
+  | 'load'
+  | 'settings'
+
+export type AdminRole = 'admin' | 'curator'
 
 const NAV: Array<{
   id: ConsoleSection
@@ -44,25 +57,31 @@ const NAV: Array<{
   icon: typeof Bug
   badge?: 'issues' | 'suggestions'
   dot?: 'loadAlerts'
+  /** Min role that may see this item. Curator-only sections omit this. */
+  adminOnly?: boolean
 }> = [
-  { id: 'issues', label: 'Issues', icon: Bug, badge: 'issues' },
-  { id: 'endpoints', label: 'Endpoints', icon: Activity },
-  { id: 'load', label: 'Load', icon: Gauge, dot: 'loadAlerts' },
-  { id: 'suggestions', label: 'Suggestions', icon: MapPin, badge: 'suggestions' },
-  { id: 'admins', label: 'Admins', icon: ShieldCheck },
+  { id: 'stops', label: 'Map & Stops', icon: MapPin },
+  { id: 'suggestions', label: 'Suggestions', icon: CircleDot, badge: 'suggestions' },
   { id: 'audit', label: 'Audit', icon: ScrollText },
-  { id: 'guide', label: 'Maintenance Guide', icon: BookOpen },
+  { id: 'issues', label: 'Issues', icon: Bug, badge: 'issues', adminOnly: true },
+  { id: 'endpoints', label: 'Endpoints', icon: Activity, adminOnly: true },
+  { id: 'load', label: 'Load', icon: Gauge, dot: 'loadAlerts', adminOnly: true },
+  { id: 'admins', label: 'People', icon: ShieldCheck, adminOnly: true },
+  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'guide', label: 'Maintenance Guide', icon: BookOpen, adminOnly: true },
 ]
 
 export function AppSidebar({
   active,
   counts,
+  role,
   onNavigate,
   onLogout,
   ...props
-}: React.ComponentProps<typeof Sidebar> & {
+}: Omit<React.ComponentProps<typeof Sidebar>, 'role'> & {
   active: ConsoleSection
   counts: { issues: number; suggestions: number; loadAlerts: number }
+  role: AdminRole | null
   onNavigate: (section: ConsoleSection) => void
   onLogout: () => void
 }) {
@@ -88,7 +107,7 @@ export function AppSidebar({
         <SidebarGroup>
           <SidebarGroupLabel>Operations</SidebarGroupLabel>
           <SidebarMenu>
-            {NAV.map((item) => {
+            {NAV.filter((item) => !(item.adminOnly && role !== 'admin')).map((item) => {
               const count = item.badge ? counts[item.badge] : 0
               const alertCount = item.dot ? counts[item.dot] : 0
               return (

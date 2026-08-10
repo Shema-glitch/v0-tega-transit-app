@@ -25,7 +25,7 @@ function req(path = '/api/admin/admins', opts: { method?: string; body?: unknown
 beforeEach(() => {
   process.env.ADMIN_TOKEN = 'route-test-admin-token'
   vi.clearAllMocks()
-  mockedList.mockResolvedValue({ admins: [{ email: 'a@b.com', source: 'env' }], dbOk: true })
+  mockedList.mockResolvedValue({ admins: [{ email: 'a@b.com', source: 'env', role: 'admin' }], dbOk: true })
   mockedInvite.mockResolvedValue({ ok: true })
   mockedRevoke.mockResolvedValue({ ok: true })
 })
@@ -47,7 +47,7 @@ describe('/api/admin/admins', () => {
     const res = await GET(req())
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual(
-      expect.objectContaining({ admins: [{ email: 'a@b.com', source: 'env' }], dbOk: true })
+      expect.objectContaining({ admins: [{ email: 'a@b.com', source: 'env', role: 'admin' }], dbOk: true })
     )
   })
 

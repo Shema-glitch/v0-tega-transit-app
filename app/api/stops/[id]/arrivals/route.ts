@@ -79,11 +79,25 @@ async function handleGet(
     const supabase = getSupabaseServer()
 
     // ── 1. Verify the stop exists ──────────────────────────────────────────────
-    const { data: stopRow, error: stopErr } = await supabase
+    // Curator soft-state (migration 0014): a merged stop resolves to its
+    // survivor (old cached ids keep working — deep links never break); a
+    // hidden stop is a genuine 404. Falls back to the plain lookup if the
+    // migration isn't applied yet.
+    let stopResult = await supabase
       .from('stops')
-      .select('stop_id, stop_name, stop_lat, stop_lon')
+      .select('stop_id, stop_name, stop_lat, stop_lon, merged_into_id, status')
       .eq('stop_id', stopId)
       .maybeSingle()
+    if (stopResult.error) {
+      stopResult = await supabase
+        .from('stops')
+        .select('stop_id, stop_name, stop_lat, stop_lon')
+        .eq('stop_id', stopId)
+        .maybeSingle()
+    }
+
+    const stopErr = stopResult.error
+    const stopRow = stopResult.data
 
     if (stopErr) {
       console.error('[arrivals] Stop lookup error:', stopErr)
@@ -93,14 +107,17 @@ async function handleGet(
       )
     }
 
-    // Stop does not exist in the database → genuine 404
-    if (!stopRow) {
+    // Stop does not exist (or was hidden) → genuine 404
+    if (!stopRow || (stopRow as { status?: string }).status === 'hidden') {
       return NextResponse.json(
         { error: `Stop '${stopId}' not found` },
         { status: 404, headers: CORS }
       )
     }
 
+    // Merged → resolve to the survivor id for schedule lookups (stop_times
+    // were rewritten to it at merge time); lat/lon are the same physical spot.
+    const resolvedStopId = (stopRow as { merged_into_id?: string | null }).merged_into_id ?? stopId
     const stopLat = stopRow.stop_lat as number
     const stopLon = stopRow.stop_lon as number
 
@@ -134,7 +151,7 @@ async function handleGet(
 
     // Resolve all stops within 50m (from the in-memory cache) to capture
     // fragmented schedules split across duplicate stop records.
-    let nearbyStopIds = [stopId]
+    let nearbyStopIds = [resolvedStopId]
     try {
       const ids = await findStopIdsNear(stopLat, stopLon, 50)
       if (ids.length > 0) nearbyStopIds = ids

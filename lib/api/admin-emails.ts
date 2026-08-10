@@ -18,11 +18,13 @@
 
 import { getSupabaseAdmin } from '../supabase-server'
 import { isAllowlistedAdmin } from './admin-auth'
+import type { AdminRole } from './curators'
 
 export interface AdminEmailEntry {
   email: string
   /** 'env' = seeded from ADMIN_EMAILS (cannot be revoked from the dashboard). */
   source: 'env' | 'supabase'
+  role: AdminRole
   invitedBy?: string
   createdAt?: number
 }
@@ -31,6 +33,7 @@ interface AdminEmailRow {
   email: string
   invited_by: string
   created_at: string
+  role: string | null
 }
 
 function envEmails(): Set<string> {
@@ -71,7 +74,7 @@ export async function listAdminEmails(): Promise<{ admins: AdminEmailEntry[]; db
   const env = envEmails()
   const merged = new Map<string, AdminEmailEntry>()
   for (const email of env) {
-    merged.set(email, { email, source: 'env' })
+    merged.set(email, { email, source: 'env', role: 'admin' })
   }
 
   let dbOk = true
@@ -79,7 +82,7 @@ export async function listAdminEmails(): Promise<{ admins: AdminEmailEntry[]; db
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from('admin_emails')
-      .select('email, invited_by, created_at')
+      .select('email, invited_by, created_at, role')
       .order('created_at', { ascending: true })
     if (error || !data) {
       dbOk = false
@@ -88,6 +91,7 @@ export async function listAdminEmails(): Promise<{ admins: AdminEmailEntry[]; db
         merged.set(row.email, {
           email: row.email,
           source: 'supabase',
+          role: row.role === 'curator' ? 'curator' : 'admin',
           invitedBy: row.invited_by,
           createdAt: new Date(row.created_at).getTime(),
         })

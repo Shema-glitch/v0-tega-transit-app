@@ -3,9 +3,13 @@
  *
  * Step 1 of the admin login: asks Supabase Auth to email a 6-digit code (and a
  * magic link) to the admin's address.
- *
- * Response contract (so the login page can show real error boundaries):
- *   - { ok: true,  sent: true }                 allowlisted + Supabase accepted
+ * * Response contract (so the login page can show real error boundaries):
+ *   - { ok: true, sent: true, step: 'otp' | 'confirm' }  allowlisted + Supabase
+ *                                                   accepted. step 'confirm'
+ *                                                   means the address is new to
+ *                                                   Supabase Auth and got a
+ *                                                   one-time confirmation email
+ *                                                   before codes start flowing.
  *   - { ok: true,  sent: false, detail: 'not-allowlisted' }   not an admin address
  *   - { ok: true,  sent: false, detail, message }  allowlisted but Supabase
  *                                                   rejected the send (email
@@ -21,8 +25,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServer } from '@/lib/supabase-server'
+import { getSupabaseServer, getSupabaseAdmin } from '@/lib/supabase-server'
 import { isAdminEmailAllowed } from '@/lib/api/admin-emails'
+import { publicBaseUrl } from '@/lib/api/public-url'
 import { getAuthGuardStatus, recordAuthFailure } from '@/lib/api/auth-guard'
 import { AuthLog } from '@/lib/api/auth-log'
 import { clientIp } from '@/lib/api/client-ip'
@@ -60,15 +65,36 @@ export async function POST(request: NextRequest) {
   }
 
   // Allowlisted — actually ask Supabase to send. The magic link in the email
-  // points at our callback so a link-click also logs the admin in.
-  const origin = request.nextUrl.origin
+  // points at our callback so a link-click also logs the admin in. The link
+  // base is the *public* URL (ADMIN_PUBLIC_URL / NEXT_PUBLIC_APP_URL), never
+  // the request's origin — otherwise an email requested while testing on
+  // localhost (or behind a proxy) bounces the admin off localhost when they
+  // click it. See lib/api/public-url.ts.
+  const baseUrl = publicBaseUrl(request.nextUrl.origin)
+
+  // First-time flow: with "Confirm email" enabled in Supabase Auth, a brand-new
+  // address receives a one-time confirmation email before OTP codes start
+  // flowing. Detect that so the login page can say exactly what to expect
+  // ("click the confirmation link, then request a code") instead of pretending
+  // a code is on its way.
+  let step: 'otp' | 'confirm' = 'otp'
+  try {
+    const admin = getSupabaseAdmin()
+    const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    if (!error && data?.users) {
+      step = data.users.some((u) => u.email?.toLowerCase() === email) ? 'otp' : 'confirm'
+    }
+  } catch {
+    // Unknown — assume 'otp'; the send below still happens either way.
+  }
+
   try {
     const supabase = getSupabaseServer()
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: `${origin}/api/auth/callback`,
+        emailRedirectTo: `${baseUrl}/api/auth/callback`,
       },
     })
     if (error) {
@@ -79,7 +105,7 @@ export async function POST(request: NextRequest) {
       )
     }
     AuthLog.record({ action: 'magic-link-request', email, ip, ok: true })
-    return NextResponse.json({ ok: true, sent: true }, { headers: CORS })
+    return NextResponse.json({ ok: true, sent: true, step }, { headers: CORS })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     AuthLog.record({ action: 'magic-link-request', email, ip, ok: false, detail: message })

@@ -130,6 +130,14 @@
     <h3><span class="badge badge-be">API</span>Load alerts <span class="badge badge-new">NEW</span></h3>
     <p class="muted">The Load section flags spikes automatically: request rate over <span class="mono">120/min</span> or rate-limit trips over <span class="mono">10</span> in the window trips an amber/red alert with a recent-episodes list. Thresholds overridable via <span class="mono">LOAD_ALERT_RPM_THRESHOLD</span> / <span class="mono">LOAD_ALERT_429_THRESHOLD</span>.</p>
   </div>
+  <div class="card">
+    <h3><span class="badge badge-fe">AUTH</span>Admin auth: public redirect + TOTP <span class="badge badge-new">NEW</span></h3>
+    <p class="muted">Magic-link emails now point at <span class="mono">ADMIN_PUBLIC_URL</span> (set it to the Render URL) instead of wherever the request came from — no more localhost bounce on confirmation links. New addresses get a one-time confirmation email before codes flow (the login page explains it). Admins can enroll a <strong>Google Authenticator</strong> second factor in the console's new <strong>Settings</strong> tab; sensitive actions (stop writes, maintenance toggles, admin invite/revoke, suggestion approval) then need a fresh code, with a 5-minute grace after identity confirmation.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-fe">CURATORS</span>Curator tier: merge, undo, roles <span class="badge badge-new">NEW</span></h3>
+    <p class="muted">A second admin role for vetted map editors (migration <span class="mono">0014</span>). Curators get a <strong>Map &amp; Stops</strong> section: full stop list with status/hub badges, edit (rename/move/hub), <strong>merge</strong> with a dry-run preview of the exact affected <span class="mono">stop_times</span> + pending suggestions, <strong>one-shot undo</strong> from a snapshot journal, and server-side <strong>duplicate detection</strong> feeding "Suggested merges". Merged stops redirect to their survivor everywhere — old cached ids and deep links keep working. Hide/restore and role grants stay admin-only. Roles are re-read every request, so a revoke is immediate; the sidebar hides People / Endpoints / Load / Guide for curators.</p>
+  </div>
 </div>
 
 <p class="muted">Also live from earlier batches: durable maintenance flags + auth audit log (migrations 0010–0011), 90-day uptime bars (<span class="mono">/api/uptime</span>, 0012), admin invites (0009), admin console rebuilt on shadcn with a sidebar.</p>

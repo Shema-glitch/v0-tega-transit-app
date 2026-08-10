@@ -77,12 +77,23 @@ export class SpatialService {
    * never matched real stop IDs).
    */
   static async searchStops(query: string, limit: number = 5): Promise<StopResult[]> {
-    const { data, error } = await supabase
+    // Curator soft-state (migration 0014): merged + hidden stops never appear
+    // in public search. Falls back to the plain query if the migration isn't
+    // applied yet on an older deploy.
+    let result = await supabase
       .from('stops')
       .select('stop_id, stop_name, stop_lat, stop_lon')
       .ilike('stop_name', `%${query}%`)
+      .eq('status', 'active')
       .limit(limit)
-
+    if (result.error) {
+      result = await supabase
+        .from('stops')
+        .select('stop_id, stop_name, stop_lat, stop_lon')
+        .ilike('stop_name', `%${query}%`)
+        .limit(limit)
+    }
+    const { data, error } = result
     if (error) throw error
 
     return Promise.all(

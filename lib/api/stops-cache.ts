@@ -56,24 +56,45 @@ function deduplicate(stops: CachedStop[]): CachedStop[] {
   return primary
 }
 
+interface StopRow {
+  stop_id: string
+  stop_name: string | null
+  stop_lat: number | null
+  stop_lon: number | null
+  status?: string
+  merged_into_id?: string | null
+}
+
 async function fetchStops(): Promise<CachedStop[]> {
   const supabase = getSupabaseServer()
-  const { data, error } = await supabase
-    .from('stops')
-    .select('stop_id, stop_name, stop_lat, stop_lon')
-    .not('stop_lat', 'is', null)
-    .not('stop_lon', 'is', null)
+  const run = (select: string) =>
+    supabase
+      .from('stops')
+      .select(select)
+      .not('stop_lat', 'is', null)
+      .not('stop_lon', 'is', null)
 
+  // Curator soft-state columns (migration 0014): merged + hidden stops drop
+  // out of public search, and merged stops collapse into their survivor. If
+  // the migration hasn't been applied on an older deploy, fall back to the
+  // plain query rather than breaking search.
+  let result = await run('stop_id, stop_name, stop_lat, stop_lon, status, merged_into_id')
+  if (result.error) result = await run('stop_id, stop_name, stop_lat, stop_lon')
+  const { data, error } = result
   if (error) throw new Error(`[stops-cache] Supabase error: ${error.message}`)
 
   return (data ?? [])
-    .map((r) => ({
-      id: String(r.stop_id),
-      name: (r.stop_name as string) ?? '',
-      lat: r.stop_lat as number,
-      lon: r.stop_lon as number,
-    }))
-    .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lon))
+    .map((r) => {
+      const row = r as unknown as StopRow
+      if ((row.status ?? 'active') !== 'active') return null
+      return {
+        id: String(row.merged_into_id ?? row.stop_id),
+        name: row.stop_name ?? '',
+        lat: row.stop_lat as number,
+        lon: row.stop_lon as number,
+      }
+    })
+    .filter((s): s is CachedStop => s !== null && Number.isFinite(s.lat) && Number.isFinite(s.lon))
 }
 
 /**

@@ -16,6 +16,7 @@ import { z } from 'zod'
 import { StopSuggestions } from '@/lib/api/stop-suggestions'
 import { createStopRow, updateStopRow, deleteStopRow } from '@/lib/api/stops-admin'
 import { checkAdminAuth } from '@/lib/api/admin-auth'
+import { requireTotpForAction } from '@/lib/api/admin-totp'
 import { ErrorLog } from '@/lib/api/error-log'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 
@@ -26,7 +27,8 @@ const PATH = '/api/admin/stop-suggestions/[id]'
 const DecisionSchema = z.object({ decision: z.enum(['approve', 'reject']) })
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!checkAdminAuth(request).ok) {
+  const auth = checkAdminAuth(request)
+  if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
   }
 
@@ -51,6 +53,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (parsed.data.decision === 'reject') {
       await StopSuggestions.resolve(numId, 'rejected')
       return NextResponse.json({ success: true }, { headers: CORS })
+    }
+
+    // Approve applies a real stops-table write — a hijacked session could
+    // mass-edit the map through the queue, so it needs TOTP. Reject is only
+    // marking, and stays instant.
+    if (!(await requireTotpForAction(request, auth.email)).ok) {
+      return NextResponse.json(
+        { error: 'totp-required', message: 'Enter your authenticator code to continue.' },
+        { status: 403, headers: CORS }
+      )
     }
 
     // Approve — apply the underlying stops-table write first. If it fails,

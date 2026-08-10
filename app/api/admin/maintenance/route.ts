@@ -14,11 +14,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { MaintenanceStore } from '@/lib/api/maintenance-store'
 import { CacheService } from '@/lib/api/cache.service'
 import { checkAdminAuth } from '@/lib/api/admin-auth'
+import { requireRole } from '@/lib/api/curators'
+import { requireTotpForAction } from '@/lib/api/admin-totp'
 import { PROCESS_STARTED_AT } from '@/lib/api/process-info'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = checkAdminAuth(request)
+  if (!auth.ok) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!(await requireRole(request, auth.email, 'admin')).ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   await MaintenanceStore.ensureHydrated()
   return NextResponse.json(
     {
@@ -32,8 +41,20 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   await MaintenanceStore.ensureHydrated()
-  if (!checkAdminAuth(request).ok) {
+  const auth = checkAdminAuth(request)
+  if (!auth.ok) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!(await requireRole(request, auth.email, 'admin')).ok) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  // Disabling an endpoint makes the public status page + live frontend 503 —
+  // a hijacked session could take the whole map down, so it needs TOTP.
+  if (!(await requireTotpForAction(request, auth.email)).ok) {
+    return NextResponse.json(
+      { error: 'totp-required', message: 'Enter your authenticator code to continue.' },
+      { status: 403 }
+    )
   }
 
   try {

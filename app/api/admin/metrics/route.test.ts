@@ -1,11 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { NextRequest } from 'next/server'
 import { GET } from './route'
 import { RequestMetrics } from '@/lib/api/request-metrics'
 import { LoadAlerts } from '@/lib/api/load-alerts'
 import { __resetCacheForTests } from '@/lib/api/ttl-cache'
 
+/** Shared-token request — the legacy full-access credential (always admin). */
+function adminReq(): NextRequest {
+  return new NextRequest(new URL('http://localhost:3000/api/admin/metrics'), {
+    headers: { 'x-admin-token': 'test-admin-token-abcdef' },
+  })
+}
+
 describe('GET /api/admin/metrics', () => {
   beforeEach(() => {
+    process.env.ADMIN_TOKEN = 'test-admin-token-abcdef'
     RequestMetrics.__resetForTests()
     LoadAlerts.__resetForTests()
     __resetCacheForTests()
@@ -19,7 +28,7 @@ describe('GET /api/admin/metrics', () => {
     RequestMetrics.recordRequest('stops.list')
     RequestMetrics.record('stops.list', 200, { durationMs: 15 })
 
-    const res = await GET()
+    const res = await GET(adminReq())
     expect(res.status).toBe(200)
     const body = await res.json()
 
@@ -38,7 +47,7 @@ describe('GET /api/admin/metrics', () => {
     RequestMetrics.recordRequest('stops.list')
     RequestMetrics.record('stops.list', 200)
 
-    const res = await GET()
+    const res = await GET(adminReq())
     const body = await res.json()
     expect(body.alerts.active).toHaveLength(1)
     expect(body.alerts.active[0].kind).toBe('requests_per_min')
@@ -46,7 +55,7 @@ describe('GET /api/admin/metrics', () => {
   })
 
   it('reports an empty groups list when nothing has been recorded', async () => {
-    const res = await GET()
+    const res = await GET(adminReq())
     const body = await res.json()
     expect(body.groups).toEqual([])
     expect(body.totals.requests).toBe(0)
