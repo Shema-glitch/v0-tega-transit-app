@@ -1,7 +1,7 @@
 /**
  * POST /api/auth/magic-link/verify  { email, code }
  *
- * Step 2 of the admin login: exchanges the emailed 6-digit code for a Supabase
+ * Step 2 of the admin login: exchanges the emailed one-time code for a Supabase
  * session (server-side), then — only if the email is on the ADMIN_EMAILS
  * allowlist — issues our own short-lived HttpOnly `admin_session` cookie.
  * Failed codes count toward the per-IP lockout and the global circuit breaker.
@@ -19,7 +19,9 @@ import { CORS, corsPreflight } from '@/lib/api/cors'
 export const dynamic = 'force-dynamic'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const CODE_RE = /^\d{6}$/
+// Supabase's email OTP length is configurable (6, 8, or 10 digits) — accept all
+// three so the form never rejects a valid code based on our own assumption.
+const CODE_RE = /^\d{6,10}$/
 
 export async function POST(request: NextRequest) {
   const ip = clientIp(request.headers)

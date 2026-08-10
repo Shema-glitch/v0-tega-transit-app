@@ -4,7 +4,7 @@
  * The "magic link" path of the admin login: when the admin clicks the link in
  * the emailed code, Supabase redirects the browser here. We exchange the
  * verification token server-side, check the email against ADMIN_EMAILS, and
- * set the same HttpOnly `admin_session` cookie the 6-digit code flow uses —
+ * set the same HttpOnly `admin_session` cookie the one-time code flow uses —
  * so both paths (type the code, or click the link) land on /admin.
  *
  * This endpoint must be listed in Supabase → Authentication → URL Configuration

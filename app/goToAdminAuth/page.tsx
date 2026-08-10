@@ -9,10 +9,11 @@
  *      ADMIN_EMAILS-allowlisted addresses actually get a code; the response
  *      tells us whether the email service accepted the request so the form
  *      can show a real error boundary instead of a silent "sent".
- *   2. Enter the 6-digit code → POST /api/auth/magic-link/verify — on success
+ *   2. Enter the one-time code → POST /api/auth/magic-link/verify — on success
  *      the server sets an HttpOnly `admin_session` cookie and we land on
  *      /admin. Clicking the magic link in the email (→ /api/auth/callback)
- *      works too.
+ *      works too. Supabase's code length is configurable (6, 8, or 10 digits),
+ *      so the input accepts any of those.
  *
  * Both steps sit behind per-IP lockout + a global circuit breaker
  * (lib/api/auth-guard.ts).
@@ -199,8 +200,8 @@ export default function GoToAdminAuthPage() {
 
   const verifyCode = useCallback(async (raw?: string) => {
     const value = (raw ?? code).trim()
-    if (!/^\d{6}$/.test(value)) {
-      setVerify({ kind: 'error', message: 'Enter the 6-digit code from the email.' })
+    if (!/^\d{6,10}$/.test(value)) {
+      setVerify({ kind: 'error', message: 'Enter the code from the email (6, 8, or 10 digits).' })
       return
     }
     setVerify({ kind: 'verifying' })
@@ -227,9 +228,11 @@ export default function GoToAdminAuthPage() {
 
   const onCodeChange = useCallback(
     (value: string) => {
-      const clean = value.replace(/\D/g, '').slice(0, 6)
+      const clean = value.replace(/\D/g, '').slice(0, 10)
       setCode(clean)
-      if (clean.length === 6) verifyCode(clean)
+      // Auto-submit once the code reaches a full, valid length (Supabase ships
+      // 6, 8, or 10-digit OTPs depending on the project's Auth settings).
+      if ([6, 8, 10].includes(clean.length)) verifyCode(clean)
     },
     [verifyCode]
   )
@@ -473,7 +476,7 @@ export default function GoToAdminAuthPage() {
                     autoComplete="one-time-code"
                     value={code}
                     onChange={(e) => onCodeChange(e.target.value)}
-                    placeholder="000000"
+                    placeholder="······"
                     className="h-12 pr-10 text-center font-mono text-lg tracking-[0.45em]"
                     autoFocus
                   />
@@ -510,7 +513,7 @@ export default function GoToAdminAuthPage() {
                   <Button
                     type="button"
                     onClick={() => verifyCode()}
-                    disabled={verify.kind === 'verifying' || code.length !== 6}
+                    disabled={verify.kind === 'verifying' || !/^\d{6,10}$/.test(code)}
                     className="h-11 text-sm"
                   >
                     {verify.kind === 'verifying' ? (

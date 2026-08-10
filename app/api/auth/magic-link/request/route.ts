@@ -1,7 +1,7 @@
 /**
  * POST /api/auth/magic-link/request  { email }
  *
- * Step 1 of the admin login: asks Supabase Auth to email a 6-digit code (and a
+ * Step 1 of the admin login: asks Supabase Auth to email a one-time code (and a
  * magic link) to the admin's address.
  * * Response contract (so the login page can show real error boundaries):
  *   - { ok: true, sent: true, step: 'otp' | 'confirm' }  allowlisted + Supabase
