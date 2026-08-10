@@ -51,7 +51,7 @@ export type ConsoleSection =
 
 export type AdminRole = 'admin' | 'curator'
 
-const NAV: Array<{
+interface NavItem {
   id: ConsoleSection
   label: string
   icon: typeof Bug
@@ -59,16 +59,43 @@ const NAV: Array<{
   dot?: 'loadAlerts'
   /** Min role that may see this item. Curator-only sections omit this. */
   adminOnly?: boolean
-}> = [
-  { id: 'stops', label: 'Map & Stops', icon: MapPin },
-  { id: 'suggestions', label: 'Suggestions', icon: CircleDot, badge: 'suggestions' },
-  { id: 'audit', label: 'Audit', icon: ScrollText },
-  { id: 'issues', label: 'Issues', icon: Bug, badge: 'issues', adminOnly: true },
-  { id: 'endpoints', label: 'Endpoints', icon: Activity, adminOnly: true },
-  { id: 'load', label: 'Load', icon: Gauge, dot: 'loadAlerts', adminOnly: true },
-  { id: 'admins', label: 'People', icon: ShieldCheck, adminOnly: true },
-  { id: 'settings', label: 'Settings', icon: Settings },
-  { id: 'guide', label: 'Maintenance Guide', icon: BookOpen, adminOnly: true },
+}
+
+// Categorized nav — grouped so the console reads as a tool, not a flat list:
+//   Overview      — what's happening right now
+//   Map data      — the curator's working surface
+//   Administration — who can act, and how the console is secured
+//   System        — deep diagnostics and docs
+const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
+  {
+    label: 'Overview',
+    items: [
+      { id: 'endpoints', label: 'Endpoints', icon: Activity, adminOnly: true },
+      { id: 'load', label: 'Load', icon: Gauge, dot: 'loadAlerts', adminOnly: true },
+    ],
+  },
+  {
+    label: 'Map data',
+    items: [
+      { id: 'stops', label: 'Map & Stops', icon: MapPin },
+      { id: 'suggestions', label: 'Suggestions', icon: CircleDot, badge: 'suggestions' },
+    ],
+  },
+  {
+    label: 'Administration',
+    items: [
+      { id: 'admins', label: 'People', icon: ShieldCheck, adminOnly: true },
+      { id: 'settings', label: 'Settings', icon: Settings },
+      { id: 'audit', label: 'Audit', icon: ScrollText },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { id: 'issues', label: 'Issues', icon: Bug, badge: 'issues', adminOnly: true },
+      { id: 'guide', label: 'Maintenance Guide', icon: BookOpen, adminOnly: true },
+    ],
+  },
 ]
 
 export function AppSidebar({
@@ -104,42 +131,48 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Operations</SidebarGroupLabel>
-          <SidebarMenu>
-            {NAV.filter((item) => !(item.adminOnly && role !== 'admin')).map((item) => {
-              const count = item.badge ? counts[item.badge] : 0
-              const alertCount = item.dot ? counts[item.dot] : 0
-              return (
-                <SidebarMenuItem key={item.id}>
-                  <SidebarMenuButton
-                    isActive={active === item.id}
-                    onClick={() => onNavigate(item.id)}
-                    tooltip={
-                      alertCount > 0
-                        ? `${item.label} — ${alertCount} active alert${alertCount === 1 ? '' : 's'}`
-                        : item.label
-                    }
-                  >
-                    <item.icon />
-                    <span>{item.label}</span>
-                    {alertCount > 0 && (
-                      <span
-                        aria-label={`${alertCount} active load alert${alertCount === 1 ? '' : 's'}`}
-                        className="size-2 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.18)] group-data-[collapsible=icon]:hidden"
-                      />
-                    )}
-                    {count > 0 && (
-                      <SidebarMenuBadge className="bg-amber-500/15 text-amber-500 group-data-[collapsible=icon]:hidden">
-                        {count}
-                      </SidebarMenuBadge>
-                    )}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )
-            })}
-          </SidebarMenu>
-        </SidebarGroup>
+        {NAV_GROUPS.map((group) => {
+          const items = group.items.filter((item) => !(item.adminOnly && role !== 'admin'))
+          if (items.length === 0) return null
+          return (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarMenu>
+                {items.map((item) => {
+                  const count = item.badge ? counts[item.badge] : 0
+                  const alertCount = item.dot ? counts[item.dot] : 0
+                  return (
+                    <SidebarMenuItem key={item.id}>
+                      <SidebarMenuButton
+                        isActive={active === item.id}
+                        onClick={() => onNavigate(item.id)}
+                        tooltip={
+                          alertCount > 0
+                            ? `${item.label} — ${alertCount} active alert${alertCount === 1 ? '' : 's'}`
+                            : item.label
+                        }
+                      >
+                        <item.icon />
+                        <span>{item.label}</span>
+                        {alertCount > 0 && (
+                          <span
+                            aria-label={`${alertCount} active load alert${alertCount === 1 ? '' : 's'}`}
+                            className="size-2 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.18)] group-data-[collapsible=icon]:hidden"
+                          />
+                        )}
+                        {count > 0 && (
+                          <SidebarMenuBadge className="bg-amber-500/15 text-amber-500 group-data-[collapsible=icon]:hidden">
+                            {count}
+                          </SidebarMenuBadge>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroup>
+          )
+        })}
         <SidebarGroup className="mt-auto">
           <SidebarGroupLabel>Links</SidebarGroupLabel>
           <SidebarMenu>

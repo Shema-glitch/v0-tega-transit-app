@@ -17,8 +17,10 @@
  * the authenticator dialog and retries once (see app/admin/page.tsx).
  */
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
   GitMerge,
   Loader2,
@@ -86,6 +88,20 @@ const STATUS_BADGE: Record<StopEntry['status'], string> = {
   hidden: 'bg-amber-500/15 text-amber-400',
 }
 
+/** Display order for status sorting (active → merged → hidden). */
+const STATUS_ORDER: Record<StopEntry['status'], number> = { active: 0, merged: 1, hidden: 2 }
+
+const PAGE_SIZES = [25, 50, 100]
+
+type SortKey = 'name' | 'id' | 'status' | 'edited'
+
+const STATUS_FILTERS: Array<{ v: 'all' | StopEntry['status']; l: string }> = [
+  { v: 'all', l: 'All' },
+  { v: 'active', l: 'Active' },
+  { v: 'merged', l: 'Merged' },
+  { v: 'hidden', l: 'Hidden' },
+]
+
 function fmtTime(ts: number): string {
   return new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 }
@@ -104,6 +120,14 @@ export function StopsPanel({
   const [merges, setMerges] = useState<RecentMerge[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
+
+  // List tools — pagination, sorting, filtering
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [statusFilter, setStatusFilter] = useState<'all' | StopEntry['status']>('all')
+  const [hubOnly, setHubOnly] = useState(false)
 
   // Merge tool
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -147,13 +171,63 @@ export function StopsPanel({
 
   const byId = useMemo(() => new Map(stops.map((s) => [s.id, s])), [stops])
 
+  // Search + status + hub filters.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return stops
-    return stops.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || (s.mergedIntoId ?? '').toLowerCase().includes(q)
-    )
-  }, [stops, query])
+    return stops.filter((s) => {
+      if (statusFilter !== 'all' && s.status !== statusFilter) return false
+      if (hubOnly && !s.isHub) return false
+      if (!q) return true
+      return (
+        s.name.toLowerCase().includes(q) ||
+        s.id.toLowerCase().includes(q) ||
+        (s.mergedIntoId ?? '').toLowerCase().includes(q)
+      )
+    })
+  }, [stops, query, statusFilter, hubOnly])
+
+  // Sort (stable-ish: tie-break on name).
+  const sorted = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1
+    return [...filtered].sort((a, b) => {
+      const cmp =
+        sortKey === 'name'
+          ? a.name.localeCompare(b.name)
+          : sortKey === 'id'
+            ? a.id.localeCompare(b.id)
+            : sortKey === 'status'
+              ? STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
+              : (a.editedAt ?? 0) - (b.editedAt ?? 0)
+      const final = cmp === 0 ? a.name.localeCompare(b.name) : cmp
+      return final * dir
+    })
+  }, [filtered, sortKey, sortDir])
+
+  // Pagination (page is clamped so a shrink never leaves a dead page).
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize))
+  const safePage = Math.min(page, pageCount)
+  const pageItems = sorted.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+  // Select-all on the current page (active stops only — the merge victims).
+  const visibleActive = useMemo(() => pageItems.filter((s) => s.status === 'active'), [pageItems])
+  const allVisibleSelected = visibleActive.length > 0 && visibleActive.every((s) => selected.has(s.id))
+  const someVisibleSelected = visibleActive.some((s) => selected.has(s.id))
+  const selectAllRef = useRef<HTMLInputElement | null>(null)
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected
+  }, [someVisibleSelected, allVisibleSelected])
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        for (const s of visibleActive) next.delete(s.id)
+      } else {
+        for (const s of visibleActive) next.add(s.id)
+      }
+      return next
+    })
+    setPreview(null)
+  }, [allVisibleSelected, visibleActive])
 
   const counts = useMemo(() => {
     let active = 0
@@ -360,8 +434,20 @@ export function StopsPanel({
     setPreview(null)
   }, [])
 
-  const activeOnly = stops.filter((s) => s.status === 'active')
-  const survivorOptions = activeOnly.filter((s) => !selected.has(s.id))
+  // Merge survivor options respect the current search so the dropdown stays
+  // usable even with a full stop database (thousands of rows).
+  const activeOnly = useMemo(() => stops.filter((s) => s.status === 'active'), [stops])
+  const survivorOptions = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const base = activeOnly.filter((s) => !selected.has(s.id))
+    if (!q) return base
+    return base.filter((s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
+  }, [activeOnly, selected, query])
+
+  const clearSelection = useCallback(() => {
+    setSelected(new Set())
+    setPreview(null)
+  }, [])
 
   return (
     <section className="space-y-4">
@@ -410,7 +496,7 @@ export function StopsPanel({
       )}
 
       {/* Merge tool */}
-      <Card className="p-4">
+      <Card id="merge-tool" className="p-4">
         <p className="flex items-center gap-2 text-xs font-semibold">
           <GitMerge className="size-3.5 text-emerald-400" /> Merge stops
         </p>
@@ -507,16 +593,115 @@ export function StopsPanel({
 
       {/* Stop list */}
       <Card className="overflow-hidden p-0">
+        {/* Search + rows-per-page */}
         <div className="flex items-center gap-2 border-b border-border p-3">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <Input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
             placeholder={`Search ${stops.length} stops by name or id…`}
             aria-label="Search stops"
             className="h-9 text-xs"
           />
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setPage(1)
+            }}
+            aria-label="Rows per page"
+            className="h-9 shrink-0 rounded-md border border-input bg-transparent px-2 font-mono text-[11px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {PAGE_SIZES.map((n) => (
+              <option key={n} value={n}>
+                {n} / page
+              </option>
+            ))}
+          </select>
         </div>
+
+        {/* Filters + sort */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2">
+          <div className="flex items-center gap-0.5 rounded-lg border border-border p-0.5">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.v}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(f.v)
+                  setPage(1)
+                }}
+                className={`h-7 rounded-md px-2.5 text-[11px] font-medium transition-colors ${
+                  statusFilter === f.v ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {f.l}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={hubOnly}
+              onChange={(e) => {
+                setHubOnly(e.target.checked)
+                setPage(1)
+              }}
+              className="size-3.5 accent-blue-500"
+            />
+            Hubs only
+          </label>
+          <div className="ml-auto flex items-center gap-1.5">
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              aria-label="Sort stops by"
+              className="h-7 rounded-md border border-input bg-transparent px-2 text-[11px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="name">Sort: name</option>
+              <option value="id">Sort: id</option>
+              <option value="status">Sort: status</option>
+              <option value="edited">Sort: last edited</option>
+            </select>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              className="h-7 w-7 px-0"
+              aria-label={`Sort ${sortDir === 'asc' ? 'descending' : 'ascending'}`}
+            >
+              {sortDir === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
+            </Button>
+          </div>
+        </div>
+
+        {/* Bulk bar — appears the moment anything is selected */}
+        {selected.size > 0 && (
+          <div className="rise-in flex flex-wrap items-center gap-2 border-b border-emerald-400/20 bg-emerald-400/5 px-3 py-2">
+            <span className="font-mono text-xs font-semibold text-emerald-300">{selected.size} selected</span>
+            <span className="text-[10px] text-muted-foreground">merge victims — active stops only</span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={clearSelection} disabled={busy}>
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 text-[11px]"
+                onClick={() => {
+                  if (survivorId) void previewMerge()
+                  else document.getElementById('merge-tool')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }}
+                disabled={busy}
+              >
+                {survivorId ? 'Preview merge' : 'Choose survivor'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="p-3">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -532,18 +717,43 @@ export function StopsPanel({
             <MapPin className="size-6 text-muted-foreground/50" />
             <p className="text-sm font-semibold tracking-tight">No stops</p>
             <p className="max-w-[38ch] text-xs text-muted-foreground">
-              {query ? 'Nothing matches this search.' : 'The GTFS feed has not been imported yet.'}
+              {query || statusFilter !== 'all' || hubOnly
+                ? 'Nothing matches this search or filter.'
+                : 'The GTFS feed has not been imported yet.'}
             </p>
           </div>
         ) : (
-          <div className="max-h-[55vh] divide-y divide-border overflow-y-auto">
-            {filtered.map((s) => {
+          <>
+            {/* Select-all row */}
+            <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={toggleSelectAll}
+                disabled={visibleActive.length === 0 || busy}
+                aria-label={
+                  allVisibleSelected ? 'Deselect all active stops on this page' : 'Select all active stops on this page'
+                }
+                className="size-4 accent-emerald-500 disabled:opacity-40"
+              />
+              <span className="text-[11px] text-muted-foreground">
+                {allVisibleSelected ? 'Deselect all' : 'Select all'} active on this page
+                {selected.size > 0 && <span className="font-mono"> · {selected.size} total selected</span>}
+              </span>
+              <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                {`Showing ${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, sorted.length)} of ${sorted.length.toLocaleString()}`}
+              </span>
+            </div>
+
+            <div className="divide-y divide-border">
+            {pageItems.map((s, idx) => {
               const isVictim = selected.has(s.id)
               return (
                 <div
                   key={s.id}
                   className="rise-in flex flex-wrap items-center gap-2 px-3 py-2.5 pl-4"
-                  style={{ '--rise-index': Math.min(filtered.indexOf(s), 8) } as CSSProperties}
+                  style={{ '--rise-index': Math.min(idx, 8) } as CSSProperties}
                 >
                   <input
                     type="checkbox"
@@ -602,7 +812,40 @@ export function StopsPanel({
                 </div>
               )
             })}
-          </div>
+            </div>
+
+            {/* Pagination */}
+            {pageCount > 1 && (
+              <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
+                <span className="text-[11px] text-muted-foreground">
+                  {sorted.length.toLocaleString()} stop{sorted.length === 1 ? '' : 's'} total
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => setPage(safePage - 1)}
+                    disabled={safePage <= 1}
+                  >
+                    Prev
+                  </Button>
+                  <span className="min-w-10 text-center font-mono text-[11px] text-muted-foreground">
+                    {safePage} / {pageCount}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => setPage(safePage + 1)}
+                    disabled={safePage >= pageCount}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Card>
 

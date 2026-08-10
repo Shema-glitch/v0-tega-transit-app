@@ -61,6 +61,7 @@ import {
 import { MAINTENANCE_GUIDE_HTML } from '@/lib/admin/maintenance-guide-html'
 import UptimeBars, { type UptimeDay } from '@/components/uptime-bars'
 import SseMonitor from '@/components/admin/sse-monitor'
+import { NotificationCenter, type AdminNotification } from '@/components/admin/notification-center'
 import LoadPanel from '@/components/admin/load-panel'
 import { SettingsPanel } from '@/components/admin/settings-panel'
 import { StopsPanel } from '@/components/admin/stops-panel'
@@ -431,6 +432,10 @@ export default function AdminPage() {
   // of the Load section so a spike surfaces no matter which section is open
   // (the poll also keeps threshold evaluation running while Load is closed).
   const [activeAlerts, setActiveAlerts] = useState(0)
+  // Full alert items — the notification feed diffs these for new episodes.
+  const [activeAlertItems, setActiveAlertItems] = useState<
+    Array<{ kind: string; severity: string; value: number; threshold: number; state: string; at: number }>
+  >([])
   useEffect(() => {
     let cancelled = false
     const check = async () => {
@@ -438,7 +443,10 @@ export default function AdminPage() {
         const res = await fetch('/api/admin/metrics', { cache: 'no-store' })
         if (!res.ok) return
         const data = await res.json()
-        if (!cancelled) setActiveAlerts(data.alerts?.active?.length ?? 0)
+        if (!cancelled) {
+          setActiveAlerts(data.alerts?.active?.length ?? 0)
+          setActiveAlertItems(data.alerts?.active ?? [])
+        }
       } catch {
         // Silent — the sidebar dot is best-effort; the Load panel errors loudly.
       }
@@ -496,6 +504,104 @@ export default function AdminPage() {
     setToasts((t) => [...t, { id, message, kind }])
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000)
   }, [])
+
+  // ─── Live notification feed ───────────────────────────────────────────────
+  // Diffs errors/bugs/suggestions/load-alerts between polls and surfaces NEW
+  // items as notifications (bell badge + toast). The first real data load
+  // seeds the seen-set silently so a fresh login isn't greeted by a wall of
+  // notifications for everything already in the system.
+  const [notifications, setNotifications] = useState<AdminNotification[]>([])
+  const notifiedKeysRef = useRef<Set<string>>(new Set())
+  const seededRef = useRef(false)
+  useEffect(() => {
+    // Seed only after the first successful data load — a failed initial poll
+    // (loading → false, no data) must not count as the seed, or the next
+    // successful poll would flood notifications for everything already known.
+    if (authState !== 'in' || loading || lastUpdated === null) return
+    const fresh: AdminNotification[] = []
+    const seen = notifiedKeysRef.current
+
+    for (const e of errors) {
+      const key = `err:${e.path}:${e.status}:${e.message}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (seededRef.current) {
+        fresh.push({
+          id: key,
+          kind: 'issue',
+          title: `${e.status} · ${e.method} ${e.path}`,
+          detail: e.message,
+          section: 'issues',
+          ts: e.lastAt,
+          read: false,
+        })
+      }
+    }
+    for (const r of bugReports) {
+      if (r.status !== 'open') continue
+      const key = `bug:${r.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (seededRef.current) {
+        fresh.push({
+          id: key,
+          kind: 'issue',
+          title: 'New bug report',
+          detail: r.subject,
+          section: 'issues',
+          ts: r.createdAt,
+          read: false,
+        })
+      }
+    }
+    for (const s of stopSuggestions) {
+      if (s.status !== 'pending') continue
+      const key = `sug:${s.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (seededRef.current) {
+        const what = s.type === 'add' ? 'New stop' : s.type === 'rename' ? 'Rename' : 'Delete'
+        fresh.push({
+          id: key,
+          kind: 'suggestion',
+          title: `${what} suggestion`, // "New stop suggestion" / "Rename suggestion"
+          detail: s.proposed_name ?? s.stop_id ?? '',
+          section: 'suggestions',
+          ts: new Date(s.created_at).getTime(),
+          read: false,
+        })
+      }
+    }
+    for (const a of activeAlertItems) {
+      if (a.state !== 'triggered') continue
+      const key = `alert:${a.kind}:triggered`
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (seededRef.current) {
+        fresh.push({
+          id: key,
+          kind: 'alert',
+          title: a.kind === 'requests_per_min' ? 'Request rate high' : 'Rate-limit trips',
+          detail: `${a.value} vs threshold ${a.threshold}`,
+          section: 'load',
+          ts: a.at || Date.now(),
+          read: false,
+        })
+      }
+    }
+
+    seededRef.current = true
+    if (fresh.length === 0) return
+
+    const batch = fresh.slice(0, 8)
+    setNotifications((prev) => [...batch, ...prev].slice(0, 50))
+    const hasAlert = batch.some((n) => n.kind === 'alert')
+    const hasIssue = batch.some((n) => n.kind === 'issue')
+    pushToast(
+      `${batch.length} new notification${batch.length === 1 ? '' : 's'}`,
+      hasAlert || hasIssue ? 'error' : 'success'
+    )
+  }, [authState, loading, lastUpdated, errors, bugReports, stopSuggestions, activeAlertItems, pushToast])
 
   // Wraps a sensitive admin write: on 403 'totp-required' it asks for a fresh
   // authenticator code (which primes the session cookie), then retries once.
@@ -990,6 +1096,14 @@ export default function AdminPage() {
               ) : lastUpdated ? (
                 <span className="hidden font-mono tabular-nums sm:inline">updated <TimeAgo ts={lastUpdated} /></span>
               ) : null}
+              <NotificationCenter
+                notifications={notifications}
+                onSelect={(section) => {
+                  setTab(section)
+                  setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+                }}
+                onMarkAllRead={() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))}
+              />
               <Button
                 onClick={refreshAll}
                 variant="outline"
