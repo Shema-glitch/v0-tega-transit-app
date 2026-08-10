@@ -27,6 +27,8 @@ export interface AdminEmailEntry {
   role: AdminRole
   invitedBy?: string
   createdAt?: number
+  /** Second-factor state for the People table. dbOk=false = store unreachable. */
+  totp?: { enabled: boolean; pending: boolean; dbOk: boolean }
 }
 
 interface AdminEmailRow {
@@ -99,6 +101,41 @@ export async function listAdminEmails(): Promise<{ admins: AdminEmailEntry[]; db
     }
   } catch {
     dbOk = false
+  }
+
+  // Best-effort second-factor state for the People table. Only when the main
+  // list read succeeded — a DB outage already degrades the list, and the TOTP
+  // store lives on the same connection.
+  if (dbOk && merged.size > 0) {
+    try {
+      const supabase = getSupabaseAdmin()
+      const { data: totpRows, error: totpError } = await supabase
+        .from('admin_totp')
+        .select('email, secret, pending_secret, enabled_at')
+        .in('email', [...merged.keys()])
+      const totpDbOk = !totpError && Array.isArray(totpRows)
+      const byEmail = new Map<string, { secret: string | null; pending_secret: string | null; enabled_at: string | null }>()
+      for (const row of (totpRows ?? []) as unknown as Array<{
+        email: string
+        secret: string | null
+        pending_secret: string | null
+        enabled_at: string | null
+      }>) {
+        byEmail.set(row.email, row)
+      }
+      for (const entry of merged.values()) {
+        const row = byEmail.get(entry.email)
+        entry.totp = {
+          enabled: !!row?.secret && !!row?.enabled_at,
+          pending: !!row?.pending_secret,
+          dbOk: totpDbOk,
+        }
+      }
+    } catch {
+      for (const entry of merged.values()) {
+        entry.totp = { enabled: false, pending: false, dbOk: false }
+      }
+    }
   }
 
   return { admins: [...merged.values()], dbOk }

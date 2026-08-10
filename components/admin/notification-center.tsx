@@ -42,8 +42,8 @@ const KIND_ICON = {
 
 const KIND_COLOR = {
   issue: 'text-destructive',
-  suggestion: 'text-amber-400',
-  alert: 'text-red-400',
+  suggestion: 'text-warning',
+  alert: 'text-danger',
 } as const
 
 function timeAgo(ms: number, now: number): string {
@@ -90,7 +90,7 @@ export function NotificationCenter({
       >
         <Bell className="size-3.5" />
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 font-mono text-[9px] font-bold text-white shadow-[0_0_0_3px_rgba(239,68,68,0.2)]">
+          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 font-mono text-xs font-bold text-white shadow-[0_0_0_3px_color-mix(in_oklab,var(--danger)_20%,transparent)]">
             {unread > 99 ? '99+' : unread}
           </span>
         )}
@@ -102,7 +102,7 @@ export function NotificationCenter({
             <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
               <p className="text-xs font-semibold tracking-tight">Notifications</p>
               {unread > 0 && (
-                <span className="rounded-full bg-red-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-red-400">
+                <span className="rounded-full bg-danger/10 px-1.5 py-0.5 font-mono text-xs font-bold text-danger">
                   {unread} new
                 </span>
               )}
@@ -110,7 +110,7 @@ export function NotificationCenter({
                 <button
                   type="button"
                   onClick={onMarkAllRead}
-                  className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <CheckCheck className="size-3" /> Mark all read
                 </button>
@@ -121,7 +121,7 @@ export function NotificationCenter({
               <div className="flex flex-col items-center gap-1.5 px-4 py-10 text-center">
                 <Bell className="size-5 text-muted-foreground/50" />
                 <p className="text-xs font-semibold tracking-tight">No notifications</p>
-                <p className="max-w-[30ch] text-[11px] text-muted-foreground">
+                <p className="max-w-[30ch] text-xs text-muted-foreground">
                   New issues, suggestions, and load alerts land here live.
                 </p>
               </div>
@@ -139,10 +139,10 @@ export function NotificationCenter({
                       <Icon className={`mt-0.5 size-4 shrink-0 ${KIND_COLOR[n.kind]}`} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-semibold tracking-tight">{n.title}</span>
-                        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{n.detail}</span>
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{n.detail}</span>
                       </span>
-                      {!n.read && <span className="mt-1 size-1.5 shrink-0 rounded-full bg-emerald-400" />}
-                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{timeAgo(n.ts, now)}</span>
+                      {!n.read && <span className="mt-1 size-1.5 shrink-0 rounded-full bg-brand" />}
+                      <span className="shrink-0 font-mono text-xs text-muted-foreground">{timeAgo(n.ts, now)}</span>
                     </button>
                   )
                 })}

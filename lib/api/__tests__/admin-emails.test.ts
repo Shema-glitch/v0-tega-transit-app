@@ -18,6 +18,7 @@ function fakeChain(overrides: Record<string, unknown> = {}) {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {
     select: vi.fn(() => chain),
     eq: vi.fn(() => chain),
+    in: vi.fn(() => chain),
     order: vi.fn(() => chain),
     maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
     upsert: vi.fn(() => Promise.resolve({ data: null, error: null })),
@@ -98,6 +99,43 @@ describe('listAdminEmails', () => {
     const { admins, dbOk } = await listAdminEmails()
     expect(dbOk).toBe(false)
     expect(admins).toEqual([{ email: 'sonyxperiame1@gmail.com', source: 'env', role: 'admin' }])
+  })
+
+  it('attaches second-factor state from the admin_totp table', async () => {
+    const chain = fakeChain()
+    // First call (admin_emails) → the allowlist rows.
+    chain.select.mockImplementationOnce(() => ({
+      order: vi.fn(() =>
+        Promise.resolve({
+          data: [{ email: 'dev@example.com', invited_by: 'sonyxperiame1@gmail.com', created_at: '2026-08-01T10:00:00Z' }],
+          error: null,
+        })
+      ),
+    }))
+    // Second call (admin_totp) → one enrolled, one pending.
+    chain.select.mockImplementationOnce(() => ({
+      in: vi.fn(() =>
+        Promise.resolve({
+          data: [
+            {
+              email: 'dev@example.com',
+              secret: 'ABCDEF123456',
+              pending_secret: null,
+              enabled_at: '2026-08-02T10:00:00Z',
+            },
+          ],
+          error: null,
+        })
+      ),
+    }))
+    mockedAdmin.mockReturnValue({ from: vi.fn(() => chain) } as never)
+
+    const { admins } = await listAdminEmails()
+    const owner = admins.find((a) => a.email === 'sonyxperiame1@gmail.com')
+    const dev = admins.find((a) => a.email === 'dev@example.com')
+    expect(dev?.totp).toEqual({ enabled: true, pending: false, dbOk: true })
+    // No row in admin_totp for the env-seeded owner → not enrolled, store fine.
+    expect(owner?.totp).toEqual({ enabled: false, pending: false, dbOk: true })
   })
 })
 

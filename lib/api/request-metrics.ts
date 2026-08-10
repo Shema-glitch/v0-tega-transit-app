@@ -27,13 +27,31 @@ export interface RequestMetricsGroup {
   rateLimited: number
   /** Rolling ring of the last LATENCY_RING_MAX response times (ms). */
   latency: number[]
+  /** Time-bucketed latency samples for the 30-minute trend sparkline. */
+  history: Map<number, number[]>
   firstSeen: number
   lastSeen: number
+}
+
+/** One point in the per-endpoint latency trend, as exposed in snapshots. */
+export interface LatencyHistoryPoint {
+  /** Bucket start time (ms epoch). */
+  t: number
+  /** Samples recorded inside this bucket. */
+  count: number
+  p50Ms: number | null
+  p95Ms: number | null
 }
 
 const WINDOW_MS = 5 * 60 * 1000 // 5-minute rolling window
 const LATENCY_RING_MAX = 200
 const MAX_GROUPS = 200
+
+// 30-second buckets x 60 = a 30-minute trend, matching the sparkline window.
+const HISTORY_BUCKET_MS = 30_000
+const HISTORY_BUCKETS = 60
+// Cap per-bucket samples so a 429 surge can't grow the history unboundedly.
+const HISTORY_BUCKET_SAMPLES_MAX = 50
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0
@@ -42,13 +60,18 @@ function percentile(sorted: number[], p: number): number {
 }
 
 class RequestMetricsTracker {
-  readonly startedAt = Date.now()
+  private nowFn: () => number = Date.now
+  readonly startedAt = this.now()
   private groups = new Map<string, RequestMetricsGroup>()
+
+  private now(): number {
+    return this.nowFn()
+  }
 
   private ensure(group: string): RequestMetricsGroup {
     let g = this.groups.get(group)
     if (!g) {
-      const now = Date.now()
+      const now = this.now()
       g = {
         group,
         requests: 0,
@@ -58,6 +81,7 @@ class RequestMetricsTracker {
         status5xx: 0,
         rateLimited: 0,
         latency: [],
+        history: new Map(),
         firstSeen: now,
         lastSeen: now,
       }
@@ -76,7 +100,7 @@ class RequestMetricsTracker {
   }
 
   private roll(g: RequestMetricsGroup): void {
-    if (Date.now() - g.lastSeen >= WINDOW_MS) {
+    if (this.now() - g.lastSeen >= WINDOW_MS) {
       g.requests = 0
       g.status2xx = 0
       g.status3xx = 0
@@ -91,7 +115,7 @@ class RequestMetricsTracker {
   recordRequest(group: string): void {
     const g = this.ensure(group)
     this.roll(g)
-    g.lastSeen = Date.now()
+    g.lastSeen = this.now()
     g.requests++
   }
 
@@ -108,7 +132,7 @@ class RequestMetricsTracker {
   ): void {
     const g = this.ensure(group)
     this.roll(g)
-    g.lastSeen = Date.now()
+    g.lastSeen = this.now()
     if (status >= 500) g.status5xx++
     else if (status >= 400) g.status4xx++
     else if (status >= 300) g.status3xx++
@@ -119,18 +143,51 @@ class RequestMetricsTracker {
       if (g.latency.length > LATENCY_RING_MAX) {
         g.latency.splice(0, g.latency.length - LATENCY_RING_MAX)
       }
+      // Bucket the sample for the trend sparkline, trimming the oldest bucket
+      // once the map holds more than the 30-minute window.
+      const bucket = Math.floor(this.now() / HISTORY_BUCKET_MS)
+      let samples = g.history.get(bucket)
+      if (!samples) {
+        samples = []
+        g.history.set(bucket, samples)
+        while (g.history.size > HISTORY_BUCKETS) {
+          const oldest = g.history.keys().next().value
+          if (oldest !== undefined) g.history.delete(oldest)
+        }
+      }
+      if (samples.length < HISTORY_BUCKET_SAMPLES_MAX) samples.push(opts.durationMs)
     }
   }
 
   /** Live snapshot for /api/admin/metrics. Groups sorted by request count. */
   snapshot(): RequestMetricsSnapshot {
-    const now = Date.now()
+    const now = this.now()
     const elapsedMin = Math.max(1, (now - this.startedAt) / 60_000)
+
+    const nowBucket = Math.floor(now / HISTORY_BUCKET_MS)
+    const startBucket = nowBucket - HISTORY_BUCKETS + 1
 
     const groups = [...this.groups.values()]
       .map((g) => {
         const sorted = [...g.latency].sort((a, b) => a - b)
         const requestsPerMin = g.requests / Math.max(1, (now - g.lastSeen + WINDOW_MS) / 60_000)
+        // Uniform 30-minute series — empty buckets stay in the series as nulls
+        // so the sparkline's x-axis is a real timeline, not sparse points.
+        const history: LatencyHistoryPoint[] = []
+        for (let b = startBucket; b <= nowBucket; b++) {
+          const samples = g.history.get(b)
+          if (samples && samples.length > 0) {
+            const sortedSamples = [...samples].sort((a, b) => a - b)
+            history.push({
+              t: b * HISTORY_BUCKET_MS,
+              count: samples.length,
+              p50Ms: percentile(sortedSamples, 50),
+              p95Ms: percentile(sortedSamples, 95),
+            })
+          } else {
+            history.push({ t: b * HISTORY_BUCKET_MS, count: 0, p50Ms: null, p95Ms: null })
+          }
+        }
         return {
           group: g.group,
           requests: g.requests,
@@ -145,6 +202,7 @@ class RequestMetricsTracker {
           avgMs: sorted.length
             ? Math.round(sorted.reduce((a, b) => a + b, 0) / sorted.length)
             : 0,
+          history,
           lastSeen: g.lastSeen,
         }
       })
@@ -189,12 +247,18 @@ class RequestMetricsTracker {
   /** Test hook — wipes all collected state. */
   __resetForTests(): void {
     this.groups.clear()
+    this.nowFn = Date.now
+  }
+
+  /** Test hook — overrides the internal clock for deterministic bucketing. */
+  __setNowForTests(fn: () => number): void {
+    this.nowFn = fn
   }
 
   /** Test hook — backdates every group past the window so the next record rolls it. */
   __expireWindowForTests(): void {
     for (const g of this.groups.values()) {
-      g.lastSeen = Date.now() - WINDOW_MS - 1000
+      g.lastSeen = this.now() - WINDOW_MS - 1000
     }
   }
 }
@@ -227,6 +291,7 @@ export interface RequestMetricsSnapshot {
     p50Ms: number
     p95Ms: number
     avgMs: number
+    history: LatencyHistoryPoint[]
     lastSeen: number
   }>
 }

@@ -17,10 +17,11 @@
  * the authenticator dialog and retries once (see app/admin/page.tsx).
  */
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   ArrowDown,
   ArrowUp,
+  Check,
   CheckCircle2,
   GitMerge,
   Loader2,
@@ -31,6 +32,7 @@ import {
   ScanSearch,
   Search,
   ShieldOff,
+  Terminal,
   TriangleAlert,
   X,
 } from 'lucide-react'
@@ -86,9 +88,9 @@ interface DuplicateCluster {
 }
 
 const STATUS_BADGE: Record<StopEntry['status'], string> = {
-  active: 'bg-emerald-500/15 text-emerald-400',
+  active: 'bg-brand/15 text-brand',
   merged: 'bg-muted text-muted-foreground',
-  hidden: 'bg-amber-500/15 text-amber-400',
+  hidden: 'bg-warning/10 text-warning',
 }
 
 /** Display order for status sorting (active → merged → hidden). */
@@ -123,6 +125,23 @@ export function StopsPanel({
   const [merges, setMerges] = useState<RecentMerge[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
+
+  // GTFS import is a one-time terminal sync (scripts/push-gtfs.js), not a
+  // runtime API — the empty state hands the admin the exact command instead
+  // of leaving the dead-end "no stops" message.
+  const [cmdCopied, setCmdCopied] = useState(false)
+  const cmdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyImportCommand = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText('node --env-file=.env scripts/push-gtfs.js')
+    } catch {
+      return
+    }
+    setCmdCopied(true)
+    if (cmdTimerRef.current) clearTimeout(cmdTimerRef.current)
+    cmdTimerRef.current = setTimeout(() => setCmdCopied(false), 2000)
+  }, [])
+  useEffect(() => () => { if (cmdTimerRef.current) clearTimeout(cmdTimerRef.current) }, [])
 
   // List tools — pagination, sorting, filtering
   const [page, setPage] = useState(1)
@@ -455,7 +474,7 @@ export function StopsPanel({
           <span className="font-semibold text-foreground">{counts.active}</span> active ·{' '}
           <span className="font-semibold text-foreground">{counts.merged}</span> merged ·{' '}
           <span className="font-semibold text-foreground">{counts.hidden}</span> hidden ·{' '}
-          <span className="font-semibold text-emerald-400">{counts.hubs}</span> hubs
+          <span className="font-semibold text-brand">{counts.hubs}</span> hubs
         </p>
         <Button variant="outline" size="sm" onClick={detect} disabled={detecting} className="h-9 gap-1.5 text-xs">
           {detecting ? <Loader2 className="size-3.5 animate-spin" /> : <ScanSearch className="size-3.5" />}
@@ -470,9 +489,9 @@ export function StopsPanel({
       {duplicates && duplicates.length > 0 && (
         <Card className="p-4">
           <p className="flex items-center gap-2 text-xs font-semibold">
-            <ScanSearch className="size-3.5 text-emerald-400" /> Suggested merges
+            <ScanSearch className="size-3.5 text-brand" /> Suggested merges
           </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground">
             {duplicates.length} candidate cluster{duplicates.length === 1 ? '' : 's'} within 60 m. “Use” loads the
             cluster into the merge tool below.
           </p>
@@ -484,8 +503,8 @@ export function StopsPanel({
                   {c.stops.slice(0, 3).map((s) => s.name).join(' · ')}
                   {c.stops.length > 3 ? ` +${c.stops.length - 3}` : ''}
                 </span>
-                <span className="font-mono text-[11px] text-muted-foreground">{Math.round(c.maxSpanMeters)} m</span>
-                <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => applyCluster(c)}>
+                <span className="font-mono text-xs text-muted-foreground">{Math.round(c.maxSpanMeters)} m</span>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => applyCluster(c)}>
                   Use
                 </Button>
               </div>
@@ -497,15 +516,15 @@ export function StopsPanel({
       {/* Merge tool */}
       <Card id="merge-tool" className="p-4">
         <p className="flex items-center gap-2 text-xs font-semibold">
-          <GitMerge className="size-3.5 text-emerald-400" /> Merge stops
+          <GitMerge className="size-3.5 text-brand" /> Merge stops
         </p>
-        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           Check the victim stops below, pick the survivor, preview what changes, then confirm. Merged stops redirect
           to the survivor everywhere — old links keep working.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <div>
-            <label htmlFor="merge-survivor" className="mb-1 block text-[11px] font-semibold text-muted-foreground">
+            <label htmlFor="merge-survivor" className="mb-1 block text-xs font-semibold text-muted-foreground">
               Survivor stop
             </label>
             <Select
@@ -522,7 +541,7 @@ export function StopsPanel({
                 {survivorOptions.map((s) => (
                   <SelectItem key={s.id} value={s.id} className="text-xs">
                     <span className="truncate">
-                      {s.name} — <span className="font-mono text-[10px] text-muted-foreground">{s.id}</span>
+                      {s.name} — <span className="font-mono text-xs text-muted-foreground">{s.id}</span>
                     </span>
                   </SelectItem>
                 ))}
@@ -530,7 +549,7 @@ export function StopsPanel({
             </Select>
           </div>
           <div>
-            <label htmlFor="merge-reason" className="mb-1 block text-[11px] font-semibold text-muted-foreground">
+            <label htmlFor="merge-reason" className="mb-1 block text-xs font-semibold text-muted-foreground">
               Reason (optional, shown in the audit)
             </label>
             <Input
@@ -575,14 +594,14 @@ export function StopsPanel({
           </p>
         )}
         {preview?.ok && (
-          <div className="rise-in mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2.5">
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-emerald-300">
+          <div className="rise-in mt-3 rounded-lg border border-brand/20 bg-brand/10 px-3 py-2.5">
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-brand">
               <span className="font-mono tabular-nums">{preview.victims?.length ?? 0} victims</span>
               <span className="font-mono tabular-nums">{preview.affectedStopTimes ?? 0} stop_times</span>
               <span className="font-mono tabular-nums">{preview.pendingSuggestions ?? 0} pending suggestions</span>
               <span className="font-mono tabular-nums">{preview.collisionsSkipped ?? 0} collisions</span>
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               {preview.affectedStopTimes === 0 && preview.pendingSuggestions === 0
                 ? 'Nothing references these victims — the merge only cleans up the stop list.'
                 : 'This is exactly what will change. Confirm to commit.'}
@@ -618,7 +637,7 @@ export function StopsPanel({
               }
             }}
           >
-            <SelectTrigger size="sm" className="w-[5.5rem] shrink-0 font-mono text-[11px]" aria-label="Rows per page">
+            <SelectTrigger size="sm" className="w-[5.5rem] shrink-0 font-mono text-xs" aria-label="Rows per page">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -644,12 +663,12 @@ export function StopsPanel({
             className="gap-0.5"
           >
             {STATUS_FILTERS.map((f) => (
-              <ToggleGroupItem key={f.v} value={f.v} className="h-7 px-2.5 text-[11px]">
+              <ToggleGroupItem key={f.v} value={f.v} className="h-7 px-2.5 text-xs">
                 {f.l}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          <label className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <Checkbox
               checked={hubOnly}
               onCheckedChange={(c) => {
@@ -660,9 +679,9 @@ export function StopsPanel({
             Hubs only
           </label>
           <div className="ml-auto flex items-center gap-1.5">
-            <span className="text-[11px] text-muted-foreground">Sort</span>
+            <span className="text-xs text-muted-foreground">Sort</span>
             <Select value={sortKey} onValueChange={(v) => v && setSortKey(v as SortKey)}>
-              <SelectTrigger size="sm" className="h-7 text-[11px]" aria-label="Sort stops by">
+              <SelectTrigger size="sm" className="h-7 text-xs" aria-label="Sort stops by">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -686,16 +705,16 @@ export function StopsPanel({
 
         {/* Bulk bar — appears the moment anything is selected */}
         {selected.size > 0 && (
-          <div className="rise-in flex flex-wrap items-center gap-2 border-b border-emerald-400/20 bg-emerald-400/5 px-3 py-2">
-            <span className="font-mono text-xs font-semibold text-emerald-300">{selected.size} selected</span>
-            <span className="text-[10px] text-muted-foreground">merge victims — active stops only</span>
+          <div className="rise-in flex flex-wrap items-center gap-2 border-b border-brand/20 bg-brand/5 px-3 py-2">
+            <span className="font-mono text-xs font-semibold text-brand">{selected.size} selected</span>
+            <span className="text-xs text-muted-foreground">merge victims — active stops only</span>
             <div className="ml-auto flex items-center gap-2">
-              <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={clearSelection} disabled={busy}>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={clearSelection} disabled={busy}>
                 Clear
               </Button>
               <Button
                 size="sm"
-                className="h-7 text-[11px]"
+                className="h-7 text-xs"
                 onClick={() => {
                   if (survivorId) void previewMerge()
                   else document.getElementById('merge-tool')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -719,15 +738,27 @@ export function StopsPanel({
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-14 text-center">
-            <MapPin className="size-6 text-muted-foreground/50" />
-            <p className="text-sm font-semibold tracking-tight">No stops</p>
-            <p className="max-w-[38ch] text-xs text-muted-foreground">
-              {query || statusFilter !== 'all' || hubOnly
-                ? 'Nothing matches this search or filter.'
-                : 'The GTFS feed has not been imported yet.'}
-            </p>
-          </div>
+          query || statusFilter !== 'all' || hubOnly ? (
+            <div className="flex flex-col items-center gap-2 py-14 text-center">
+              <MapPin className="size-6 text-muted-foreground/50" />
+              <p className="text-sm font-semibold tracking-tight">No stops</p>
+              <p className="max-w-[38ch] text-xs text-muted-foreground">Nothing matches this search or filter.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-14 text-center">
+              <MapPin className="size-6 text-muted-foreground/50" />
+              <p className="text-sm font-semibold tracking-tight">No stops yet</p>
+              <p className="max-w-[46ch] text-xs leading-relaxed text-muted-foreground">
+                The GTFS feed hasn&apos;t been imported. Stops load from <span className="font-mono">kigali_gtfs/</span> via a
+                one-time sync to Supabase — run the import script from the repo root (needs{' '}
+                <span className="font-mono">NEXT_SUPABASE_CONNECTION_STRING</span>).
+              </p>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={copyImportCommand}>
+                {cmdCopied ? <Check className="size-3.5" /> : <Terminal className="size-3.5" />}
+                {cmdCopied ? 'Command copied' : 'Copy import command'}
+              </Button>
+            </div>
+          )
         ) : (
           <>
             {/* Select-all row */}
@@ -741,11 +772,11 @@ export function StopsPanel({
                   allVisibleSelected ? 'Deselect all active stops on this page' : 'Select all active stops on this page'
                 }
               />
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {allVisibleSelected ? 'Deselect all' : 'Select all'} active on this page
                 {selected.size > 0 && <span className="font-mono"> · {selected.size} total selected</span>}
               </span>
-              <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+              <span className="ml-auto font-mono text-xs text-muted-foreground">
                 {`Showing ${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, sorted.length)} of ${sorted.length.toLocaleString()}`}
               </span>
             </div>
@@ -766,26 +797,26 @@ export function StopsPanel({
                     aria-label={`Select ${s.name} as a merge victim`}
                     className="shrink-0"
                   />
-                  <Badge className={`w-16 shrink-0 justify-center font-mono text-[10px] ${STATUS_BADGE[s.status]}`}>
+                  <Badge className={`w-16 shrink-0 justify-center font-mono text-xs ${STATUS_BADGE[s.status]}`}>
                     {s.status === 'active' ? 'ACTIVE' : s.status === 'merged' ? 'MERGED' : 'HIDDEN'}
                   </Badge>
                   {s.isHub && (
-                    <Badge className="shrink-0 bg-blue-500/15 font-semibold text-blue-400">HUB</Badge>
+                    <Badge className="shrink-0 bg-muted/60 font-semibold text-muted-foreground">HUB</Badge>
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-semibold tracking-tight">
                       {s.name}
                       {s.status === 'merged' && s.mergedIntoId && (
-                        <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                           → {byId.get(s.mergedIntoId)?.name ?? s.mergedIntoId}
                         </span>
                       )}
                     </p>
-                    <p className="truncate font-mono text-[10px] text-muted-foreground">{s.id}</p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">{s.id}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     {s.status === 'active' && (
-                      <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[11px]" onClick={() => openEdit(s)} disabled={busy}>
+                      <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => openEdit(s)} disabled={busy}>
                         <Pencil className="size-3" /> Edit
                       </Button>
                     )}
@@ -793,7 +824,7 @@ export function StopsPanel({
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 gap-1 px-2 text-[11px] text-amber-400 hover:text-amber-300"
+                        className="h-7 gap-1 px-2 text-xs text-warning hover:opacity-80"
                         onClick={() => hide(s.id, s.name)}
                         disabled={busy}
                       >
@@ -804,7 +835,7 @@ export function StopsPanel({
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 gap-1 px-2 text-[11px] text-emerald-400 hover:text-emerald-300"
+                        className="h-7 gap-1 px-2 text-xs text-brand hover:text-brand"
                         onClick={() => restore(s.id, s.name)}
                         disabled={busy}
                       >
@@ -820,26 +851,26 @@ export function StopsPanel({
             {/* Pagination */}
             {pageCount > 1 && (
               <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {sorted.length.toLocaleString()} stop{sorted.length === 1 ? '' : 's'} total
                 </span>
                 <div className="flex items-center gap-1">
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 px-2 text-[11px]"
+                    className="h-7 px-2 text-xs"
                     onClick={() => setPage(safePage - 1)}
                     disabled={safePage <= 1}
                   >
                     Prev
                   </Button>
-                  <span className="min-w-10 text-center font-mono text-[11px] text-muted-foreground">
+                  <span className="min-w-10 text-center font-mono text-xs text-muted-foreground">
                     {safePage} / {pageCount}
                   </span>
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 px-2 text-[11px]"
+                    className="h-7 px-2 text-xs"
                     onClick={() => setPage(safePage + 1)}
                     disabled={safePage >= pageCount}
                   >
@@ -863,18 +894,18 @@ export function StopsPanel({
           <div className="mt-2 divide-y divide-border">
             {merges.slice(0, 10).map((m) => (
               <div key={m.id} className="flex flex-wrap items-center gap-2 py-2">
-                <span className="font-mono text-[10px] text-muted-foreground">{m.victimIds.length}→</span>
+                <span className="font-mono text-xs text-muted-foreground">{m.victimIds.length}→</span>
                 <span className="min-w-0 flex-1 truncate text-xs">
                   <span className="font-semibold">{byId.get(m.survivorId)?.name ?? m.survivorId}</span>
                   {m.reason && <span className="text-muted-foreground"> — {m.reason}</span>}
                 </span>
-                <span className="font-mono text-[10px] text-muted-foreground">
+                <span className="font-mono text-xs text-muted-foreground">
                   {fmtTime(m.createdAt)} · {m.actorId}
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-[11px]"
+                  className="h-7 text-xs"
                   onClick={() => undo(m.id)}
                   disabled={busy}
                 >
@@ -910,23 +941,23 @@ export function StopsPanel({
                 <X className="size-4" />
               </button>
             </div>
-            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{editTarget.id}</p>
+            <p className="mt-0.5 font-mono text-xs text-muted-foreground">{editTarget.id}</p>
             <div className="mt-4 space-y-3">
               <div>
-                <label htmlFor="edit-name" className="mb-1 block text-[11px] font-semibold text-muted-foreground">
+                <label htmlFor="edit-name" className="mb-1 block text-xs font-semibold text-muted-foreground">
                   Name
                 </label>
                 <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} className="h-10 text-xs" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="edit-lat" className="mb-1 block text-[11px] font-semibold text-muted-foreground">
+                  <label htmlFor="edit-lat" className="mb-1 block text-xs font-semibold text-muted-foreground">
                     Lat
                   </label>
                   <Input id="edit-lat" value={editLat} onChange={(e) => setEditLat(e.target.value)} className="h-10 font-mono text-xs" />
                 </div>
                 <div>
-                  <label htmlFor="edit-lon" className="mb-1 block text-[11px] font-semibold text-muted-foreground">
+                  <label htmlFor="edit-lon" className="mb-1 block text-xs font-semibold text-muted-foreground">
                     Lon
                   </label>
                   <Input id="edit-lon" value={editLon} onChange={(e) => setEditLon(e.target.value)} className="h-10 font-mono text-xs" />
@@ -935,7 +966,7 @@ export function StopsPanel({
               <label className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
                 <span>
                   <span className="block text-xs font-semibold">Hub stop</span>
-                  <span className="block text-[10px] text-muted-foreground">Pinned as a terminal / interchange</span>
+                  <span className="block text-xs text-muted-foreground">Pinned as a terminal / interchange</span>
                 </span>
                 <Switch checked={editHub} onCheckedChange={setEditHub} />
               </label>

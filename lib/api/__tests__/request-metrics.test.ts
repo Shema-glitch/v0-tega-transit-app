@@ -69,6 +69,52 @@ describe('RequestMetrics', () => {
     expect(snap.windowSeconds).toBe(300)
     expect(snap.uptimeSeconds).toBeGreaterThanOrEqual(0)
   })
+
+  it('buckets latency into a uniform 30-minute history series', () => {
+    let t = 1_750_000_000_000
+    RequestMetrics.__setNowForTests(() => t)
+
+    // 10 samples land in the first 30s bucket
+    for (let i = 1; i <= 10; i++) {
+      RequestMetrics.record('stops.list', 200, { durationMs: i * 10 })
+    }
+    // jump forward 60s → two buckets later, one sample
+    t += 60_000
+    RequestMetrics.record('stops.list', 200, { durationMs: 500 })
+
+    const group = RequestMetrics.snapshot().groups.find((g) => g.group === 'stops.list')!
+    expect(group.history).toHaveLength(60)
+
+    // newest bucket (current) holds the 500ms sample
+    const last = group.history[group.history.length - 1]
+    expect(last.count).toBe(1)
+    expect(last.p50Ms).toBe(500)
+
+    // the bucket two steps back holds the 10 samples → p50 ≈ 50, p95 ≈ 100
+    const earlier = group.history.find((h) => h.count === 10)!
+    expect(earlier.p50Ms).toBeGreaterThanOrEqual(50)
+    expect(earlier.p50Ms).toBeLessThanOrEqual(60)
+    expect(earlier.p95Ms).toBeGreaterThanOrEqual(95)
+    expect(earlier.p95Ms).toBeLessThanOrEqual(100)
+
+    // empty buckets stay in the series as nulls so the x-axis is a real timeline
+    expect(group.history.some((h) => h.count === 0 && h.p50Ms === null)).toBe(true)
+  })
+
+  it('keeps only the last 30 minutes of history buckets', () => {
+    let t = 1_750_000_000_000
+    RequestMetrics.__setNowForTests(() => t)
+    for (let i = 0; i < 70; i++) {
+      RequestMetrics.record('stops.list', 200, { durationMs: 10 })
+      t += 31_000 // every step lands in a fresh bucket
+    }
+
+    const group = RequestMetrics.snapshot().groups.find((g) => g.group === 'stops.list')!
+    expect(group.history).toHaveLength(60)
+    // nothing older than the 30-minute window survives (with bucket tolerance)
+    expect(group.history[0].t).toBeGreaterThanOrEqual(t - 31 * 60_000)
+    expect(group.history[group.history.length - 1].t).toBeLessThanOrEqual(t)
+  })
 })
 
 describe('withRequestMetrics', () => {

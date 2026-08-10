@@ -66,7 +66,8 @@ interface NavItem {
 //   Map data      — the curator's working surface
 //   Administration — who can act, and how the console is secured
 //   System        — deep diagnostics and docs
-const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
+// Exported so the Cmd+K palette reuses the same structure (no drift).
+export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'Overview',
     items: [
@@ -121,7 +122,7 @@ export function AppSidebar({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/assets/busgo-mark-dark.png" alt="BusGo Track" className="size-6 shrink-0" />
               <div className="leading-tight">
-                <p className="text-[10px] font-semibold tracking-[0.16em] text-emerald-400 uppercase">
+                <p className="text-xs font-semibold tracking-[0.16em] text-brand uppercase">
                   BusGo Track
                 </p>
                 <p className="text-sm font-bold tracking-tight">Console</p>
@@ -157,11 +158,11 @@ export function AppSidebar({
                         {alertCount > 0 && (
                           <span
                             aria-label={`${alertCount} active load alert${alertCount === 1 ? '' : 's'}`}
-                            className="size-2 rounded-full bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.18)] group-data-[collapsible=icon]:hidden"
+                            className="size-2 rounded-full bg-danger shadow-[0_0_0_3px_color-mix(in_oklab,var(--danger)_18%,transparent)] group-data-[collapsible=icon]:hidden"
                           />
                         )}
                         {count > 0 && (
-                          <SidebarMenuBadge className="bg-amber-500/15 text-amber-500 group-data-[collapsible=icon]:hidden">
+                          <SidebarMenuBadge className="bg-warning/10 text-warning group-data-[collapsible=icon]:hidden">
                             {count}
                           </SidebarMenuBadge>
                         )}

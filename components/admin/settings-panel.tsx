@@ -251,7 +251,7 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
         <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
           <div>
             <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-              <ShieldCheck className="size-4 text-emerald-400" />
+              <ShieldCheck className="size-4 text-brand" />
               Two-factor authentication
             </CardTitle>
             <CardDescription className="mt-1 text-xs">
@@ -263,7 +263,7 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
             </CardDescription>
           </div>
           {enabled ? (
-            <Badge className="gap-1.5 bg-emerald-500/15 font-semibold text-emerald-400">
+            <Badge className="gap-1.5 bg-brand/15 font-semibold text-brand">
               <CheckCircle2 className="size-3" /> TOTP active
             </Badge>
           ) : (
@@ -278,15 +278,15 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
             {/* Confirm identity — primes the 5-minute sensitive-op grace */}
             <div className="rise-in rounded-xl border border-border bg-card p-4" style={{ '--rise-index': 0 } as CSSProperties}>
               <p className="flex items-center gap-2 text-xs font-semibold">
-                <Smartphone className="size-3.5 text-emerald-400" />
+                <Smartphone className="size-3.5 text-brand" />
                 Confirm identity
                 {graceLeft > 0 && (
-                  <span className="ml-auto font-mono text-[11px] tabular-nums text-emerald-400">
+                  <span className="ml-auto font-mono text-xs tabular-nums text-brand">
                     {fmtGrace(graceLeft)} left
                   </span>
                 )}
               </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 {graceLeft > 0
                   ? 'Sensitive actions are unlocked for the remaining window.'
                   : 'Enter a fresh authenticator code to unlock sensitive actions for 5 minutes.'}
@@ -312,7 +312,7 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
                 <ShieldOff className="size-3.5" />
                 Disable two-factor
               </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 Requires a valid authenticator code — this is deliberate, so a compromised session
                 can&apos;t switch the second factor off.
               </p>
@@ -368,8 +368,8 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
                       />
                     ) : qrFailed ? (
                       <div className="flex size-[216px] flex-col items-center justify-center gap-2 text-center">
-                        <TriangleAlert className="size-5 text-amber-500" />
-                        <p className="max-w-[24ch] text-[11px] text-muted-foreground">
+                        <TriangleAlert className="size-5 text-warning" />
+                        <p className="max-w-[24ch] text-xs text-muted-foreground">
                           Couldn&apos;t render the QR — use the setup key below instead.
                         </p>
                       </div>
@@ -378,8 +378,8 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
                         <Loader2 className="size-5 animate-spin text-muted-foreground" />
                       </div>
                     )}
-                    <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                      <ScanLine className="size-3.5 text-emerald-400" /> Scan with Google Authenticator
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <ScanLine className="size-3.5 text-brand" /> Scan with Google Authenticator
                     </p>
                   </div>
 
@@ -402,19 +402,19 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
 
                     <div className="rounded-xl border border-border bg-muted/30 p-4">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                           Setup key
                         </p>
-                        <Button variant="outline" size="sm" onClick={copySecret} className="h-7 gap-1.5 px-2 text-[11px]">
-                          {copied ? <CheckCircle2 className="size-3 text-emerald-400" /> : <Copy className="size-3" />}
+                        <Button variant="outline" size="sm" onClick={copySecret} className="h-7 gap-1.5 px-2 text-xs">
+                          {copied ? <CheckCircle2 className="size-3 text-brand" /> : <Copy className="size-3" />}
                           {copied ? 'Copied' : 'Copy'}
                         </Button>
                       </div>
                       <p className="mt-2 font-mono text-xs break-all tracking-widest">{secret}</p>
-                      <p className="mt-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                      <p className="mt-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                         otpauth URI
                       </p>
-                      <p className="mt-1 font-mono text-[11px] break-all text-muted-foreground">{uri}</p>
+                      <p className="mt-1 font-mono text-xs break-all text-muted-foreground">{uri}</p>
                     </div>
                   </div>
                 </div>

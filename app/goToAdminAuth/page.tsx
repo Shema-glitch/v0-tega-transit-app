@@ -72,6 +72,27 @@ function fmtDuration(totalSec: number): string {
 }
 
 export default function GoToAdminAuthPage() {
+  // Match the console's theme so the front door and the dashboard don't flash
+  // different moods. Reads the same key the header toggle writes; when the
+  // user has never chosen, follow the OS preference (ivory for light-mode
+  // systems, warm dark otherwise).
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  useEffect(() => {
+    const saved = localStorage.getItem('busgo-admin-theme')
+    if (saved === 'light' || saved === 'dark') {
+      setTheme(saved)
+      return
+    }
+    const mq = window.matchMedia('(prefers-color-scheme: light)')
+    const apply = () => {
+      // A console toggle writes the key — once the user chooses, stop tracking.
+      if (!localStorage.getItem('busgo-admin-theme')) setTheme(mq.matches ? 'light' : 'dark')
+    }
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -249,26 +270,27 @@ export default function GoToAdminAuthPage() {
         : null
 
   return (
-    <div className="dark min-h-[100dvh] bg-background text-foreground">
+    <div className={`${theme === 'dark' ? 'dark' : 'admin-light'} min-h-[100dvh] bg-background text-foreground`}>
       <div className="grid min-h-[100dvh] lg:grid-cols-[1.15fr_1fr]">
         {/* ─── Brand panel (desktop) ─────────────────────────────────────── */}
         <aside className="relative hidden overflow-hidden border-r border-border/70 lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
-          {/* Ambient layers: emerald glow + faint grid + bottom fade */}
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_65%_45%_at_15%_0%,rgba(16,185,129,0.09),transparent_60%)]" />
-          <div className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:linear-gradient(to_right,rgba(255,255,255,0.6)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.6)_1px,transparent_1px)] [background-size:42px_42px]" />
+          {/* Ambient layers: brand-teal glow + faint grid + bottom fade — all
+              token-driven so they adapt to the warm dark and ivory themes. */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_65%_45%_at_15%_0%,color-mix(in_oklab,var(--brand)_12%,transparent),transparent_60%)]" />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:linear-gradient(to_right,color-mix(in_oklab,var(--foreground)_8%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklab,var(--foreground)_8%,transparent)_1px,transparent_1px)] [background-size:42px_42px]" />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
 
           <div className="relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-20 w-auto xl:h-24" />
+            <img
+              src={theme === 'dark' ? '/assets/busgo-logo-dark-sm.png' : '/assets/busgo-logo-light-sm.png'}
+              alt="BusGo Track"
+              className="h-20 w-auto xl:h-24"
+            />
           </div>
 
           <div className="relative max-w-md">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-medium tracking-widest text-emerald-300">
-              <span className="status-breathe size-1.5 rounded-full bg-emerald-400" />
-              LIVE · KIGALI TRANSIT
-            </span>
-            <h1 className="mt-5 text-3xl font-semibold tracking-tight text-balance xl:text-4xl">
+            <h1 className="text-4xl font-semibold tracking-tight text-balance xl:text-5xl">
               The control room for BusGo Track.
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
@@ -277,15 +299,15 @@ export default function GoToAdminAuthPage() {
             </p>
             <ul className="mt-8 space-y-3.5 text-sm text-muted-foreground">
               <li className="flex items-center gap-3">
-                <Activity className="size-4 shrink-0 text-emerald-400/90" />
+                <Activity className="size-4 shrink-0 text-brand/90" />
                 Live health checks on every API route
               </li>
               <li className="flex items-center gap-3">
-                <ShieldCheck className="size-4 shrink-0 text-emerald-400/90" />
+                <ShieldCheck className="size-4 shrink-0 text-brand/90" />
                 Signed-in sessions only — no shared secrets in the browser
               </li>
               <li className="flex items-center gap-3">
-                <MapPin className="size-4 shrink-0 text-emerald-400/90" />
+                <MapPin className="size-4 shrink-0 text-brand/90" />
                 Approve stop-suggestion edits for the Kigali network
               </li>
             </ul>
@@ -304,20 +326,21 @@ export default function GoToAdminAuthPage() {
                  then auto-redirect (or Continue on click). */
               <div className="flex flex-col items-center text-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-16 w-auto" />
+                <img
+                  src={theme === 'dark' ? '/assets/busgo-logo-dark-sm.png' : '/assets/busgo-logo-light-sm.png'}
+                  alt="BusGo Track"
+                  className="h-16 w-auto"
+                />
                 <div className="rise-in mt-8 w-full" style={{ '--rise-index': 0 } as CSSProperties}>
-                  <p className="text-xs font-semibold tracking-widest text-emerald-400/90 uppercase">
-                    Admin console
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight">You&apos;re signed in</h2>
+                  <h2 className="text-2xl font-semibold tracking-tight">You&apos;re signed in</h2>
                   <p className="mt-1.5 text-sm text-muted-foreground">
                     Signed in as <span className="font-mono text-xs">{session.email}</span>. Taking you to
                     the dashboard…
                   </p>
 
-                  <div className="mt-5 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2.5 text-left">
-                    <div className="flex items-center gap-2 text-xs font-medium text-emerald-300">
-                      <span className="status-breathe size-1.5 rounded-full bg-emerald-400" />
+                  <div className="mt-5 rounded-lg border border-brand/25 bg-brand/10 px-3 py-2.5 text-left">
+                    <div className="flex items-center gap-2 text-xs font-medium text-brand">
+                      <span className="status-breathe size-1.5 rounded-full bg-brand" />
                       Session active — redirecting in {redirectIn}s
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -342,7 +365,11 @@ export default function GoToAdminAuthPage() {
                 {/* Mobile logo */}
                 <div className="mb-10 flex justify-center lg:hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/assets/busgo-logo-dark-sm.png" alt="BusGo Track" className="h-16 w-auto" />
+                  <img
+                    src={theme === 'dark' ? '/assets/busgo-logo-dark-sm.png' : '/assets/busgo-logo-light-sm.png'}
+                    alt="BusGo Track"
+                    className="h-16 w-auto"
+                  />
                 </div>
 
                 {/* System notice — a session killed mid-use, or a failed magic-link
@@ -365,10 +392,7 @@ export default function GoToAdminAuthPage() {
                 )}
 
                 <div className="rise-in" style={{ '--rise-index': 0 } as CSSProperties}>
-              <p className="text-xs font-semibold tracking-widest text-emerald-400/90 uppercase">
-                Admin console
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight">Sign in</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
               <p className="mt-1.5 text-sm text-muted-foreground">
                 {step === 'email'
                   ? 'Enter your admin email and we’ll send a one-time code.'
@@ -411,7 +435,7 @@ export default function GoToAdminAuthPage() {
                     <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
                       <MailCheck className="size-3.5" /> One-time confirmation sent to {maskEmail(email)}
                     </p>
-                    <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                       This address is new — click the confirmation link in the email once (it lands you
                       back on this sign-in page), then send the code again. After that, codes come
                       straight to your inbox.
@@ -419,7 +443,7 @@ export default function GoToAdminAuthPage() {
                   </div>
                 )}
                 {send.kind === 'sent' && !confirmFirst && (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                  <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-success">
                     <CheckCircle2 className="size-3.5" /> Code sent — check your inbox.
                   </p>
                 )}
@@ -430,7 +454,7 @@ export default function GoToAdminAuthPage() {
                   </p>
                 )}
                 {send.kind === 'error' && send.hint && (
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">{send.hint}</p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{send.hint}</p>
                 )}
 
                 <Button
@@ -460,7 +484,7 @@ export default function GoToAdminAuthPage() {
             ) : (
               <div className="rise-in mt-7" style={{ '--rise-index': 1 } as CSSProperties}>
                 {send.kind === 'sent' && (
-                  <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                  <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-success">
                     <CheckCircle2 className="size-3.5" /> Code sent to {maskEmail(email)} — check your
                     inbox.
                   </p>

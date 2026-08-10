@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react'
 import { Activity, Database, Gauge, Radio, RefreshCw, ShieldAlert, Timer } from 'lucide-react'
+import { Line, LineChart, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -28,6 +29,13 @@ interface LoadAlert {
   at: number
 }
 
+interface LatencyHistoryPoint {
+  t: number
+  count: number
+  p50Ms: number | null
+  p95Ms: number | null
+}
+
 interface MetricsGroup {
   group: string
   requests: number
@@ -40,6 +48,7 @@ interface MetricsGroup {
   p50Ms: number
   p95Ms: number
   avgMs: number
+  history: LatencyHistoryPoint[]
   lastSeen: number
 }
 
@@ -89,6 +98,61 @@ function fmtUptime(sec: number): string {
   return `${m}m`
 }
 
+/** Compact p50/p95 latency sparkline for one endpoint (30-minute window). */
+function LatencySparkline({ points }: { points?: LatencyHistoryPoint[] }) {
+  // Defensive: a stale server instance (pre-deploy or mid-rollout) may omit
+  // the history field — treat it as "no data yet" instead of crashing.
+  const series = points ?? []
+  const hasData = series.some((p) => p.count > 0)
+  if (!hasData) {
+    return <p className="text-xs text-muted-foreground/70">no latency data</p>
+  }
+  return (
+    <div className="h-10 w-36">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={series} margin={{ top: 3, right: 2, bottom: 3, left: 2 }}>
+          <RechartsTooltip
+            cursor={{ stroke: 'rgba(148,163,184,0.35)', strokeWidth: 1 }}
+            content={({ active, payload }) => {
+              if (!active || !payload || payload.length === 0) return null
+              const p = payload[0].payload as LatencyHistoryPoint
+              return (
+                <div className="rounded-md border bg-popover px-2 py-1.5 text-xs shadow-md">
+                  <p className="font-mono text-muted-foreground">{fmtTime(p.t)}</p>
+                  <p className="font-mono tabular-nums">
+                    p50 <span className="text-success">{p.p50Ms === null ? '—' : `${p.p50Ms} ms`}</span>
+                    <span className="text-muted-foreground"> · </span>
+                    p95 <span className="text-warning">{p.p95Ms === null ? '—' : `${p.p95Ms} ms`}</span>
+                  </p>
+                  {p.count === 0 ? <p className="text-muted-foreground">no traffic</p> : null}
+                </div>
+              )
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="p50Ms"
+            stroke="var(--success)"
+            strokeWidth={1.5}
+            dot={false}
+            isAnimationActive={false}
+            connectNulls={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="p95Ms"
+            stroke="var(--warning)"
+            strokeWidth={1.5}
+            dot={false}
+            isAnimationActive={false}
+            connectNulls={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 function SummaryTile({
   icon,
   label,
@@ -104,17 +168,17 @@ function SummaryTile({
 }) {
   const toneCls =
     tone === 'warn'
-      ? 'text-amber-500 dark:text-amber-400'
+      ? 'text-warning'
       : tone === 'good'
-        ? 'text-green-500 dark:text-green-400'
+        ? 'text-success'
         : 'text-foreground'
   return (
     <div className="flex items-start gap-3 px-4 py-3">
       <span className="mt-0.5 text-muted-foreground">{icon}</span>
       <div className="min-w-0">
-        <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <p className={`font-mono text-lg leading-tight tabular-nums tracking-tight ${toneCls}`}>{value}</p>
-        {sub ? <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">{sub}</p> : null}
+        {sub ? <p className="mt-0.5 truncate text-xs text-muted-foreground/80">{sub}</p> : null}
       </div>
     </div>
   )
@@ -167,30 +231,30 @@ export default function LoadPanel() {
         <Card
           className={`mb-4 gap-0 border py-0 ${
             alerts.active.some((a) => a.severity === 'critical')
-              ? 'border-red-500/40 bg-red-500/10'
-              : 'border-amber-500/40 bg-amber-500/10'
+              ? 'border-danger/40 bg-danger/10'
+              : 'border-warning/40 bg-warning/10'
           }`}
         >
           {alerts.active.map((a) => (
             <div
               key={a.kind}
               className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 ${
-                a.severity === 'critical' ? 'text-red-500 dark:text-red-400' : 'text-amber-500 dark:text-amber-400'
+                a.severity === 'critical' ? 'text-danger' : 'text-warning'
               }`}
             >
               <ShieldAlert className="size-4 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold">Load alert — {alertLabel(a)}</p>
-                <p className="text-[11px] opacity-80">
+                <p className="text-xs opacity-80">
                   {a.severity === 'critical' ? 'Critical' : 'Warning'} · triggered {fmtTime(a.at)} · still over
                   threshold on the last poll
                 </p>
               </div>
               <Badge
-                className={`font-mono text-[10px] tabular-nums border-transparent ${
+                className={`font-mono text-xs tabular-nums border-transparent ${
                   a.severity === 'critical'
-                    ? 'bg-red-500/15 text-red-500'
-                    : 'bg-amber-500/15 text-amber-500'
+                    ? 'bg-danger/10 text-danger'
+                    : 'bg-warning/10 text-warning'
                 }`}
               >
                 {a.severity === 'critical' ? 'critical' : 'warn'}
@@ -208,14 +272,14 @@ export default function LoadPanel() {
         {metrics ? (
           <>
             <Badge
-              className={`gap-1.5 font-mono text-[11px] tabular-nums ${
-                redis?.connected ? 'text-green-500 dark:text-green-400 bg-green-500/15 border-transparent' : 'text-muted-foreground'
+              className={`gap-1.5 font-mono text-xs tabular-nums ${
+                redis?.connected ? 'text-success bg-success/10 border-transparent' : 'text-muted-foreground'
               }`}
             >
               <Database className="size-3" />
               redis {redis?.connected ? `shared${redis?.pubsub?.attached ? ' · pub/sub' : ''}` : 'memory-only'}
             </Badge>
-            <Badge variant="outline" className="gap-1.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+            <Badge variant="outline" className="gap-1.5 font-mono text-xs tabular-nums text-muted-foreground">
               <Activity className="size-3" />
               up {fmtUptime(metrics.uptimeSeconds)}
             </Badge>
@@ -289,13 +353,14 @@ export default function LoadPanel() {
                   <TableHead>Requests</TableHead>
                   <TableHead className="w-[30%]">Status mix</TableHead>
                   <TableHead className="text-right">Latency p50 / p95</TableHead>
+                  <TableHead>30-min trend</TableHead>
                   <TableHead className="text-right">429</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {metrics.groups.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center">
+                    <TableCell colSpan={6} className="py-10 text-center">
                       <p className="text-sm font-semibold text-muted-foreground">No traffic in this window</p>
                       <p className="mx-auto mt-1 max-w-[45ch] text-xs text-muted-foreground/80">
                         Requests will appear here as riders hit the API. The read-only probe sweep counts too.
@@ -310,32 +375,35 @@ export default function LoadPanel() {
                       <TableRow key={g.group}>
                         <TableCell>
                           <p className="truncate font-mono text-xs tabular-nums">{g.group}</p>
-                          <p className="text-[11px] text-muted-foreground">{g.requestsPerMin} req/min</p>
+                          <p className="text-xs text-muted-foreground">{g.requestsPerMin} req/min</p>
                         </TableCell>
                         <TableCell className="font-mono text-xs tabular-nums">{fmt(g.requests)}</TableCell>
                         {/* Status mini-bar — 2xx / 4xx / 5xx proportional */}
                         <TableCell>
                           <div className="flex h-1.5 min-w-24 max-w-56 overflow-hidden rounded-full bg-muted">
                             <div
-                              className="h-full bg-green-500/80 transition-[width]"
+                              className="h-full bg-success/80 transition-[width]"
                               style={{ width: `${pct(g.status2xx + g.status3xx)}%` }}
                             />
                             <div
-                              className="h-full bg-amber-500/80 transition-[width]"
+                              className="h-full bg-warning/80 transition-[width]"
                               style={{ width: `${pct(g.status4xx)}%` }}
                             />
                             <div
-                              className="h-full bg-red-500/80 transition-[width]"
+                              className="h-full bg-danger/80 transition-[width]"
                               style={{ width: `${pct(g.status5xx)}%` }}
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                        <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
                           {g.p50Ms}/{g.p95Ms} ms
+                        </TableCell>
+                        <TableCell>
+                          <LatencySparkline points={g.history} />
                         </TableCell>
                         <TableCell className="text-right">
                           {g.rateLimited > 0 ? (
-                            <Badge className="border-transparent bg-amber-500/15 font-mono text-[10px] tabular-nums text-amber-500">
+                            <Badge className="border-transparent bg-warning/10 font-mono text-xs tabular-nums text-warning">
                               {g.rateLimited}×
                             </Badge>
                           ) : (
@@ -368,7 +436,7 @@ export default function LoadPanel() {
                         {a.state === 'triggered' ? (
                           <ShieldAlert
                             className={`size-3.5 ${
-                              a.severity === 'critical' ? 'text-red-500' : 'text-amber-500'
+                              a.severity === 'critical' ? 'text-danger' : 'text-warning'
                             }`}
                           />
                         ) : (
@@ -379,7 +447,7 @@ export default function LoadPanel() {
                         <span className="font-semibold">{a.state === 'triggered' ? 'Triggered' : 'Resolved'}</span>
                         <span className="text-muted-foreground"> · {alertLabel(a)}</span>
                       </TableCell>
-                      <TableCell className="text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                      <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
                         {fmtTime(a.at)}
                       </TableCell>
                     </TableRow>
@@ -389,7 +457,7 @@ export default function LoadPanel() {
             </Card>
           ) : null}
 
-          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground/80">
             <RefreshCw className="size-3" />
             Live — refreshes every 10 s while this section is open.
           </p>

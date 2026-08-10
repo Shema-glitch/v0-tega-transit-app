@@ -34,7 +34,11 @@ import {
   KeyRound,
   Loader2,
   MapPin,
+  Moon,
+  MoreHorizontal,
   RefreshCw,
+  Sun,
+  ScrollText,
   ShieldAlert,
   Share2,
   TriangleAlert,
@@ -44,6 +48,13 @@ import {
 } from 'lucide-react'
 import { ENDPOINT_REGISTRY, type EndpointRegistryEntry } from '@/lib/api/endpoint-registry'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Toaster } from '@/components/ui/sonner'
@@ -61,37 +72,48 @@ import {
   DialogPortal,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogBackdrop,
+  AlertDialogCancel,
+  AlertDialogDescription,
+  AlertDialogPopup,
+  AlertDialogPortal,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { MAINTENANCE_GUIDE_HTML } from '@/lib/admin/maintenance-guide-html'
 import UptimeBars, { type UptimeDay } from '@/components/uptime-bars'
-import SseMonitor from '@/components/admin/sse-monitor'
+import SseMonitor, { type SseMonitorHandle } from '@/components/admin/sse-monitor'
+import { CommandPalette } from '@/components/admin/command-palette'
 import { NotificationCenter, type AdminNotification } from '@/components/admin/notification-center'
 import LoadPanel from '@/components/admin/load-panel'
 import { SettingsPanel } from '@/components/admin/settings-panel'
 import { StopsPanel } from '@/components/admin/stops-panel'
 import { AppSidebar, type ConsoleSection, type AdminRole } from '@/components/app-sidebar'
 import { Separator } from '@/components/ui/separator'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 
-// shadcn's own theme doesn't ship semantic success/warning colors (only
-// primary/destructive/muted/accent), so those two route through Tailwind's
-// stock green/amber scale. Everything else uses shadcn's own tokens directly
-// via className (text-primary, text-destructive, text-muted-foreground, …).
+// Status colors route through the semantic tokens in globals.css: --brand
+// (emerald, the single accent) with --success / --warning / --danger. Everything
+// else uses shadcn's own tokens directly (text-primary, text-destructive, …).
 const STATUS_COLOR = {
-  good: 'text-green-500 dark:text-green-400',
-  warn: 'text-amber-500 dark:text-amber-400',
-  err: 'text-destructive',
+  good: 'text-success',
+  warn: 'text-warning',
+  err: 'text-danger',
   accent: 'text-primary',
   dim: 'text-muted-foreground',
 } as const
 
 const STATUS_BADGE = {
-  good: 'text-green-500 dark:text-green-400 bg-green-500/15 border-transparent',
-  warn: 'text-amber-500 dark:text-amber-400 bg-amber-500/15 border-transparent',
-  err: 'text-destructive bg-destructive/15 border-transparent',
+  good: 'text-success bg-success/10 border-transparent',
+  warn: 'text-warning bg-warning/10 border-transparent',
+  err: 'text-danger bg-danger/10 border-transparent',
   accent: 'text-primary bg-primary/15 border-transparent',
   dim: 'text-muted-foreground bg-muted border-transparent',
 } as const
@@ -106,6 +128,12 @@ const RECENT_RESTART_MS = 10 * 60 * 1000
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000
 const IDLE_WARN_MS = 14 * 60 * 1000
 const LAST_SEEN_KEY = 'admin-last-seen'
+// Console theme — dark is the deliberate default ("checking in at 11pm
+// mid-incident" tool); the ivory light mode is the daytime option.
+const THEME_KEY = 'busgo-admin-theme'
+type ConsoleTheme = 'dark' | 'light'
+// Suggestions queue — fixed page size keeps the footer chrome minimal.
+const SUGG_PAGE_SIZE = 10
 
 // The one link this dashboard hands out for sharing — a static, riders-only
 // guide with no admin surface at all (see frontend/public/guide.html in the
@@ -155,6 +183,7 @@ interface AdminEmailEntry {
   role: 'admin' | 'curator'
   invitedBy?: string
   createdAt?: number
+  totp?: { enabled: boolean; pending: boolean; dbOk: boolean }
 }
 
 // Mirrors lib/api/auth-log.ts AuthLogEvent.
@@ -240,32 +269,28 @@ function SkeletonBox({ className }: { className?: string }) {
   return <span className={`inline-block animate-pulse rounded bg-muted ${className ?? ''}`} />
 }
 
-function StatPanel({
-  icon,
-  label,
-  value,
-  valueClass,
-  pulse = false,
-}: {
+interface StatDef {
   icon: ReactNode
   label: string
   value: ReactNode
   valueClass?: string
   pulse?: boolean
-}) {
+}
+
+function StatPanel({ icon, label, value, valueClass, pulse = false }: StatDef) {
   return (
     <div className="relative flex items-center gap-4 px-4 py-4 sm:px-5">
       {/* Status rail — the only per-cell color; everything else is neutral. */}
       <span
         className={`absolute top-4 bottom-4 left-0 w-[2px] rounded-full ${
-          pulse ? 'bg-amber-500/70 status-breathe' : 'bg-border'
+          pulse ? 'bg-warning/70 status-breathe' : 'bg-border'
         }`}
       />
       <div className="min-w-0">
         <div className={`text-2xl leading-none font-bold tracking-tight tabular-nums ${valueClass ?? 'text-foreground'}`}>
           {value}
         </div>
-        <div className="mt-1.5 text-[11px] leading-tight font-medium tracking-wide text-muted-foreground uppercase">
+        <div className="mt-1.5 text-xs leading-tight font-medium tracking-wide text-muted-foreground uppercase">
           {label}
         </div>
       </div>
@@ -296,16 +321,19 @@ function PageUrlLink({ url }: { url: string }) {
   )
 }
 
-function CopyGuideLinkButton() {
+// Secondary header actions live behind a kebab menu so the header stays to a
+// single line. The community guide link (shareable, riders-only) and Debug
+// Mode are rare actions — they don't each earn a permanent button.
+function HeaderActionsMenu() {
   const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const copy = useCallback(async () => {
+  const copyGuide = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(COMMUNITY_GUIDE_URL)
     } catch {
       // Clipboard API can fail (permissions, insecure context) — the link
-      // is still visible/clickable via the button's title, so this is a
+      // is still visible via the item's title, so this is a
       // degraded-but-not-broken outcome, not worth surfacing an error for.
       return
     }
@@ -316,42 +344,43 @@ function CopyGuideLinkButton() {
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
-  return (
-    <Button
-      onClick={copy}
-      variant="outline"
-      size="sm"
-      className="hidden h-9 gap-1.5 text-xs lg:inline-flex"
-      title={COMMUNITY_GUIDE_URL}
-    >
-      <Share2 className="size-3.5" />
-      {copied ? 'Copied!' : 'Copy community guide link'}
-    </Button>
-  )
-}
-
-// Debug Mode (stop rename/delete/add) used to be a toggle any rider could
-// find in the app's own Preferences screen — a real problem, since it
-// writes to the live database and only an admin token gated whether those
-// writes actually landed. It's no longer discoverable there at all; this
-// button (and GET /admin/debug, which it calls) is now the only way in.
-// That route redirects to the frontend with the token in a URL FRAGMENT
-// (`#admin_debug=...`), never a query param, so it's never sent to any
-// server or written to a server access log on the frontend's end — the
-// frontend's AppContext reads it client-side on load and strips it
-// immediately. Only ever click this on a device you trust with the token.
-function LaunchDebugModeButton() {
-  const launch = useCallback(() => {
+  // Debug Mode (stop rename/delete/add) used to be a toggle any rider could
+  // find in the app's own Preferences screen — a real problem, since it
+  // writes to the live database and only an admin token gated whether those
+  // writes actually landed. It's no longer discoverable there at all; this
+  // menu item (and GET /admin/debug, which it calls) is now the only way in.
+  // That route redirects to the frontend with the token in a URL FRAGMENT
+  // (`#admin_debug=...`), never a query param, so it's never sent to any
+  // server or written to a server access log on the frontend's end — the
+  // frontend's AppContext reads it client-side on load and strips it
+  // immediately. Only ever click this on a device you trust with the token.
+  const launchDebug = useCallback(() => {
     // The session cookie authenticates the request; the route mints a
     // short-lived token for the frontend (see app/admin/debug/route.ts).
     window.open('/admin/debug', '_blank', 'noopener,noreferrer')
   }, [])
 
   return (
-    <Button onClick={launch} variant="outline" size="sm" className="hidden h-9 gap-1.5 text-xs lg:inline-flex">
-      <Wrench className="size-3.5" />
-      Open app in Debug Mode
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="outline" size="sm" className="h-8 px-2" aria-label="More actions" />
+        }
+      >
+        <MoreHorizontal className="size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuItem onClick={copyGuide} title={COMMUNITY_GUIDE_URL} className="gap-2">
+          <Share2 className="size-4" />
+          {copied ? 'Copied!' : 'Copy community guide link'}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={launchDebug} className="gap-2">
+          <Wrench className="size-4" />
+          Open app in Debug Mode
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -371,8 +400,33 @@ export default function AdminPage() {
 
   const [tab, setTab] = useState<ConsoleSection>('stops')
   const [role, setRole] = useState<AdminRole | null>(null)
+  // Theme: an explicit toggle choice (stored in localStorage) wins; otherwise
+  // follow the OS preference live, defaulting to dark when it's unavailable.
+  const [theme, setTheme] = useState<ConsoleTheme>('dark')
+  useEffect(() => {
+    const saved = localStorage.getItem(THEME_KEY)
+    if (saved === 'light' || saved === 'dark') {
+      setTheme(saved)
+      return
+    }
+    const mq = window.matchMedia('(prefers-color-scheme: light)')
+    const apply = () => {
+      // The toggle writes THEME_KEY — once the user chooses, stop tracking.
+      if (!localStorage.getItem(THEME_KEY)) setTheme(mq.matches ? 'light' : 'dark')
+    }
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+  // Imperative handle to the SSE card — lets the Cmd+K palette start the
+  // live monitor without the palette knowing anything about EventSource.
+  const sseRef = useRef<SseMonitorHandle>(null)
   const [issueFilter, setIssueFilter] = useState<'all' | 'errors' | 'bugs' | 'open'>('open')
   const [query, setQuery] = useState('')
+  // Suggestions pagination — the queue can grow past a screenful.
+  const [suggPage, setSuggPage] = useState(1)
+  // Reference docs — one iframe, tabbed, instead of two stacked 75vh frames.
+  const [guideTab, setGuideTab] = useState<'guide' | 'version'>('guide')
 
   // Action feedback + dialogs (replaces the old window.prompt flow)
   const [disableTarget, setDisableTarget] = useState<EndpointRegistryEntry | null>(null)
@@ -392,7 +446,9 @@ export default function AdminPage() {
   const [totpVerifying, setTotpVerifying] = useState(false)
   const [totpError, setTotpError] = useState<string | null>(null)
 
-  // Data freshness
+  // Data freshness. lastUpdated is also the "first successful load happened"
+  // signal for notification seeding — it's tracked but no longer shown in the
+  // header (the per-second "updated Xs ago" text was the P1 clutter).
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<number | null>(null)
   const [pollFailed, setPollFailed] = useState(false)
@@ -451,6 +507,38 @@ export default function AdminPage() {
   const [maintLastHydratedAt, setMaintLastHydratedAt] = useState<number | null>(null)
   const [authLog, setAuthLog] = useState<AuthLogEvent[]>([])
   const [authLogSource, setAuthLogSource] = useState<'supabase' | 'memory' | null>(null)
+
+  // People page — who's actually using the console, derived from the audit
+  // log the dashboard already polls. An admin is "active" once a login event
+  // lands; last-active is their most recent ok auth event of any kind.
+  const adminActivity = useMemo(() => {
+    const lastLogin = new Map<string, number>()
+    const lastActive = new Map<string, number>()
+    for (const ev of authLog) {
+      if (!ev.email) continue
+      if (ev.ok && (ev.action === 'login' || ev.action === 'magic-link-login')) {
+        lastLogin.set(ev.email, Math.max(lastLogin.get(ev.email) ?? 0, ev.at))
+      }
+      if (ev.ok) {
+        lastActive.set(ev.email, Math.max(lastActive.get(ev.email) ?? 0, ev.at))
+      }
+    }
+    return { lastLogin, lastActive }
+  }, [authLog])
+
+  // 2FA coverage line above the People table (best-effort — only when the
+  // TOTP store answered).
+  const totpSummary = useMemo(() => {
+    const known = admins.filter((a) => a.totp)
+    return { known: known.length, enabled: known.filter((a) => a.totp?.enabled).length }
+  }, [admins])
+
+  // Per-admin activity drill-down (Sheet) — same audit log, filtered to one email.
+  const [activityEmail, setActivityEmail] = useState<string | null>(null)
+  const activityEvents = useMemo(
+    () => (activityEmail ? authLog.filter((ev) => ev.email === activityEmail) : []),
+    [activityEmail, authLog]
+  )
 
   // Uptime history for the Render-style bars (see lib/api/uptime-tracker.ts)
   const [uptime, setUptime] = useState<Record<string, UptimeEntry>>({})
@@ -699,6 +787,13 @@ export default function AdminPage() {
       setChecksRunning(false)
     }
   }, [pushToast, refreshAll])
+
+  // Cmd+K palette "Start live SSE monitor": hop to the Endpoints section
+  // (where the card mounts) and fire its handle once the tab has rendered.
+  const startSseFromPalette = useCallback(() => {
+    setTab('endpoints')
+    requestAnimationFrame(() => sseRef.current?.start())
+  }, [])
 
   const inviteAdmin = useCallback(async () => {
     const addr = inviteEmail.trim().toLowerCase()
@@ -991,6 +1086,11 @@ export default function AdminPage() {
   const disabledCount = ENDPOINT_REGISTRY.filter((e) => disabledIds.has(e.id)).length
   const isAllClear = issueFilter === 'open' && !query.trim() && openCount === 0
 
+  // Suggestions queue — paginated so it stays a tool, not an endless scroll.
+  const suggPageCount = Math.max(1, Math.ceil(stopSuggestions.length / SUGG_PAGE_SIZE))
+  const safeSuggPage = Math.min(suggPage, suggPageCount)
+  const suggVisible = stopSuggestions.slice((safeSuggPage - 1) * SUGG_PAGE_SIZE, safeSuggPage * SUGG_PAGE_SIZE)
+
   const overallStatus = disabledCount > 0
     ? { label: 'Endpoints disabled', variant: 'warn' as const }
     : openCount > 0
@@ -999,6 +1099,45 @@ export default function AdminPage() {
 
   const processUptimeMs = processStartedAt ? now - processStartedAt : null
   const showRestartNudge = processUptimeMs !== null && processUptimeMs < RECENT_RESTART_MS
+
+  // The stat bar only appears where its numbers are actionable — Issues
+  // (open issues, bug reports), Endpoints (disabled count), Suggestions —
+  // instead of repeating the same four cells on every panel.
+  const statsByTab: Record<string, StatDef[]> = {
+    issues: [
+      {
+        icon: <AlertTriangle className="size-3.5" />,
+        label: 'Open issues',
+        pulse: openCount > 0,
+        valueClass: openCount > 0 ? STATUS_COLOR.warn : STATUS_COLOR.good,
+        value: loading ? <SkeletonBox className="h-7 w-10" /> : openCount,
+      },
+      {
+        icon: <Bug className="size-3.5" />,
+        label: 'Bug reports',
+        value: loading ? <SkeletonBox className="h-7 w-10" /> : bugReports.length,
+      },
+    ],
+    endpoints: [
+      {
+        icon: <ShieldAlert className="size-3.5" />,
+        label: 'Endpoints disabled',
+        pulse: disabledCount > 0,
+        valueClass: disabledCount > 0 ? STATUS_COLOR.warn : undefined,
+        value: loading ? <SkeletonBox className="h-7 w-10" /> : disabledCount,
+      },
+    ],
+    suggestions: [
+      {
+        icon: <MapPin className="size-3.5" />,
+        label: 'Suggestions',
+        pulse: stopSuggestions.length > 0,
+        valueClass: stopSuggestions.length > 0 ? STATUS_COLOR.warn : undefined,
+        value: loading ? <SkeletonBox className="h-7 w-10" /> : stopSuggestions.length,
+      },
+    ],
+  }
+  const activeStats = statsByTab[tab] ?? []
 
   // ─── Session check screen ────────────────────────────────────────────────
   // 'out' redirects to /goToAdminAuth via the effect above; this just covers
@@ -1019,11 +1158,11 @@ export default function AdminPage() {
 
   // ─── Dashboard ─────────────────────────────────────────────────────────────
   return (
-    <div className="dark min-h-[100dvh] bg-background text-foreground">
+    <div className={`${theme === 'dark' ? 'dark' : 'admin-light'} min-h-[100dvh] bg-background text-foreground`}>
       {/* Fixed film grain — one paint layer, never intercepts input (see .admin-grain). */}
       <div aria-hidden className="admin-grain" />
-      {/* shadcn Sonner toasts — dark to match the console, bottom-right like the old stack. */}
-      <Toaster theme="dark" position="bottom-right" richColors />
+      {/* shadcn Sonner toasts — follows the console theme, bottom-right like the old stack. */}
+      <Toaster theme={theme} position="bottom-right" richColors />
 
       {/* shadcn dashboard-01 shell: sidebar nav + inset content. The sections
           that were top tabs now live in the sidebar (see components/app-sidebar.tsx)
@@ -1056,18 +1195,16 @@ export default function AdminPage() {
             >
               <span
                 className={`size-1.5 rounded-full ${
-                  overallStatus.variant === 'good' ? 'bg-green-500' : 'bg-amber-500 status-breathe'
+                  overallStatus.variant === 'good' ? 'bg-success' : 'bg-warning status-breathe'
                 }`}
               />
               {overallStatus.label}
             </Badge>
             <span className="text-sm font-semibold tracking-tight capitalize">{tab}</span>
-            <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
-              {pollFailed ? (
+            <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+              {pollFailed && (
                 <span className="hidden font-medium text-destructive sm:inline">Can&apos;t reach the API · retrying…</span>
-              ) : lastUpdated ? (
-                <span className="hidden font-mono tabular-nums sm:inline">updated <TimeAgo ts={lastUpdated} /></span>
-              ) : null}
+              )}
               <NotificationCenter
                 notifications={notifications}
                 onSelect={(section) => {
@@ -1077,6 +1214,20 @@ export default function AdminPage() {
                 onMarkAllRead={() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))}
               />
               <Button
+                onClick={() => {
+                  const next: ConsoleTheme = theme === 'dark' ? 'light' : 'dark'
+                  setTheme(next)
+                  localStorage.setItem(THEME_KEY, next)
+                }}
+                variant="outline"
+                size="sm"
+                className="h-8 w-8 px-0"
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                title={theme === 'dark' ? 'Switch to the ivory light mode' : 'Switch back to dark mode'}
+              >
+                {theme === 'dark' ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+              </Button>
+              <Button
                 onClick={refreshAll}
                 variant="outline"
                 size="sm"
@@ -1085,15 +1236,14 @@ export default function AdminPage() {
               >
                 <RefreshCw className="size-3.5" /> Refresh
               </Button>
-              <CopyGuideLinkButton />
-              <LaunchDebugModeButton />
+              <HeaderActionsMenu />
             </div>
           </header>
 
       <main className="@container/main flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
         {idleWarning && (
-          <Alert className="mb-4 border-amber-500/40 bg-amber-500/10">
-            <AlertTriangle className="size-4 text-amber-500 dark:text-amber-400" />
+          <Alert className="mb-4 border-warning/40 bg-warning/10">
+            <AlertTriangle className="size-4 text-warning" />
             <AlertTitle>Session expires soon</AlertTitle>
             <AlertDescription>
               No activity for 14 minutes — you&apos;ll be signed out in{' '}
@@ -1105,55 +1255,24 @@ export default function AdminPage() {
           </Alert>
         )}
 
-        {showRestartNudge && (
-          <Alert className="mb-4 border-amber-500/40 bg-amber-500/10">
-            <AlertTriangle className="size-4 text-amber-500 dark:text-amber-400" />
-            <AlertTitle>Process restarted recently</AlertTitle>
-            <AlertDescription>
-              This process started <TimeAgo ts={processStartedAt!} />.
-              {maintDurable ? (
-                <> Maintenance flags are backed by Supabase, so what was disabled before the restart is still
-                  disabled — no need to re-check the Endpoints section.</>
-              ) : (
-                <> Maintenance flags are in-memory only right now, so a restart re-enables everything that was
-                  disabled before it. Double-check the Endpoints section if you were mid-incident.</>
-              )}
-            </AlertDescription>
-          </Alert>
+        {/* Stat bar — scoped to the panels whose numbers it summarizes
+            (see statsByTab above), with cells carrying a status rail instead
+            of a box each. Numbers are tabular and tracking-tight. */}
+        {activeStats.length > 0 && (
+          activeStats.length === 1 ? (
+            <Card className="mb-6 overflow-hidden gap-0 py-0 sm:max-w-md">
+              <StatPanel {...activeStats[0]} />
+            </Card>
+          ) : (
+            <Card className="mb-6 overflow-hidden gap-0 py-0">
+              <div className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-4 sm:divide-y-0">
+                {activeStats.map((s) => (
+                  <StatPanel key={s.label} {...s} />
+                ))}
+              </div>
+            </Card>
+          )
         )}
-
-        {/* Stat bar — one divided panel, cells carry a status rail instead of
-            a box each. Numbers are tabular and tracking-tight. */}
-        <Card className="mb-6 overflow-hidden gap-0 py-0">
-          <div className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-4 sm:divide-y-0">
-            <StatPanel
-              icon={<AlertTriangle className="size-3.5" />}
-              label="Open issues"
-              pulse={openCount > 0}
-              valueClass={openCount > 0 ? STATUS_COLOR.warn : STATUS_COLOR.good}
-              value={loading ? <SkeletonBox className="h-7 w-10" /> : openCount}
-            />
-            <StatPanel
-              icon={<ShieldAlert className="size-3.5" />}
-              label="Endpoints disabled"
-              pulse={disabledCount > 0}
-              valueClass={disabledCount > 0 ? STATUS_COLOR.warn : undefined}
-              value={loading ? <SkeletonBox className="h-7 w-10" /> : disabledCount}
-            />
-            <StatPanel
-              icon={<Bug className="size-3.5" />}
-              label="Bug reports"
-              value={loading ? <SkeletonBox className="h-7 w-10" /> : bugReports.length}
-            />
-            <StatPanel
-              icon={<MapPin className="size-3.5" />}
-              label="Suggestions"
-              pulse={stopSuggestions.length > 0}
-              valueClass={stopSuggestions.length > 0 ? STATUS_COLOR.warn : undefined}
-              value={loading ? <SkeletonBox className="h-7 w-10" /> : stopSuggestions.length}
-            />
-          </div>
-        </Card>
 
         {/* Sections — the sidebar owns navigation now (see AppSidebar). */}
         {tab === 'issues' && (
@@ -1197,7 +1316,7 @@ export default function AdminPage() {
 
               {!loading && filteredIssues.length === 0 && isAllClear && (
                 <div className="flex flex-col items-center gap-3 py-20 text-center">
-                  <span className="inline-flex size-12 items-center justify-center rounded-full border border-green-500/20 bg-green-500/10">
+                  <span className="inline-flex size-12 items-center justify-center rounded-full border border-success/20 bg-success/10">
                     <CheckCircle2 className={`size-6 ${STATUS_COLOR.good}`} />
                   </span>
                   <p className="text-sm font-semibold tracking-tight">All clear</p>
@@ -1312,13 +1431,29 @@ export default function AdminPage() {
               )}
 
               <p className="mt-3 text-xs text-muted-foreground">
-                Errors: {source.errors === 'supabase' ? 'durable' : 'in-memory only'} · Bug reports: {source.bugs === 'supabase' ? 'durable' : 'in-memory only'} · auto-refreshes every 15s.
+                Errors: {source.errors === 'supabase' ? 'durable' : 'in-memory only'} · Bug reports: {source.bugs === 'supabase' ? 'durable' : 'in-memory only'}.
               </p>
             </section>
           )}
 
         {tab === 'endpoints' && (
             <section>
+              {showRestartNudge && (
+                <Alert className="mb-4 border-warning/40 bg-warning/10">
+                  <AlertTriangle className="size-4 text-warning" />
+                  <AlertTitle>Process restarted recently</AlertTitle>
+                  <AlertDescription>
+                    This process started <TimeAgo ts={processStartedAt!} />.
+                    {maintDurable ? (
+                      <> Maintenance flags are backed by Supabase, so what was disabled before the restart is still
+                        disabled — no need to re-check the Endpoints section.</>
+                    ) : (
+                      <> Maintenance flags are in-memory only right now, so a restart re-enables everything that was
+                        disabled before it. Double-check the Endpoints section if you were mid-incident.</>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
               {/* Diagnostics — admin-only. These used to sit on the public page
                   where every visitor's browser would self-probe the API; both
                   actions are now server-side and gated. */}
@@ -1328,7 +1463,7 @@ export default function AdminPage() {
                     onClick={runChecks}
                     disabled={checksRunning}
                     size="sm"
-                    className="h-9 gap-1.5 bg-emerald-500 text-xs font-semibold text-emerald-950 shadow-[0_8px_20px_-8px_oklch(0.696_0.17_162.48/0.6)] transition-[transform,background-color] hover:bg-emerald-400 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+                    className="h-9 gap-1.5 bg-brand text-xs font-semibold text-brand-foreground shadow-brand transition-[transform,background-color] hover:bg-brand active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
                   >
                     {checksRunning ? (
                       <Loader2 className="size-3.5 animate-spin" />
@@ -1337,9 +1472,9 @@ export default function AdminPage() {
                     )}
                     {checksRunning ? 'Checking…' : 'Re-run all checks'}
                   </Button>
-                  <SseMonitor />
+                  <SseMonitor ref={sseRef} />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Probes every endpoint server-side and records the result into the uptime bars below. The
                   background sweep runs read-only every 5 minutes; this button also exercises the write endpoints
                   (broadcast, incident/bug report, stop suggestion) — expect a test event in Issues afterwards.
@@ -1356,7 +1491,7 @@ export default function AdminPage() {
                 className={`mb-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
                   maintDurable
                     ? 'border-border bg-muted/30 text-muted-foreground'
-                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : 'border-warning/30 bg-warning/10 text-warning'
                 }`}
               >
                 {maintDurable ? (
@@ -1382,7 +1517,7 @@ export default function AdminPage() {
               </div>
 
               {disabledCount === 0 && (
-                <div className="mb-4 flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-600 dark:text-green-400">
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
                   <CheckCircle2 className="size-4 shrink-0" />
                   All {ENDPOINT_REGISTRY.length} endpoints are live.
                 </div>
@@ -1399,7 +1534,7 @@ export default function AdminPage() {
                   <div className="mb-2 flex items-center gap-2">
                     <span
                       className={`size-1.5 rounded-full ${
-                        groupDisabled ? 'bg-amber-500 status-breathe' : 'bg-emerald-500/80'
+                        groupDisabled ? 'bg-warning status-breathe' : 'bg-brand/80'
                       }`}
                     />
                     <h3 className="text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase">{group}</h3>
@@ -1427,7 +1562,7 @@ export default function AdminPage() {
                                   setDisableTarget(ep)
                                 }
                               }}
-                              className="data-checked:bg-green-600 data-unchecked:bg-destructive"
+                              className="data-checked:bg-success data-unchecked:bg-destructive"
                             />
                           </span>
                           <div className="min-w-0 flex-1">
@@ -1472,7 +1607,7 @@ export default function AdminPage() {
                 </div>
               )}
               <div className="space-y-2">
-                {stopSuggestions.map((s) => (
+                {suggVisible.map((s) => (
                   <Card key={s.id} className="p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge className={`font-semibold ${STATUS_BADGE.accent}`}>{s.type.toUpperCase()}</Badge>
@@ -1502,16 +1637,20 @@ export default function AdminPage() {
                           onClick={() => resolveStopSuggestion(s.id, 'approve')}
                           variant="outline"
                           size="sm"
-                          className={`h-9 text-xs ${STATUS_COLOR.good}`}
+                          className={`h-9 gap-1.5 text-xs ${STATUS_COLOR.good}`}
+                          title="Apply this change to the live map (same write the stop editor uses)"
                         >
+                          <CheckCircle2 className="size-3.5" />
                           Approve
                         </Button>
                         <Button
                           onClick={() => resolveStopSuggestion(s.id, 'reject')}
                           variant="outline"
                           size="sm"
-                          className={`h-9 text-xs ${STATUS_COLOR.err}`}
+                          className={`h-9 gap-1.5 text-xs ${STATUS_COLOR.err}`}
+                          title="Drop this suggestion without touching the map"
                         >
+                          <X className="size-3.5" />
                           Reject
                         </Button>
                       </div>
@@ -1520,6 +1659,36 @@ export default function AdminPage() {
                   </Card>
                 ))}
               </div>
+              {suggPageCount > 1 && (
+                <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+                  <span className="text-xs text-muted-foreground">
+                    {stopSuggestions.length.toLocaleString()} suggestion{stopSuggestions.length === 1 ? '' : 's'} total
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setSuggPage(safeSuggPage - 1)}
+                      disabled={safeSuggPage <= 1}
+                    >
+                      Prev
+                    </Button>
+                    <span className="min-w-10 text-center font-mono text-xs text-muted-foreground">
+                      {safeSuggPage} / {suggPageCount}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setSuggPage(safeSuggPage + 1)}
+                      disabled={safeSuggPage >= suggPageCount}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
@@ -1570,82 +1739,129 @@ export default function AdminPage() {
                 )}
               </Card>
 
-              <Card className="mt-4 overflow-hidden p-0">
+              {totpSummary.known > 0 ? (
+                <p className="mb-2 text-xs text-muted-foreground">
+                  <KeyRound className="mr-1 inline size-3" />
+                  2FA: {totpSummary.enabled} of {totpSummary.known} admins enrolled
+                </p>
+              ) : null}
+
+              <Card className="mt-2 overflow-hidden p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Email</TableHead>
-                      <TableHead>Source</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>2FA</TableHead>
+                      <TableHead>Last active</TableHead>
                       <TableHead>Role</TableHead>
-                      <TableHead>Added</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {admins.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-8 text-center text-xs text-muted-foreground">
+                        <TableCell colSpan={6} className="py-8 text-center text-xs text-muted-foreground">
                           No admins yet — invite the first one above.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      admins.map((a) => (
-                        <TableRow key={a.email}>
-                          <TableCell className="font-mono text-xs font-semibold">{a.email}</TableCell>
-                          <TableCell>
-                            <Badge
-                              className={`font-semibold ${a.source === 'env' ? STATUS_BADGE.dim : STATUS_BADGE.accent}`}
-                            >
-                              {a.source === 'env' ? 'env · ADMIN_EMAILS' : 'invited'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={`font-semibold ${
-                                a.role === 'curator' ? 'bg-blue-500/15 text-blue-400' : 'bg-emerald-500/15 text-emerald-400'
-                              }`}
-                            >
-                              {a.role === 'curator' ? 'CURATOR' : 'ADMIN'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {a.source === 'supabase' ? (
-                              <>
-                                by {a.invitedBy ?? 'unknown'}
-                                {a.createdAt ? (
+                      admins.map((a) => {
+                        const lastActiveTs = adminActivity.lastActive.get(a.email)
+                        const hasLoggedIn = adminActivity.lastLogin.has(a.email)
+                        const status =
+                          a.source === 'env'
+                            ? { label: 'env', cls: STATUS_BADGE.dim }
+                            : hasLoggedIn
+                              ? { label: 'Active', cls: 'bg-success/10 text-success' }
+                              : { label: 'Invited · awaiting login', cls: 'bg-warning/10 text-warning' }
+                        return (
+                          <TableRow key={a.email}>
+                            <TableCell>
+                              <div className="font-mono text-xs font-semibold">{a.email}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {a.source === 'supabase' ? (
                                   <>
-                                    {' '}· <TimeAgo ts={a.createdAt} />
+                                    invited by {a.invitedBy ?? 'unknown'}
+                                    {a.createdAt ? (
+                                      <>
+                                        {' '}· <TimeAgo ts={a.createdAt} />
+                                      </>
+                                    ) : null}
                                   </>
-                                ) : null}
-                              </>
-                            ) : (
-                              '—'
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {a.source === 'supabase' && (
+                                ) : (
+                                  'seeded via ADMIN_EMAILS'
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={`font-semibold ${status.cls}`}>{status.label}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {a.totp ? (
+                                a.totp.enabled ? (
+                                  <Badge className="gap-1 border-transparent bg-success/10 font-semibold text-success">
+                                    <KeyRound className="size-3" />
+                                    on
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs font-semibold text-warning">
+                                    no 2FA
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {lastActiveTs ? <TimeAgo ts={lastActiveTs} /> : '—'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={`font-semibold ${
+                                  a.role === 'curator'
+                                    ? 'bg-brand/15 text-brand'
+                                    : 'bg-brand/15 text-brand'
+                                }`}
+                              >
+                                {a.role === 'curator' ? 'CURATOR' : 'ADMIN'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
                               <div className="flex justify-end gap-1.5">
                                 <Button
-                                  onClick={() => toggleCuratorRole(a.email, a.role)}
+                                  onClick={() => setActivityEmail(a.email)}
                                   variant="outline"
                                   size="sm"
                                   className="h-8 text-xs"
                                 >
-                                  {a.role === 'curator' ? 'Make admin' : 'Make curator'}
+                                  Activity
                                 </Button>
-                                <Button
-                                  onClick={() => revokeAdmin(a.email)}
-                                  variant="outline"
-                                  size="sm"
-                                  className={`h-8 text-xs ${STATUS_COLOR.err}`}
-                                >
-                                  Revoke
-                                </Button>
+                                {a.source === 'supabase' && (
+                                  <>
+                                    <Button
+                                      onClick={() => toggleCuratorRole(a.email, a.role)}
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 text-xs"
+                                    >
+                                      {a.role === 'curator' ? 'Make admin' : 'Make curator'}
+                                    </Button>
+                                    <Button
+                                      onClick={() => revokeAdmin(a.email)}
+                                      variant="outline"
+                                      size="sm"
+                                      className={`h-8 text-xs ${STATUS_COLOR.err}`}
+                                    >
+                                      Revoke
+                                    </Button>
+                                  </>
+                                )}
                               </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
                     )}
                   </TableBody>
                 </Table>
@@ -1694,18 +1910,18 @@ export default function AdminPage() {
                         <TableRow key={`${ev.at}-${i}`}>
                           <TableCell>
                             {ev.ok ? (
-                              <CheckCircle2 className="size-4 text-green-600 dark:text-green-400" />
+                              <CheckCircle2 className="size-4 text-success" />
                             ) : (
                               <X className="size-4 text-destructive" />
                             )}
                           </TableCell>
                           <TableCell>
                             <div className="text-xs font-semibold">{ev.action}</div>
-                            {ev.detail && <div className="text-[11px] text-muted-foreground">{ev.detail}</div>}
+                            {ev.detail && <div className="text-xs text-muted-foreground">{ev.detail}</div>}
                           </TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground">{ev.email ?? '—'}</TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground">{ev.ip}</TableCell>
-                          <TableCell className="text-right text-[11px] tabular-nums text-muted-foreground">
+                          <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
                             <TimeAgo ts={ev.at} />
                           </TableCell>
                         </TableRow>
@@ -1725,30 +1941,43 @@ export default function AdminPage() {
 
         {tab === 'guide' && (
             <section>
-              <p className="mb-3 text-xs text-muted-foreground">
+              <p className="mb-4 text-xs text-muted-foreground">
                 Dual-repo maintenance &amp; QA reference — frontend (<span className="font-mono">BusGo_Track</span>), backend
                 (this repo), and a persistent testing checklist. Only visible to a signed-in admin; not published anywhere public.
               </p>
+              <Tabs value={guideTab} onValueChange={(v) => setGuideTab(v as 'guide' | 'version')}>
+                <TabsList variant="line" className="mb-3 h-9">
+                  <TabsTrigger value="guide" className="h-8 px-3 text-xs font-semibold">
+                    Maintenance guide
+                  </TabsTrigger>
+                  <TabsTrigger value="version" className="h-8 px-3 text-xs font-semibold">
+                    Version log
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
               <Card className="overflow-hidden p-0">
-                <iframe
-                  title="Maintenance & QA Guide"
-                  srcDoc={MAINTENANCE_GUIDE_HTML}
-                  sandbox="allow-scripts allow-same-origin"
-                  className="h-[75vh] w-full border-0 bg-background"
-                />
+                {guideTab === 'guide' ? (
+                  <iframe
+                    title="Maintenance & QA Guide"
+                    srcDoc={MAINTENANCE_GUIDE_HTML}
+                    sandbox="allow-scripts allow-same-origin"
+                    className="h-[72vh] w-full border-0 bg-background"
+                  />
+                ) : (
+                  <iframe
+                    title="API Version Log 2026-08-09"
+                    src="/version-log-2026-08-09.html"
+                    sandbox="allow-scripts allow-same-origin"
+                    className="h-[72vh] w-full border-0 bg-background"
+                  />
+                )}
               </Card>
-              <p className="mt-5 mb-3 text-xs text-muted-foreground">
-                Version log — what shipped in the latest batch and how the frontend should consume the API at
-                scale. Also served at <span className="font-mono">/version-log-2026-08-09.html</span> for the frontend team.
-              </p>
-              <Card className="overflow-hidden p-0">
-                <iframe
-                  title="API Version Log 2026-08-09"
-                  src="/version-log-2026-08-09.html"
-                  sandbox="allow-scripts allow-same-origin"
-                  className="h-[75vh] w-full border-0 bg-background"
-                />
-              </Card>
+              {guideTab === 'version' && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  What shipped in the latest batch and how the frontend should consume the API at scale. Also
+                  served at <span className="font-mono">/version-log-2026-08-09.html</span> for the frontend team.
+                </p>
+              )}
             </section>
           )}
       </main>
@@ -1756,17 +1985,20 @@ export default function AdminPage() {
       </SidebarProvider>
 
       {/* Disable-endpoint dialog — replaces the old window.prompt flow, whose
-          Cancel fallback silently disabled the endpoint anyway. Cancel is a
-          genuine no-op now. */}
-      <Dialog open={disableTarget !== null} onOpenChange={(open) => { if (!open && !disabling) setDisableTarget(null) }}>
-        <DialogPortal>
-          <DialogBackdrop />
-          <DialogPopup>
-            <DialogTitle className="text-base font-semibold">Disable {disableTarget?.label}</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
+          Cancel fallback silently disabled the endpoint anyway. Now an
+          AlertDialog: modal, no backdrop dismissal, Cancel is a genuine no-op. */}
+      <AlertDialog
+        open={disableTarget !== null}
+        onOpenChange={(open) => { if (!open && !disabling) setDisableTarget(null) }}
+      >
+        <AlertDialogPortal>
+          <AlertDialogBackdrop />
+          <AlertDialogPopup>
+            <AlertDialogTitle className="text-base font-semibold">Disable {disableTarget?.label}</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
               Callers will get <code className="rounded bg-muted px-1 py-0.5 text-xs">503</code> until you re-enable
               it. Flags persist in Supabase, so a redeploy won&apos;t re-enable it.
-            </DialogDescription>
+            </AlertDialogDescription>
             <div className="mt-4">
               <label htmlFor="disable-reason" className="mb-1.5 block text-xs font-semibold">
                 Reason (shown to callers)
@@ -1781,16 +2013,16 @@ export default function AdminPage() {
               />
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setDisableTarget(null)} disabled={disabling} className="h-9 text-xs">
+              <AlertDialogCancel onClick={() => setDisableTarget(null)} disabled={disabling}>
                 Cancel
-              </Button>
-              <Button variant="destructive" size="sm" onClick={submitDisable} disabled={disabling} className="h-9 text-xs">
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={submitDisable} disabled={disabling}>
                 {disabling ? 'Disabling…' : 'Disable endpoint'}
-              </Button>
+              </AlertDialogAction>
             </div>
-          </DialogPopup>
-        </DialogPortal>
-      </Dialog>
+          </AlertDialogPopup>
+        </AlertDialogPortal>
+      </AlertDialog>
 
       {/* TOTP challenge — a sensitive action needs a fresh authenticator code */}
       <Dialog
@@ -1808,7 +2040,7 @@ export default function AdminPage() {
           <DialogBackdrop />
           <DialogPopup>
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <KeyRound className="size-4 text-emerald-400" />
+              <KeyRound className="size-4 text-brand" />
               Authenticator code required
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
@@ -1867,21 +2099,23 @@ export default function AdminPage() {
         </DialogPortal>
       </Dialog>
 
-      {/* Confirm dialog for bulk clears (durable Supabase data has no undo) */}
-      <Dialog open={confirmAction !== null} onOpenChange={(open) => { if (!open) setConfirmAction(null) }}>
-        <DialogPortal>
-          <DialogBackdrop />
-          <DialogPopup>
-            <DialogTitle className="text-base font-semibold">{confirmAction?.title}</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">{confirmAction?.message}</DialogDescription>
+      {/* Destructive confirmations — revoke admin, clear errors, clear bug
+          reports (durable Supabase data has no undo). AlertDialog semantics:
+          modal, no backdrop dismissal, explicit Cancel / destructive Confirm. */}
+      <AlertDialog
+        open={confirmAction !== null}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null) }}
+      >
+        <AlertDialogPortal>
+          <AlertDialogBackdrop />
+          <AlertDialogPopup>
+            <AlertDialogTitle className="text-base font-semibold">{confirmAction?.title}</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              {confirmAction?.message}
+            </AlertDialogDescription>
             <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)} className="h-9 text-xs">
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                className="h-9 text-xs"
+              <AlertDialogCancel onClick={() => setConfirmAction(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
                 onClick={() => {
                   const action = confirmAction
                   setConfirmAction(null)
@@ -1889,11 +2123,64 @@ export default function AdminPage() {
                 }}
               >
                 Confirm
-              </Button>
+              </AlertDialogAction>
             </div>
-          </DialogPopup>
-        </DialogPortal>
-      </Dialog>
+          </AlertDialogPopup>
+        </AlertDialogPortal>
+      </AlertDialog>
+
+      {/* Per-admin recent-activity drill-down — the Audit feed filtered to
+          one email, opened from the People table. */}
+      <Sheet open={activityEmail !== null} onOpenChange={(open) => { if (!open) setActivityEmail(null) }}>
+        <SheetContent side="right" className="w-[min(92vw,28rem)] gap-0 sm:max-w-md">
+          <SheetHeader className="border-b">
+            <SheetTitle className="flex items-center gap-2 text-base font-semibold">
+              <ScrollText className="size-4 text-muted-foreground" />
+              Recent activity
+            </SheetTitle>
+            <SheetDescription className="break-all font-mono text-xs">{activityEmail}</SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 space-y-1 overflow-y-auto p-3">
+            {activityEvents.length === 0 ? (
+              <p className="py-12 text-center text-xs text-muted-foreground">
+                No auth events for this email yet — the first sign-in will land here.
+              </p>
+            ) : (
+              activityEvents.map((ev, i) => (
+                <div key={`${ev.at}-${i}`} className="flex items-start gap-2.5 rounded-lg px-2 py-2 hover:bg-muted/40">
+                  {ev.ok ? (
+                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
+                  ) : (
+                    <X className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-xs font-semibold">{ev.action}</span>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        <TimeAgo ts={ev.at} />
+                      </span>
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {ev.ip}
+                      {ev.detail ? ` · ${ev.detail}` : ''}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Cmd+K palette — section jumps + one-key actions, mounted once so the
+          shortcut works from every section. */}
+      <CommandPalette
+        role={role}
+        onNavigate={(s) => setTab(s)}
+        onRunChecks={() => void runChecks()}
+        onStartSse={startSseFromPalette}
+        onRefresh={() => void refreshAll()}
+      />
     </div>
   )
 }

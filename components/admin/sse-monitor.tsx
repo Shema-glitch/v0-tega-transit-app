@@ -14,7 +14,7 @@
  * frame (a live stream should never go quiet for long).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 
@@ -51,7 +51,12 @@ const EMPTY_SSE_DIAG: SseDiag = {
   lastPayload: '',
 }
 
-export default function SseMonitor() {
+export interface SseMonitorHandle {
+  start: () => void
+  stop: () => void
+}
+
+const SseMonitor = forwardRef<SseMonitorHandle>(function SseMonitor(_, ref) {
   const [sse, setSse] = useState<SseDiag>(EMPTY_SSE_DIAG)
   const [now, setNow] = useState(() => Date.now())
   const [injecting, setInjecting] = useState(false)
@@ -165,13 +170,16 @@ export default function SseMonitor() {
 
   useEffect(() => () => { esRef.current?.close() }, []) // close on unmount
 
+  // Expose start/stop so the Cmd+K palette can fire the monitor from anywhere.
+  useImperativeHandle(ref, () => ({ start: startSse, stop: stopSse }), [startSse, stopSse])
+
   const staleSec = sse.lastMessageAt ? Math.floor((now - sse.lastMessageAt) / 1000) : null
   const upSec = sse.connectedAt ? Math.floor((now - sse.connectedAt) / 1000) : null
   const staleClass =
     staleSec === null ? 'text-muted-foreground'
     : staleSec > 10 ? 'text-destructive'
-    : staleSec > 4 ? 'text-amber-500 dark:text-amber-400'
-    : 'text-green-500 dark:text-green-400'
+    : staleSec > 4 ? 'text-warning'
+    : 'text-success'
 
   return (
     <div className="space-y-2">
@@ -198,7 +206,7 @@ export default function SseMonitor() {
             {upSec !== null && <span>up {upSec}s</span>}
             {staleSec !== null && <span className={staleClass}>last frame {staleSec}s ago</span>}
             {sse.reconnects > 0 && (
-              <span className="text-amber-500 dark:text-amber-400">{sse.reconnects} reconnect{sse.reconnects > 1 ? 's' : ''}</span>
+              <span className="text-warning">{sse.reconnects} reconnect{sse.reconnects > 1 ? 's' : ''}</span>
             )}
             {sse.errors > 0 && (
               <span className="text-muted-foreground">{sse.errors} error{sse.errors > 1 ? 's' : ''}</span>
@@ -211,7 +219,7 @@ export default function SseMonitor() {
               const n = sse.byType[t] ?? 0
               return (
                 <span key={t}>
-                  {t}: <span className={n > 0 ? 'text-green-500 dark:text-green-400' : 'text-muted-foreground'}>{n}</span>
+                  {t}: <span className={n > 0 ? 'text-success' : 'text-muted-foreground'}>{n}</span>
                 </span>
               )
             })}
@@ -225,4 +233,6 @@ export default function SseMonitor() {
       )}
     </div>
   )
-}
+})
+
+export default SseMonitor
