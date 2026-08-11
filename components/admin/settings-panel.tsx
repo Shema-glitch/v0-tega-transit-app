@@ -320,7 +320,7 @@ export function SettingsPanel({
           Account and security settings for this console — profile, appearance, and the two-factor
           authenticator that protects the destructive surface.
         </p>
-        <Button variant="outline" size="sm" onClick={refresh} className="h-9 gap-1.5 text-xs">
+        <Button variant="outline" size="sm" onClick={refresh} className="h-9 gap-1 text-xs">
           <ArrowsClockwise className="size-3.5" /> Refresh
         </Button>
       </div>
@@ -347,7 +347,7 @@ export function SettingsPanel({
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
-            <label htmlFor="profile-name" className="mb-1.5 block text-xs font-semibold">
+            <label htmlFor="profile-name" className="mb-2 block text-xs font-semibold">
               Display name
             </label>
             <Input
@@ -363,13 +363,13 @@ export function SettingsPanel({
             />
             <p className="mt-1 text-xs text-muted-foreground">Leave empty to show your email instead.</p>
             {saveError && (
-              <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+              <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
                 <Triangle className="mt-px size-3.5 shrink-0" />
                 {saveError}
               </p>
             )}
-            <div className="mt-3 flex items-center gap-2">
-              <Button onClick={saveProfile} disabled={saving} className="h-9 gap-1.5 text-xs">
+            <div className="mt-4 flex items-center gap-2">
+              <Button onClick={saveProfile} disabled={saving} className="h-9 gap-1 text-xs">
                 {saving ? <CircleNotch className="size-3.5 animate-spin" /> : <FloppyDisk className="size-3.5" />}
                 Save
               </Button>
@@ -377,15 +377,15 @@ export function SettingsPanel({
             </div>
           </div>
           <div className="space-y-3">
-            <div className="rounded-2xl border border-border bg-muted/30 p-3">
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <div className="rounded-3xl border border-border bg-muted/30 p-3">
+              <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
                 <Envelope className="size-3.5 text-brand" />
                 Email
               </p>
               <p className="mt-1 font-mono text-xs break-all">{user?.email ?? '—'}</p>
             </div>
-            <div className="rounded-2xl border border-border bg-muted/30 p-3">
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <div className="rounded-3xl border border-border bg-muted/30 p-3">
+              <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
                 <Calendar className="size-3.5 text-brand" />
                 Member since
               </p>
@@ -412,14 +412,14 @@ export function SettingsPanel({
           <Button
             variant={theme === 'dark' ? 'default' : 'outline'}
             onClick={() => onThemeChange('dark')}
-            className="h-9 gap-1.5 text-xs"
+            className="h-9 gap-1 text-xs"
           >
             <Moon className="size-3.5" /> Dark
           </Button>
           <Button
             variant={theme === 'light' ? 'default' : 'outline'}
             onClick={() => onThemeChange('light')}
-            className="h-9 gap-1.5 text-xs"
+            className="h-9 gap-1 text-xs"
           >
             <Sun className="size-3.5" /> Ivory
           </Button>
@@ -443,11 +443,11 @@ export function SettingsPanel({
             </CardDescription>
           </div>
           {enabled ? (
-            <Badge className="gap-1.5 bg-brand/15 font-semibold text-brand">
+            <Badge className="gap-1 bg-brand/15 font-semibold text-brand">
               <CheckCircle className="size-3" /> TOTP active
             </Badge>
           ) : (
-            <Badge className="gap-1.5 bg-muted font-semibold text-muted-foreground">
+            <Badge className="gap-1 bg-muted font-semibold text-muted-foreground">
               <ShieldSlash className="size-3" /> Not set up
             </Badge>
           )}
@@ -456,7 +456,7 @@ export function SettingsPanel({
         {enabled && (
           <CardContent className="grid gap-4 md:grid-cols-2">
             {/* Confirm identity — primes the 5-minute sensitive-op grace */}
-            <div className="rise-in rounded-2xl border border-border bg-card p-4" style={{ '--rise-index': 0 } as CSSProperties}>
+            <div className="rise-in rounded-3xl border border-border bg-card p-4" style={{ '--rise-index': 0 } as CSSProperties}>
               <p className="flex items-center gap-2 text-xs font-semibold">
                 <DeviceMobile className="size-3.5 text-brand" />
                 Confirm identity
@@ -471,7 +471,7 @@ export function SettingsPanel({
                   ? 'Sensitive actions are unlocked for the remaining window.'
                   : 'Enter a fresh authenticator code to unlock sensitive actions for 5 minutes.'}
               </p>
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-4 flex items-center gap-2">
                 <div className="w-56">
                   <OtpSlots
                     id="totp-confirm-code"
@@ -488,7 +488,7 @@ export function SettingsPanel({
             </div>
 
             {/* Disable — requires a valid code, so a hijacker can't turn it off */}
-            <div className="rise-in rounded-2xl border border-border bg-card p-4" style={{ '--rise-index': 1 } as CSSProperties}>
+            <div className="rise-in rounded-3xl border border-border bg-card p-4" style={{ '--rise-index': 1 } as CSSProperties}>
               <p className="flex items-center gap-2 text-xs font-semibold text-destructive">
                 <ShieldSlash className="size-3.5" />
                 Disable two-factor
@@ -497,7 +497,7 @@ export function SettingsPanel({
                 Requires a valid authenticator code — this is deliberate, so a compromised session
                 can&apos;t switch the second factor off.
               </p>
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-4 flex items-center gap-2">
                 <div className="w-56">
                   <OtpSlots
                     id="totp-disable-code"
@@ -540,7 +540,7 @@ export function SettingsPanel({
               <div className="rise-in space-y-4" style={{ '--rise-index': 0 } as CSSProperties}>
                 <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
                   {/* QR — the primary path: scan with the authenticator app */}
-                  <div className="flex flex-col items-center gap-2 self-start rounded-2xl border border-border bg-white p-4">
+                  <div className="flex flex-col items-center gap-2 self-start rounded-3xl border border-border bg-white p-4">
                     {qrDataUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -560,14 +560,14 @@ export function SettingsPanel({
                         <CircleNotch className="size-5 animate-spin text-muted-foreground" />
                       </div>
                     )}
-                    <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                       <Scan className="size-3.5 text-brand" /> Scan with Google Authenticator
                     </p>
                   </div>
 
                   {/* Manual fallback: instructions + setup key */}
                   <div className="space-y-3">
-                    <ol className="list-inside list-decimal space-y-1.5 text-xs leading-relaxed text-muted-foreground">
+                    <ol className="list-inside list-decimal space-y-2 text-xs leading-relaxed text-muted-foreground">
                       <li>
                         Open <span className="font-semibold text-foreground">Google Authenticator</span> → tap{' '}
                         <span className="font-semibold text-foreground">+</span> →{' '}
@@ -582,18 +582,18 @@ export function SettingsPanel({
                       <li>Enter the 6-digit code it shows to activate.</li>
                     </ol>
 
-                    <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                    <div className="rounded-3xl border border-border bg-muted/30 p-4">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                           Setup key
                         </p>
-                        <Button variant="outline" size="sm" onClick={copySecret} className="h-7 gap-1.5 px-2 text-xs">
+                        <Button variant="outline" size="sm" onClick={copySecret} className="h-7 gap-1 px-2 text-xs">
                           {copied ? <CheckCircle className="size-3 text-brand" /> : <Copy className="size-3" />}
                           {copied ? 'Copied' : 'Copy'}
                         </Button>
                       </div>
                       <p className="mt-2 font-mono text-xs break-all tracking-widest">{secret}</p>
-                      <p className="mt-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                      <p className="mt-4 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                         otpauth URI
                       </p>
                       <p className="mt-1 font-mono text-xs break-all text-muted-foreground">{uri}</p>
@@ -602,7 +602,7 @@ export function SettingsPanel({
                 </div>
 
                 {error && (
-                  <p className="flex items-start gap-1.5 text-xs text-destructive">
+                  <p className="flex items-start gap-1 text-xs text-destructive">
                     <Triangle className="mt-px size-3.5 shrink-0" />
                     {error}
                   </p>
@@ -610,7 +610,7 @@ export function SettingsPanel({
 
                 <div className="flex items-end gap-2">
                   <div className="w-56">
-                    <label htmlFor="totp-activate-code" className="mb-1.5 block text-xs font-semibold">
+                    <label htmlFor="totp-activate-code" className="mb-2 block text-xs font-semibold">
                       Authenticator code
                     </label>
                     <OtpSlots

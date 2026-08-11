@@ -127,7 +127,7 @@ export function AppSidebar({
       <SidebarHeader>
         {/* Brand lockup — static by design: the logo is not a control, so it
             must not behave like a button (no hover fill, no focus ring). */}
-        <div className="flex items-center gap-2.5 p-2">
+        <div className="flex items-center gap-2 p-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={theme === 'light' ? '/assets/busgo-mark-light.png' : '/assets/busgo-mark-dark.png'}
@@ -184,7 +184,7 @@ export function AppSidebar({
           )
         })}
       </SidebarContent>
-      <SidebarFooter className="gap-0.5 pb-1">
+      <SidebarFooter className="gap-1 pb-1">
         {/* Links — the console's way out to the public surfaces. */}
         <SidebarGroup>
           <SidebarGroupLabel>Links</SidebarGroupLabel>
@@ -202,7 +202,7 @@ export function AppSidebar({
         {user && (
           <SidebarGroup>
             <SidebarGroupLabel>Account</SidebarGroupLabel>
-            <div className="flex items-center gap-2.5 px-3 py-1">
+            <div className="flex items-center gap-2 px-3 py-1">
               <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand">
                 {(user.displayName || user.email).trim().charAt(0).toUpperCase() || '?'}
               </span>

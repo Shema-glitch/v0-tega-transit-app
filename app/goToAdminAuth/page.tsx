@@ -302,20 +302,20 @@ export default function GoToAdminAuthPage() {
             <h1 className="text-4xl font-semibold tracking-tight text-balance xl:text-5xl">
               The control room for BusGo Track.
             </h1>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               Flip endpoints off, triage incidents, and review stop suggestions — gated behind a code
               sent to your inbox.
             </p>
-            <ul className="mt-8 space-y-3.5 text-sm text-muted-foreground">
-              <li className="flex items-center gap-3">
+            <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
+              <li className="flex items-center gap-2">
                 <Pulse className="size-4 shrink-0 text-brand/90" />
                 Live health checks on every API route
               </li>
-              <li className="flex items-center gap-3">
+              <li className="flex items-center gap-2">
                 <ShieldCheck className="size-4 shrink-0 text-brand/90" />
                 Signed-in sessions only — no shared secrets in the browser
               </li>
-              <li className="flex items-center gap-3">
+              <li className="flex items-center gap-2">
                 <MapPin className="size-4 shrink-0 text-brand/90" />
                 Approve stop-suggestion edits for the Kigali network
               </li>
@@ -340,14 +340,14 @@ export default function GoToAdminAuthPage() {
                   alt="BusGo Track"
                   className="h-16 w-auto"
                 />
-                <div className="rise-in mt-8 w-full" style={{ '--rise-index': 0 } as CSSProperties}>
+                <div className="rise-in mt-6 w-full" style={{ '--rise-index': 0 } as CSSProperties}>
                   <h2 className="text-2xl font-semibold tracking-tight">You&apos;re signed in</h2>
-                  <p className="mt-1.5 text-sm text-muted-foreground">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Signed in as <span className="font-mono text-xs">{session.email}</span>. Taking you to
                     the dashboard…
                   </p>
 
-                  <div className="mt-5 rounded-lg border border-brand/25 bg-brand/10 px-3 py-2.5 text-left">
+                  <div className="mt-4 rounded-lg border border-brand/25 bg-brand/10 px-3 py-2.5 text-left">
                     <div className="flex items-center gap-2 text-xs font-medium text-brand">
                       <span className="status-breathe size-1.5 rounded-full bg-brand" />
                       Session active — redirecting in {redirectIn}s
@@ -372,7 +372,7 @@ export default function GoToAdminAuthPage() {
             ) : (
               <>
                 {/* Mobile logo */}
-                <div className="mb-10 flex justify-center lg:hidden">
+                <div className="mb-6 flex justify-center lg:hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={theme === 'dark' ? '/assets/busgo-logo-dark-sm.png' : '/assets/busgo-logo-light-sm.png'}
@@ -402,7 +402,7 @@ export default function GoToAdminAuthPage() {
 
                 <div className="rise-in" style={{ '--rise-index': 0 } as CSSProperties}>
               <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
-              <p className="mt-1.5 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {step === 'email'
                   ? 'Enter your admin email and we’ll send a one-time code.'
                   : `We sent a code to ${maskEmail(email)}.`}
@@ -411,14 +411,14 @@ export default function GoToAdminAuthPage() {
 
             {step === 'email' ? (
               <form
-                className="rise-in mt-7"
+                className="rise-in mt-6"
                 style={{ '--rise-index': 1 } as CSSProperties}
                 onSubmit={(e) => {
                   e.preventDefault()
                   requestCode()
                 }}
               >
-                <label htmlFor="admin-email" className="mb-1.5 block text-xs font-semibold">
+                <label htmlFor="admin-email" className="mb-2 block text-xs font-semibold">
                   Email
                 </label>
                 <div className="relative">
@@ -441,10 +441,10 @@ export default function GoToAdminAuthPage() {
 
                 {confirmFirst && send.kind === 'sent' && (
                   <div className="mt-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2.5">
-                    <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
+                    <p className="flex items-center gap-1 text-xs font-medium text-amber-300">
                       <EnvelopeOpen className="size-3.5" /> One-time confirmation sent to {maskEmail(email)}
                     </p>
-                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       This address is new — click the confirmation link in the email once (it lands you
                       back on this sign-in page), then send the code again. After that, codes come
                       straight to your inbox.
@@ -452,18 +452,18 @@ export default function GoToAdminAuthPage() {
                   </div>
                 )}
                 {send.kind === 'sent' && !confirmFirst && (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-success">
+                  <p className="mt-2 flex items-center gap-1 text-xs font-medium text-success">
                     <CheckCircle className="size-3.5" /> Code sent — check your inbox.
                   </p>
                 )}
                 {sendError && (
-                  <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                  <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
                     <Triangle className="mt-px size-3.5 shrink-0" />
                     <span>{sendError.message}</span>
                   </p>
                 )}
                 {send.kind === 'error' && send.hint && (
-                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{send.hint}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{send.hint}</p>
                 )}
 
                 <Button
@@ -483,7 +483,7 @@ export default function GoToAdminAuthPage() {
                 <p className="mt-6 flex justify-center">
                   <a
                     href="/"
-                    className="group inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    className="group inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                   >
                     <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
                     Back to the public status page
@@ -491,15 +491,15 @@ export default function GoToAdminAuthPage() {
                 </p>
               </form>
             ) : (
-              <div className="rise-in mt-7" style={{ '--rise-index': 1 } as CSSProperties}>
+              <div className="rise-in mt-6" style={{ '--rise-index': 1 } as CSSProperties}>
                 {send.kind === 'sent' && (
-                  <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-success">
+                  <p className="mb-2 flex items-center gap-1 text-xs font-medium text-success">
                     <CheckCircle className="size-3.5" /> Code sent to {maskEmail(email)} — check your
                     inbox.
                   </p>
                 )}
 
-                <label htmlFor="admin-code" className="mb-1.5 block text-xs font-semibold">
+                <label htmlFor="admin-code" className="mb-2 block text-xs font-semibold">
                   One-time code
                 </label>
                 <OtpSlots
@@ -511,13 +511,13 @@ export default function GoToAdminAuthPage() {
                 />
 
                 {verifyError && (
-                  <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                  <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
                     <Triangle className="mt-px size-3.5 shrink-0" />
                     <span>{verifyError.message}</span>
                   </p>
                 )}
                 {send.kind === 'error' && sendError && (
-                  <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                  <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
                     <Triangle className="mt-px size-3.5 shrink-0" />
                     <span>{sendError.message}</span>
                   </p>
@@ -574,7 +574,7 @@ export default function GoToAdminAuthPage() {
                   </a>
                 </div>
 
-                <Alert className="mt-5 border-muted/40 bg-muted/20">
+                <Alert className="mt-4 border-muted/40 bg-muted/20">
                   <AlertDescription className="text-xs text-muted-foreground">
                     No email? Check spam, wait a minute, then resend. You can also click the link in
                     the email instead of typing the code.

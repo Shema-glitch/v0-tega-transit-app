@@ -118,7 +118,7 @@ export function NotificationCenter({
             </div>
 
             {notifications.length === 0 ? (
-              <div className="flex flex-col items-center gap-1.5 px-4 py-10 text-center">
+              <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
                 <Bell className="size-5 text-muted-foreground/50" />
                 <p className="text-xs font-semibold tracking-tight">No notifications</p>
                 <p className="max-w-[30ch] text-xs text-muted-foreground">
@@ -134,12 +134,12 @@ export function NotificationCenter({
                       key={n.id}
                       type="button"
                       onClick={() => onSelect(n.section)}
-                      className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+                      className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
                     >
                       <Icon className={`mt-0.5 size-4 shrink-0 ${KIND_COLOR[n.kind]}`} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-semibold tracking-tight">{n.title}</span>
-                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{n.detail}</span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">{n.detail}</span>
                       </span>
                       {!n.read && <span className="mt-1 size-1.5 shrink-0 rounded-full bg-brand" />}
                       <span className="shrink-0 font-mono text-xs text-muted-foreground">{timeAgo(n.ts, now)}</span>

@@ -178,7 +178,7 @@ function SummaryTile({
       <div className="min-w-0">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <p className={`font-mono text-lg leading-tight tabular-nums tracking-tight ${toneCls}`}>{value}</p>
-        {sub ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{sub}</p> : null}
+        {sub ? <p className="mt-1 truncate text-xs text-muted-foreground">{sub}</p> : null}
       </div>
     </div>
   )
@@ -272,14 +272,14 @@ export default function LoadPanel() {
         {metrics ? (
           <>
             <Badge
-              className={`gap-1.5 font-mono text-xs tabular-nums ${
+              className={`gap-1 font-mono text-xs tabular-nums ${
                 redis?.connected ? 'text-success bg-success/10 border-transparent' : 'text-muted-foreground'
               }`}
             >
               <Database className="size-3" />
               redis {redis?.connected ? `shared${redis?.pubsub?.attached ? ' · pub/sub' : ''}` : 'memory-only'}
             </Badge>
-            <Badge variant="outline" className="gap-1.5 font-mono text-xs tabular-nums text-muted-foreground">
+            <Badge variant="outline" className="gap-1 font-mono text-xs tabular-nums text-muted-foreground">
               <Pulse className="size-3" />
               up {fmtUptime(metrics.uptimeSeconds)}
             </Badge>
@@ -397,7 +397,7 @@ export default function LoadPanel() {
                               style={{ width: `${pct(g.status5xx)}%` }}
                             />
                           </div>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             {fmt(g.status4xx)} 4xx · {fmt(g.status5xx)} 5xx
                           </p>
                         </TableCell>
@@ -463,7 +463,7 @@ export default function LoadPanel() {
             </Card>
           ) : null}
 
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <p className="mt-4 flex items-center gap-1 text-xs text-muted-foreground">
             <ArrowsClockwise className="size-3" />
             Live — refreshes every 10 s while this section is open.
           </p>

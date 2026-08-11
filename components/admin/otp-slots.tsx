@@ -50,7 +50,7 @@ export function OtpSlots({
         aria-label="One-time code"
         className="absolute inset-0 h-full w-full cursor-default text-transparent caret-transparent outline-none selection:bg-transparent disabled:cursor-not-allowed"
       />
-      <div className="flex gap-1.5" aria-hidden="true">
+      <div className="flex gap-1" aria-hidden="true">
         {Array.from({ length: slotCount }).map((_, i) => {
           const digit = value[i]
           const isActive = !disabled && i === value.length

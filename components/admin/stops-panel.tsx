@@ -476,11 +476,11 @@ export function StopsPanel({
           <span className="font-semibold text-foreground">{counts.hidden}</span> hidden ·{' '}
           <span className="font-semibold text-brand">{counts.hubs}</span> hubs
         </p>
-        <Button variant="outline" size="sm" onClick={detect} disabled={detecting} className="h-9 gap-1.5 text-xs">
+        <Button variant="outline" size="sm" onClick={detect} disabled={detecting} className="h-9 gap-1 text-xs">
           {detecting ? <CircleNotch className="size-3.5 animate-spin" /> : <Scan className="size-3.5" />}
           Detect duplicates
         </Button>
-        <Button variant="outline" size="sm" onClick={refresh} disabled={loading} className="h-9 gap-1.5 text-xs">
+        <Button variant="outline" size="sm" onClick={refresh} disabled={loading} className="h-9 gap-1 text-xs">
           <ArrowsClockwise className={`size-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </Button>
       </div>
@@ -495,7 +495,7 @@ export function StopsPanel({
             {duplicates.length} candidate cluster{duplicates.length === 1 ? '' : 's'} within 60 m. “Use” loads the
             cluster into the merge tool below.
           </p>
-          <div className="mt-3 space-y-2">
+          <div className="mt-4 space-y-2">
             {duplicates.slice(0, 8).map((c) => (
               <div key={c.anchor.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
                 <span className="font-mono text-xs font-semibold">{c.stops.length} stops</span>
@@ -522,7 +522,7 @@ export function StopsPanel({
           Check the victim stops below, pick the survivor, preview what changes, then confirm. Merged stops redirect
           to the survivor everywhere — old links keep working.
         </p>
-        <div className="mt-3 grid max-w-2xl gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <div className="mt-4 grid max-w-2xl gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <div>
             <label htmlFor="merge-survivor" className="mb-1 block text-xs font-semibold text-muted-foreground">
               Survivor stop
@@ -588,13 +588,13 @@ export function StopsPanel({
         </div>
 
         {preview && !preview.ok && (
-          <p className="mt-3 flex items-start gap-1.5 text-xs text-destructive">
+          <p className="mt-4 flex items-start gap-1 text-xs text-destructive">
             <Triangle className="mt-px size-3.5 shrink-0" />
             {preview.error}
           </p>
         )}
         {preview?.ok && (
-          <div className="rise-in mt-3 rounded-lg border border-brand/20 bg-brand/10 px-3 py-2.5">
+          <div className="rise-in mt-4 rounded-lg border border-brand/20 bg-brand/10 px-3 py-2.5">
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-brand">
               <span className="font-mono tabular-nums">{preview.victims?.length ?? 0} victims</span>
               <span className="font-mono tabular-nums">{preview.affectedStopTimes ?? 0} stop_times</span>
@@ -660,7 +660,7 @@ export function StopsPanel({
               setStatusFilter((v[0] as StopEntry['status']) ?? 'all')
               setPage(1)
             }}
-            className="gap-0.5"
+            className="gap-1"
           >
             {STATUS_FILTERS.map((f) => (
               <ToggleGroupItem key={f.v} value={f.v} className="h-7 px-2.5 text-xs">
@@ -668,7 +668,7 @@ export function StopsPanel({
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
             <Checkbox
               checked={hubOnly}
               onCheckedChange={(c) => {
@@ -678,7 +678,7 @@ export function StopsPanel({
             />
             Hubs only
           </label>
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Sort</span>
             <Select value={sortKey} onValueChange={(v) => v && setSortKey(v as SortKey)}>
               <SelectTrigger size="sm" className="h-7 text-xs" aria-label="Sort stops by">
@@ -730,7 +730,7 @@ export function StopsPanel({
         {loading ? (
           <div className="p-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 py-2.5">
+              <div key={i} className="flex items-center gap-2 py-2.5">
                 <Skeleton className="size-4 rounded" />
                 <Skeleton className="h-4 w-1/3" />
                 <Skeleton className="ml-auto h-3 w-16" />
@@ -753,7 +753,7 @@ export function StopsPanel({
                 one-time sync to Supabase — run the import script from the repo root (needs{' '}
                 <span className="font-mono">NEXT_SUPABASE_CONNECTION_STRING</span>).
               </p>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={copyImportCommand}>
+              <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={copyImportCommand}>
                 {cmdCopied ? <Check className="size-3.5" /> : <Terminal className="size-3.5" />}
                 {cmdCopied ? 'Command copied' : 'Copy import command'}
               </Button>
@@ -928,7 +928,7 @@ export function StopsPanel({
             if (e.target === e.currentTarget && !busy) setEditTarget(null)
           }}
         >
-          <div className="rise-in w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-lg">
+          <div className="rise-in w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-lg">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold tracking-tight">Edit stop</p>
               <button
@@ -941,7 +941,7 @@ export function StopsPanel({
                 <X className="size-4" />
               </button>
             </div>
-            <p className="mt-0.5 font-mono text-xs text-muted-foreground">{editTarget.id}</p>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">{editTarget.id}</p>
             <div className="mt-4 space-y-3">
               <div>
                 <label htmlFor="edit-name" className="mb-1 block text-xs font-semibold text-muted-foreground">
@@ -971,7 +971,7 @@ export function StopsPanel({
                 <Switch checked={editHub} onCheckedChange={setEditHub} />
               </label>
             </div>
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setEditTarget(null)} disabled={busy} className="h-9 text-xs">
                 Cancel
               </Button>

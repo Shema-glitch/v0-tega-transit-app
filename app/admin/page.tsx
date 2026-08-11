@@ -308,7 +308,7 @@ function StatPanel({ icon, label, value, valueClass, pulse = false }: StatDef) {
         <div className={`text-2xl leading-none font-bold tracking-tight tabular-nums ${valueClass ?? 'text-foreground'}`}>
           {value}
         </div>
-        <div className="mt-1.5 text-xs leading-tight font-medium tracking-wide text-muted-foreground uppercase">
+        <div className="mt-1 text-xs leading-tight font-medium tracking-wide text-muted-foreground uppercase">
           {label}
         </div>
       </div>
@@ -1301,7 +1301,7 @@ export default function AdminPage() {
             <SidebarTrigger className="-ml-1 md:hidden" />
             <Badge
               variant="outline"
-              className={`hidden gap-1.5 font-semibold sm:inline-flex ${
+              className={`hidden gap-1 font-semibold sm:inline-flex ${
                 overallStatus.variant === 'good' ? STATUS_BADGE.good : STATUS_BADGE.warn
               }`}
             >
@@ -1364,7 +1364,7 @@ export default function AdminPage() {
             </div>
           </header>
 
-      <main className="@container/main flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
+      <main className="@container/main flex flex-1 flex-col gap-4 p-4 md:p-6">
         {idleWarning && (
           <Alert className="mb-4 border-warning/40 bg-warning/10">
             <Triangle className="size-4 text-warning" />
@@ -1401,7 +1401,7 @@ export default function AdminPage() {
         {/* Sections — the sidebar owns navigation now (see AppSidebar). */}
         {tab === 'issues' && (
             <section>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
                 <Tabs value={issueFilter} onValueChange={(v) => setIssueFilter(v as typeof issueFilter)}>
                   <TabsList variant="line" className="h-9">
                     {(['open', 'all', 'errors', 'bugs'] as const).map((f) => (
@@ -1456,7 +1456,7 @@ export default function AdminPage() {
               )}
 
               {loading ? (
-                <div className="overflow-hidden rounded-2xl border border-border">
+                <div className="overflow-hidden rounded-3xl border border-border">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
                       <SkeletonBox className="h-2 w-2 rounded-full" />
@@ -1498,7 +1498,7 @@ export default function AdminPage() {
                                 </Badge>
                               )}
                             </div>
-                            <div className="mt-0.5 text-xs whitespace-pre-wrap">{item.detail}</div>
+                            <div className="mt-1 text-xs whitespace-pre-wrap">{item.detail}</div>
                             {item.meta && (
                               <div className="text-xs text-muted-foreground">
                                 from: <PageUrlLink url={item.meta} />
@@ -1519,7 +1519,7 @@ export default function AdminPage() {
                             <TimeAgo ts={item.timestamp} />
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-1.5">
+                            <div className="flex justify-end gap-2">
                               {item.onResolve && !item.resolved && (
                                 <Button
                                   onClick={item.onResolve}
@@ -1558,7 +1558,7 @@ export default function AdminPage() {
               </Card>
               )}
 
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className="mt-4 text-xs text-muted-foreground">
                 Errors: {source.errors === 'supabase' ? 'durable' : 'in-memory only'} · Bug reports: {source.bugs === 'supabase' ? 'durable' : 'in-memory only'}.
               </p>
             </section>
@@ -1591,7 +1591,7 @@ export default function AdminPage() {
                     onClick={runChecks}
                     disabled={checksRunning}
                     size="sm"
-                    className="h-9 gap-1.5 bg-brand text-xs font-semibold text-brand-foreground shadow-brand transition-[transform,background-color] hover:bg-brand active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+                    className="h-9 gap-1 bg-brand text-xs font-semibold text-brand-foreground shadow-brand transition-[transform,background-color] hover:bg-brand active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
                   >
                     {checksRunning ? (
                       <CircleNotch className="size-3.5 animate-spin" />
@@ -1658,7 +1658,7 @@ export default function AdminPage() {
               ).map(([group, endpoints]) => {
                 const groupDisabled = endpoints.some((ep) => maintenance.some((f) => f.feature === ep.id))
                 return (
-                <div key={group} className="mb-5">
+                <div key={group} className="mb-4">
                   <div className="mb-2 flex items-center gap-2">
                     <span
                       className={`size-1.5 rounded-full ${
@@ -1700,7 +1700,7 @@ export default function AdminPage() {
                               <span className="truncate font-mono text-xs">{ep.label}</span>
                             </div>
                             {flag && (
-                              <div className={`mt-0.5 text-xs ${STATUS_COLOR.warn}`}>
+                              <div className={`mt-1 text-xs ${STATUS_COLOR.warn}`}>
                                 Disabled: {flag.reason} · <TimeAgo ts={flag.since} />
                               </div>
                             )}
@@ -1767,7 +1767,7 @@ export default function AdminPage() {
                           variant="outline"
                           size="sm"
                           disabled={suggPending.has(s.id)}
-                          className={`h-9 gap-1.5 text-xs ${STATUS_COLOR.good}`}
+                          className={`h-9 gap-1 text-xs ${STATUS_COLOR.good}`}
                           title="Apply this change to the live map (same write the stop editor uses)"
                         >
                           {suggPending.get(s.id) === 'approve' ? (
@@ -1782,7 +1782,7 @@ export default function AdminPage() {
                           variant="outline"
                           size="sm"
                           disabled={suggPending.has(s.id)}
-                          className={`h-9 gap-1.5 text-xs ${STATUS_COLOR.err}`}
+                          className={`h-9 gap-1 text-xs ${STATUS_COLOR.err}`}
                           title="Drop this suggestion without touching the map"
                         >
                           {suggPending.get(s.id) === 'reject' ? (
@@ -1794,12 +1794,12 @@ export default function AdminPage() {
                         </Button>
                       </div>
                     </div>
-                    {s.reason && <div className="mt-1.5 text-xs text-muted-foreground">Reason: {s.reason}</div>}
+                    {s.reason && <div className="mt-2 text-xs text-muted-foreground">Reason: {s.reason}</div>}
                   </Card>
                 ))}
               </div>
               {suggPageCount > 1 && (
-                <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+                <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
                   <span className="text-xs text-muted-foreground">
                     {stopSuggestions.length.toLocaleString()} suggestion{stopSuggestions.length === 1 ? '' : 's'} total
                   </span>
@@ -1841,7 +1841,7 @@ export default function AdminPage() {
               </p>
 
               <Card className="p-4">
-                <label htmlFor="invite-email" className="mb-1.5 block text-xs font-semibold">
+                <label htmlFor="invite-email" className="mb-2 block text-xs font-semibold">
                   Invite an admin
                 </label>
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -1860,7 +1860,7 @@ export default function AdminPage() {
                   <Button
                     onClick={inviteAdmin}
                     disabled={inviting || !inviteEmail.trim()}
-                    className="h-11 gap-1.5 text-sm"
+                    className="h-11 gap-1 text-sm"
                   >
                     {inviting ? (
                       <CircleNotch className="size-4 animate-spin" />
@@ -1967,7 +1967,7 @@ export default function AdminPage() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex justify-end gap-1.5">
+                              <div className="flex justify-end gap-2">
                                 <Button
                                   onClick={() => setActivityEmail(a.email)}
                                   variant="outline"
@@ -1983,7 +1983,7 @@ export default function AdminPage() {
                                       variant="outline"
                                       size="sm"
                                       disabled={adminPending.has(a.email)}
-                                      className="h-9 gap-1.5 text-xs"
+                                      className="h-9 gap-1 text-xs"
                                     >
                                       {adminPending.has(a.email) && <CircleNotch className="size-3.5 animate-spin" />}
                                       {a.role === 'curator' ? 'Make admin' : 'Make curator'}
@@ -1993,7 +1993,7 @@ export default function AdminPage() {
                                       variant="outline"
                                       size="sm"
                                       disabled={adminPending.has(a.email)}
-                                      className={`h-9 gap-1.5 text-xs ${STATUS_COLOR.err}`}
+                                      className={`h-9 gap-1 text-xs ${STATUS_COLOR.err}`}
                                     >
                                       {adminPending.has(a.email) && <CircleNotch className="size-3.5 animate-spin" />}
                                       Revoke
@@ -2099,7 +2099,7 @@ export default function AdminPage() {
                 (this repo), and a persistent testing checklist. Only visible to a signed-in admin; not published anywhere public.
               </p>
               <Tabs value={guideTab} onValueChange={(v) => setGuideTab(v as 'guide' | 'version')}>
-                <TabsList variant="line" className="mb-3 h-9">
+                <TabsList variant="line" className="mb-4 h-9">
                   <TabsTrigger value="guide" className="h-8 px-3 text-xs font-semibold">
                     Maintenance guide
                   </TabsTrigger>
@@ -2126,7 +2126,7 @@ export default function AdminPage() {
                 )}
               </Card>
               {guideTab === 'version' && (
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="mt-4 text-xs text-muted-foreground">
                   What shipped in the latest batch and how the frontend should consume the API at scale. Also
                   served at <span className="font-mono">/version-log-2026-08-11.html</span> for the frontend team.
                 </p>
@@ -2153,7 +2153,7 @@ export default function AdminPage() {
               it. Flags persist in Supabase, so a redeploy won&apos;t re-enable it.
             </AlertDialogDescription>
             <div className="mt-4">
-              <label htmlFor="disable-reason" className="mb-1.5 block text-xs font-semibold">
+              <label htmlFor="disable-reason" className="mb-2 block text-xs font-semibold">
                 Reason (shown to callers)
               </label>
               <Input
@@ -2165,7 +2165,7 @@ export default function AdminPage() {
                 autoFocus
               />
             </div>
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <AlertDialogCancel onClick={() => setDisableTarget(null)} disabled={disabling}>
                 Cancel
               </AlertDialogCancel>
@@ -2201,7 +2201,7 @@ export default function AdminPage() {
               sensitive actions for 5 minutes.
             </DialogDescription>
             <div className="mt-4">
-              <label htmlFor="totp-challenge-code" className="mb-1.5 block text-xs font-semibold">
+              <label htmlFor="totp-challenge-code" className="mb-2 block text-xs font-semibold">
                 Authenticator code
               </label>
               <OtpSlots
@@ -2216,13 +2216,13 @@ export default function AdminPage() {
                 invalid={!!totpError}
               />
               {totpError && (
-                <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
                   <WarningCircle className="mt-px size-3.5 shrink-0" />
                   {totpError}
                 </p>
               )}
             </div>
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -2264,7 +2264,7 @@ export default function AdminPage() {
             <AlertDialogDescription className="text-sm text-muted-foreground">
               {confirmAction?.message}
             </AlertDialogDescription>
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <AlertDialogCancel onClick={() => setConfirmAction(null)}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => {
@@ -2298,11 +2298,11 @@ export default function AdminPage() {
               </p>
             ) : (
               activityEvents.map((ev, i) => (
-                <div key={`${ev.at}-${i}`} className="flex items-start gap-2.5 rounded-lg px-2 py-2 hover:bg-muted/40">
+                <div key={`${ev.at}-${i}`} className="flex items-start gap-2 rounded-lg px-2 py-2 hover:bg-muted/40">
                   {ev.ok ? (
-                    <CheckCircle className="mt-0.5 size-3.5 shrink-0 text-success" />
+                    <CheckCircle className="mt-1 size-3.5 shrink-0 text-success" />
                   ) : (
-                    <X className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                    <X className="mt-1 size-3.5 shrink-0 text-destructive" />
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-2">
