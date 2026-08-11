@@ -1430,7 +1430,7 @@ export default function AdminPage() {
               )}
 
               {loading ? (
-                <div className="overflow-hidden rounded-xl border border-border">
+                <div className="overflow-hidden rounded-2xl border border-border">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
                       <SkeletonBox className="h-2 w-2 rounded-full" />

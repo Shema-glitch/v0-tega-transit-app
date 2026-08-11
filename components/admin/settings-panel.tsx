@@ -376,14 +376,14 @@ export function SettingsPanel({
             </div>
           </div>
           <div className="space-y-3">
-            <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <div className="rounded-2xl border border-border bg-muted/30 p-3">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <Envelope className="size-3.5 text-brand" />
                 Email
               </p>
               <p className="mt-1 font-mono text-xs break-all">{user?.email ?? '—'}</p>
             </div>
-            <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <div className="rounded-2xl border border-border bg-muted/30 p-3">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <Calendar className="size-3.5 text-brand" />
                 Member since
@@ -455,7 +455,7 @@ export function SettingsPanel({
         {enabled && (
           <CardContent className="grid gap-4 md:grid-cols-2">
             {/* Confirm identity — primes the 5-minute sensitive-op grace */}
-            <div className="rise-in rounded-xl border border-border bg-card p-4" style={{ '--rise-index': 0 } as CSSProperties}>
+            <div className="rise-in rounded-2xl border border-border bg-card p-4" style={{ '--rise-index': 0 } as CSSProperties}>
               <p className="flex items-center gap-2 text-xs font-semibold">
                 <DeviceMobile className="size-3.5 text-brand" />
                 Confirm identity
@@ -486,7 +486,7 @@ export function SettingsPanel({
             </div>
 
             {/* Disable — requires a valid code, so a hijacker can't turn it off */}
-            <div className="rise-in rounded-xl border border-border bg-card p-4" style={{ '--rise-index': 1 } as CSSProperties}>
+            <div className="rise-in rounded-2xl border border-border bg-card p-4" style={{ '--rise-index': 1 } as CSSProperties}>
               <p className="flex items-center gap-2 text-xs font-semibold text-destructive">
                 <ShieldSlash className="size-3.5" />
                 Disable two-factor
@@ -537,7 +537,7 @@ export function SettingsPanel({
               <div className="rise-in space-y-4" style={{ '--rise-index': 0 } as CSSProperties}>
                 <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
                   {/* QR — the primary path: scan with the authenticator app */}
-                  <div className="flex flex-col items-center gap-2 self-start rounded-xl border border-border bg-white p-4">
+                  <div className="flex flex-col items-center gap-2 self-start rounded-2xl border border-border bg-white p-4">
                     {qrDataUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -579,7 +579,7 @@ export function SettingsPanel({
                       <li>Enter the 6-digit code it shows to activate.</li>
                     </ol>
 
-                    <div className="rounded-xl border border-border bg-muted/30 p-4">
+                    <div className="rounded-2xl border border-border bg-muted/30 p-4">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                           Setup key
