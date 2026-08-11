@@ -955,9 +955,19 @@ export default function AdminPage() {
           ? 'This permanently deletes the durable error ledger in Supabase. There is no undo.'
           : 'This clears the in-memory error ledger.',
       onConfirm: async () => {
-        await fetch('/api/errors', { method: 'DELETE' })
-        refreshAll()
-        pushToast('Error ledger cleared')
+        try {
+          const res = await fetch('/api/errors', { method: 'DELETE' })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            pushToast(data?.error ?? 'Could not clear the error ledger', 'error')
+            return
+          }
+          pushToast('Error ledger cleared')
+        } catch {
+          pushToast('Could not reach the API', 'error')
+        } finally {
+          refreshAll()
+        }
       },
     })
   }, [pushToast, refreshAll, source.errors])
@@ -970,9 +980,19 @@ export default function AdminPage() {
           ? 'This permanently deletes the durable bug-report table in Supabase. There is no undo.'
           : 'This clears the in-memory bug-report list.',
       onConfirm: async () => {
-        await fetch('/api/feedback', { method: 'DELETE' })
-        refreshAll()
-        pushToast('Bug reports cleared')
+        try {
+          const res = await fetch('/api/feedback', { method: 'DELETE' })
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            pushToast(data?.error ?? 'Could not clear bug reports', 'error')
+            return
+          }
+          pushToast('Bug reports cleared')
+        } catch {
+          pushToast('Could not reach the API', 'error')
+        } finally {
+          refreshAll()
+        }
       },
     })
   }, [pushToast, refreshAll, source.bugs])
@@ -980,11 +1000,16 @@ export default function AdminPage() {
   const resolveBugReport = useCallback(async (id: string) => {
     setBugPending((prev) => new Set(prev).add(id))
     try {
-      await fetch('/api/feedback', {
+      const res = await fetch('/api/feedback', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        pushToast(data?.error ?? 'Could not resolve that report', 'error')
+        return
+      }
       refreshAll()
       pushToast('Bug report marked resolved')
     } finally {
