@@ -25,6 +25,7 @@ import {
   Settings,
   ShieldCheck,
 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import {
   Sidebar,
   SidebarContent,
@@ -103,6 +104,7 @@ export function AppSidebar({
   active,
   counts,
   role,
+  user,
   onNavigate,
   onLogout,
   ...props
@@ -110,6 +112,8 @@ export function AppSidebar({
   active: ConsoleSection
   counts: { issues: number; suggestions: number; loadAlerts: number }
   role: AdminRole | null
+  /** Signed-in identity — shown in the footer so it's obvious who you are. */
+  user?: { email: string; displayName: string | null; role: AdminRole | null } | null
   onNavigate: (section: ConsoleSection) => void
   onLogout: () => void
 }) {
@@ -187,6 +191,24 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        {user && (
+          <div className="flex items-center gap-2.5 px-3 py-2">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand">
+              {(user.displayName || user.email).trim().charAt(0).toUpperCase() || '?'}
+            </span>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate text-xs font-semibold">{user.displayName || user.email}</p>
+              {user.displayName && <p className="truncate text-xs text-muted-foreground">{user.email}</p>}
+            </div>
+            {user.role && (
+              <Badge
+                className={`shrink-0 font-semibold ${user.role === 'admin' ? 'bg-brand/15 text-brand' : 'bg-warning/10 text-warning'}`}
+              >
+                {user.role === 'admin' ? 'Admin' : 'Curator'}
+              </Badge>
+            )}
+          </div>
+        )}
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={onLogout} className="text-destructive hover:bg-destructive/10 hover:text-destructive">

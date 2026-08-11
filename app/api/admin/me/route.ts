@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkAdminAuth } from '@/lib/api/admin-auth'
 import { getAdminRole } from '@/lib/api/curators'
+import { getAdminProfile } from '@/lib/api/admin-profile'
 import { CORS, corsPreflight } from '@/lib/api/cors'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +23,13 @@ export async function GET(request: NextRequest) {
   if (!role) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: CORS })
   }
-  return NextResponse.json({ email: auth.email, role }, { headers: CORS })
+  // Best-effort display name — the sidebar falls back to the email if the
+  // profile read fails (e.g. the 0015 migration hasn't been applied yet).
+  const profile = await getAdminProfile(auth.email).catch(() => null)
+  return NextResponse.json(
+    { email: auth.email, role, displayName: profile?.displayName ?? null },
+    { headers: CORS }
+  )
 }
 
 export async function OPTIONS() {

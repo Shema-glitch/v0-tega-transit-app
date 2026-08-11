@@ -90,8 +90,19 @@ import { NotificationCenter, type AdminNotification } from '@/components/admin/n
 import LoadPanel from '@/components/admin/load-panel'
 import { SettingsPanel } from '@/components/admin/settings-panel'
 import { StopsPanel } from '@/components/admin/stops-panel'
-import { AppSidebar, type ConsoleSection, type AdminRole } from '@/components/app-sidebar'
-import { Separator } from '@/components/ui/separator'
+import {
+  AppSidebar,
+  NAV_GROUPS,
+  type ConsoleSection,
+  type AdminRole,
+} from '@/components/app-sidebar'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
   SidebarInset,
@@ -144,6 +155,12 @@ const SUGG_PAGE_SIZE = 10
 // currently configured for, and middleware.ts's own fallback constant has a
 // stray hyphen bug (bus-go-track vs the real busgo-track) that this avoids
 // depending on.
+// Human labels for the sidebar sections, reused by the header breadcrumb so
+// the two never drift (the Cmd+K palette already reuses NAV_GROUPS directly).
+const SECTION_LABEL = Object.fromEntries(
+  NAV_GROUPS.flatMap((g) => g.items).map((i) => [i.id, i.label])
+) as Record<ConsoleSection, string>
+
 const COMMUNITY_GUIDE_URL = 'https://busgo-track.vercel.app/guide.html'
 
 // Mirrors lib/api/error-log.ts ErrorEntry.
@@ -400,6 +417,10 @@ export default function AdminPage() {
 
   const [tab, setTab] = useState<ConsoleSection>('stops')
   const [role, setRole] = useState<AdminRole | null>(null)
+  // Signed-in identity for the sidebar footer + settings Profile card. The
+  // email is load-bearing for “am I even signed in?” — showing it answers the
+  // question that a bare nav can't (which links appear depends on role).
+  const [me, setMe] = useState<{ email: string; displayName: string | null } | null>(null)
   // Theme: an explicit toggle choice (stored in localStorage) wins; otherwise
   // follow the OS preference live, defaulting to dark when it's unavailable.
   const [theme, setTheme] = useState<ConsoleTheme>('dark')
@@ -715,9 +736,11 @@ export default function AdminPage() {
         fetch('/api/uptime', { cache: 'no-store' }),
         fetch('/api/admin/me', { cache: 'no-store' }),
       ])
-      // Role re-read every refresh — a revoke takes effect immediately.
+      // Role re-read every refresh — a revoke takes effect immediately. The
+      // display name follows so the sidebar identity stays fresh.
       const meData = await meRes.json().catch(() => ({}))
       if (meRes.ok && meData?.role) setRole(meData.role)
+      if (meRes.ok && meData?.email) setMe({ email: meData.email, displayName: meData.displayName ?? null })
       if (bugRes.status === 401) {
         // The server killed the session (idle window elapsed, 8h cap, or it
         // was revoked) — say so instead of silently bouncing to login.
@@ -1182,11 +1205,11 @@ export default function AdminPage() {
           counts={{ issues: openCount, suggestions: stopSuggestions.length, loadAlerts: activeAlerts }}
           onNavigate={(s) => setTab(s)}
           onLogout={logout}
+          user={me ? { ...me, role } : null}
         />
         <SidebarInset className="bg-background">
-          <header className="sticky top-0 z-40 flex h-(--header-height) shrink-0 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur-md md:px-6">
+          <header className="sticky top-0 z-40 flex h-(--header-height) shrink-0 items-center gap-2 border-b px-4 md:px-6">
             <SidebarTrigger className="-ml-1 md:hidden" />
-            <Separator orientation="vertical" className="mr-2 hidden h-4 md:block" />
             <Badge
               variant="outline"
               className={`hidden gap-1.5 font-semibold sm:inline-flex ${
@@ -1200,7 +1223,19 @@ export default function AdminPage() {
               />
               {overallStatus.label}
             </Badge>
-            <span className="text-sm font-semibold tracking-tight capitalize">{tab}</span>
+            <Breadcrumb className="min-w-0">
+              <BreadcrumbList className="gap-1">
+                <BreadcrumbItem>
+                  <span className="text-xs font-medium text-muted-foreground">Console</span>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="text-muted-foreground/60" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="truncate text-sm font-semibold tracking-tight">
+                    {SECTION_LABEL[tab]}
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
             <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
               {pollFailed && (
                 <span className="hidden font-medium text-destructive sm:inline">Can&apos;t reach the API · retrying…</span>
@@ -1935,7 +1970,17 @@ export default function AdminPage() {
 
         {tab === 'load' && <LoadPanel />}
 
-        {tab === 'settings' && <SettingsPanel onNotify={pushToast} />}
+        {tab === 'settings' && (
+          <SettingsPanel
+            onNotify={pushToast}
+            user={me ? { ...me, role } : null}
+            theme={theme}
+            onThemeChange={(next) => {
+              setTheme(next)
+              localStorage.setItem(THEME_KEY, next)
+            }}
+          />
+        )}
 
         {tab === 'stops' && <StopsPanel role={role ?? 'curator'} onNotify={pushToast} onTotpFetch={totpAwareFetch} />}
 

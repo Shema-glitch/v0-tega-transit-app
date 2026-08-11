@@ -534,7 +534,7 @@ export function StopsPanel({
                 setPreview(null)
               }}
             >
-              <SelectTrigger className="h-10 w-full text-xs" aria-label="Survivor stop">
+              <SelectTrigger className="h-10 data-[size=default]:h-10 w-full text-xs" aria-label="Survivor stop">
                 <SelectValue placeholder="Pick the stop that survives…" />
               </SelectTrigger>
               <SelectContent className="max-h-72">
@@ -637,7 +637,7 @@ export function StopsPanel({
               }
             }}
           >
-            <SelectTrigger size="sm" className="w-[5.5rem] shrink-0 font-mono text-xs" aria-label="Rows per page">
+            <SelectTrigger className="h-9 data-[size=default]:h-9 w-[5.5rem] shrink-0 font-mono text-xs" aria-label="Rows per page">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

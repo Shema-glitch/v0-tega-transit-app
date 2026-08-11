@@ -36,7 +36,11 @@ export async function getAdminRole(email: string | null | undefined): Promise<Ad
       .eq('email', email.trim().toLowerCase())
       .maybeSingle()
     if (error || !data) return null
-    const role = (data as { role?: string }).role
+    // A row whose role is NULL (seeded before migration 0014 added the column)
+    // is a full admin — the column's own default is 'admin', so treat the
+    // missing value the same way instead of silently demoting the owner to
+    // the 4-link curator view.
+    const role = (data as { role?: string | null }).role ?? 'admin'
     return role === 'curator' ? 'curator' : role === 'admin' ? 'admin' : null
   } catch {
     return null

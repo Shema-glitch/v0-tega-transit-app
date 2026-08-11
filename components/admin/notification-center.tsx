@@ -83,7 +83,7 @@ export function NotificationCenter({
           <Button
             variant="outline"
             size="sm"
-            className="relative h-9 w-9 px-0"
+            className="relative h-8 w-8 px-0"
             aria-label={`Notifications${unread > 0 ? ` — ${unread} unread` : ''}`}
           />
         }

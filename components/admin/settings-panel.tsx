@@ -19,7 +19,25 @@
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { toDataURL } from 'qrcode'
-import { CheckCircle2, Copy, KeyRound, Loader2, RefreshCw, ScanLine, ShieldCheck, ShieldOff, Smartphone, TriangleAlert } from 'lucide-react'
+import {
+  CalendarDays,
+  CheckCircle2,
+  Copy,
+  KeyRound,
+  Loader2,
+  Mail,
+  Moon,
+  Palette,
+  RefreshCw,
+  Save,
+  ScanLine,
+  ShieldCheck,
+  ShieldOff,
+  Smartphone,
+  Sun,
+  TriangleAlert,
+  UserRound,
+} from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,7 +64,18 @@ function fmtGrace(totalSec: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?: 'success' | 'error') => void }) {
+export function SettingsPanel({
+  onNotify,
+  user,
+  theme,
+  onThemeChange,
+}: {
+  onNotify: (message: string, kind?: 'success' | 'error') => void
+  /** Signed-in identity from the dashboard — instant fallback for the profile. */
+  user?: { email: string; displayName: string | null; role: 'admin' | 'curator' | null } | null
+  theme: 'dark' | 'light'
+  onThemeChange: (theme: 'dark' | 'light') => void
+}) {
   const [status, setStatus] = useState<TotpStatus | null>(null)
   const [step, setStep] = useState<Step>('idle')
   const [secret, setSecret] = useState('')
@@ -55,6 +84,13 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // Profile — display name + membership info (see /api/admin/settings/profile).
+  const [nameDraft, setNameDraft] = useState(user?.displayName ?? '')
+  const [createdAt, setCreatedAt] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
   // Identity-confirm grace window (from a successful verify).
   const [graceLeft, setGraceLeft] = useState(0)
   // QR of the otpauth URI, generated client-side (the URI never leaves the page).
@@ -103,6 +139,48 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // Load the profile once — fills the draft with the saved name (in case the
+  // dashboard's copy is stale) and the membership date.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/admin/settings/profile', { cache: 'no-store' })
+      .then((r) => r.json().catch(() => ({})))
+      .then((data) => {
+        if (cancelled) return
+        if (data?.displayName !== undefined) setNameDraft(data.displayName ?? '')
+        if (data?.createdAt) setCreatedAt(data.createdAt)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const saveProfile = useCallback(async () => {
+    setSaving(true)
+    setSaveError(null)
+    setSaved(false)
+    try {
+      const res = await fetch('/api/admin/settings/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName: nameDraft }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSaveError(data?.error ?? 'Could not save the name.')
+        return
+      }
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+      onNotify('Display name saved — the sidebar updates on the next refresh.')
+    } catch {
+      setSaveError('Could not reach the API.')
+    } finally {
+      setSaving(false)
+    }
+  }, [nameDraft, onNotify])
 
   // Live grace countdown after a successful identity confirmation.
   useEffect(() => {
@@ -238,13 +316,114 @@ export function SettingsPanel({ onNotify }: { onNotify: (message: string, kind?:
     <section className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="mr-auto text-xs text-muted-foreground">
-          Google Authenticator second factor for this account — protects the destructive surface (stop
-          writes, maintenance toggles, admin changes) even if your email is compromised.
+          Account and security settings for this console — profile, appearance, and the two-factor
+          authenticator that protects the destructive surface.
         </p>
         <Button variant="outline" size="sm" onClick={refresh} className="h-9 gap-1.5 text-xs">
           <RefreshCw className="size-3.5" /> Refresh
         </Button>
       </div>
+
+      {/* ─── Profile ────────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+              <UserRound className="size-4 text-brand" />
+              Profile
+            </CardTitle>
+            <CardDescription className="mt-1 text-xs">
+              How you appear in the console — the name shows in the sidebar next to your role.
+            </CardDescription>
+          </div>
+          {user?.role && (
+            <Badge
+              className={`font-semibold ${user.role === 'admin' ? 'bg-brand/15 text-brand' : 'bg-warning/10 text-warning'}`}
+            >
+              {user.role === 'admin' ? 'Admin' : 'Curator'}
+            </Badge>
+          )}
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label htmlFor="profile-name" className="mb-1.5 block text-xs font-semibold">
+              Display name
+            </label>
+            <Input
+              id="profile-name"
+              value={nameDraft}
+              onChange={(e) => {
+                setNameDraft(e.target.value)
+                setSaved(false)
+              }}
+              placeholder={user?.email ?? 'Your name'}
+              maxLength={48}
+              className="h-10 text-xs"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Leave empty to show your email instead.</p>
+            {saveError && (
+              <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
+                <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                {saveError}
+              </p>
+            )}
+            <div className="mt-3 flex items-center gap-2">
+              <Button onClick={saveProfile} disabled={saving} className="h-9 gap-1.5 text-xs">
+                {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                Save
+              </Button>
+              {saved && <span className="text-xs font-medium text-success">Saved</span>}
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="rounded-xl border border-border bg-muted/30 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Mail className="size-3.5 text-brand" />
+                Email
+              </p>
+              <p className="mt-1 font-mono text-xs break-all">{user?.email ?? '—'}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/30 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <CalendarDays className="size-3.5 text-brand" />
+                Member since
+              </p>
+              <p className="mt-1 text-xs">{createdAt ? fmtDate(new Date(createdAt).getTime()) : '—'}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ─── Appearance ─────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+              <Palette className="size-4 text-brand" />
+              Appearance
+            </CardTitle>
+            <CardDescription className="mt-1 text-xs">
+              Console theme — the same choice as the header toggle, in one place.
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="flex items-center gap-2">
+          <Button
+            variant={theme === 'dark' ? 'default' : 'outline'}
+            onClick={() => onThemeChange('dark')}
+            className="h-9 gap-1.5 text-xs"
+          >
+            <Moon className="size-3.5" /> Dark
+          </Button>
+          <Button
+            variant={theme === 'light' ? 'default' : 'outline'}
+            onClick={() => onThemeChange('light')}
+            className="h-9 gap-1.5 text-xs"
+          >
+            <Sun className="size-3.5" /> Ivory
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* ─── Status + identity confirmation ─────────────────────────────── */}
       <Card>
