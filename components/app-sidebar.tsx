@@ -63,10 +63,12 @@ interface NavItem {
 }
 
 // Categorized nav — grouped so the console reads as a tool, not a flat list:
-//   Overview      — what's happening right now
-//   Map data      — the curator's working surface
-//   Administration — who can act, and how the console is secured
-//   System        — deep diagnostics and docs
+//   Overview        — what's happening right now
+//   Map data        — the curator's working surface
+//   System          — deep diagnostics and docs
+//   Administration  — who can act, and how the console is secured; last, as
+//                     admins expect the management section below the surfaces
+//                     the dashboard is representing
 // Exported so the Cmd+K palette reuses the same structure (no drift).
 export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
   {
@@ -84,18 +86,18 @@ export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
     ],
   },
   {
+    label: 'System',
+    items: [
+      { id: 'issues', label: 'Issues', icon: Bug, badge: 'issues', adminOnly: true },
+      { id: 'guide', label: 'Maintenance Guide', icon: BookOpen, adminOnly: true },
+    ],
+  },
+  {
     label: 'Administration',
     items: [
       { id: 'admins', label: 'People', icon: ShieldCheck, adminOnly: true },
       { id: 'settings', label: 'Settings', icon: Settings },
       { id: 'audit', label: 'Audit', icon: ScrollText },
-    ],
-  },
-  {
-    label: 'System',
-    items: [
-      { id: 'issues', label: 'Issues', icon: Bug, badge: 'issues', adminOnly: true },
-      { id: 'guide', label: 'Maintenance Guide', icon: BookOpen, adminOnly: true },
     ],
   },
 ]
@@ -105,6 +107,7 @@ export function AppSidebar({
   counts,
   role,
   user,
+  theme = 'dark',
   onNavigate,
   onLogout,
   ...props
@@ -114,26 +117,28 @@ export function AppSidebar({
   role: AdminRole | null
   /** Signed-in identity — shown in the footer so it's obvious who you are. */
   user?: { email: string; displayName: string | null; role: AdminRole | null } | null
+  /** Console theme, so the brand mark picks the right contrast variant. */
+  theme?: 'dark' | 'light'
   onNavigate: (section: ConsoleSection) => void
   onLogout: () => void
 }) {
   return (
     <Sidebar collapsible="offcanvas" variant="inset" {...props}>
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="gap-2.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/assets/busgo-mark-dark.png" alt="BusGo Track" className="size-6 shrink-0" />
-              <div className="leading-tight">
-                <p className="text-xs font-semibold tracking-[0.16em] text-brand uppercase">
-                  BusGo Track
-                </p>
-                <p className="text-sm font-bold tracking-tight">Console</p>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        {/* Brand lockup — static by design: the logo is not a control, so it
+            must not behave like a button (no hover fill, no focus ring). */}
+        <div className="flex items-center gap-2.5 p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={theme === 'light' ? '/assets/busgo-mark-light.png' : '/assets/busgo-mark-dark.png'}
+            alt="BusGo Track"
+            className="size-7 shrink-0"
+          />
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-sm font-semibold tracking-tight">BusGo Track</p>
+            <p className="truncate text-xs text-muted-foreground">Console</p>
+          </div>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         {NAV_GROUPS.map((group) => {

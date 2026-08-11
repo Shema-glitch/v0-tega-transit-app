@@ -92,6 +92,15 @@ export default function GoToAdminAuthPage() {
     mq.addEventListener('change', apply)
     return () => mq.removeEventListener('change', apply)
   }, [])
+  // Same portal fix as the dashboard: mirror the theme onto <html> so any
+  // Radix overlay on this page inherits the console tokens, not the light
+  // :root defaults. Cleaned up on unmount.
+  useEffect(() => {
+    const el = document.documentElement
+    el.classList.toggle('dark', theme === 'dark')
+    el.classList.toggle('admin-light', theme === 'light')
+    return () => el.classList.remove('dark', 'admin-light')
+  }, [theme])
 
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')

@@ -439,6 +439,17 @@ export default function AdminPage() {
     mq.addEventListener('change', apply)
     return () => mq.removeEventListener('change', apply)
   }, [])
+  // Radix portals (menus, selects, dialogs, the command palette, toasts) render
+  // on document.body — outside the theme wrapper div — so they'd otherwise fall
+  // back to the light :root tokens and flash a white popover in dark mode.
+  // Mirror the theme class onto <html> so every overlay inherits the console
+  // tokens; remove it on unmount so the public page stays untouched.
+  useEffect(() => {
+    const el = document.documentElement
+    el.classList.toggle('dark', theme === 'dark')
+    el.classList.toggle('admin-light', theme === 'light')
+    return () => el.classList.remove('dark', 'admin-light')
+  }, [theme])
   // Imperative handle to the SSE card — lets the Cmd+K palette start the
   // live monitor without the palette knowing anything about EventSource.
   const sseRef = useRef<SseMonitorHandle>(null)
@@ -1202,6 +1213,7 @@ export default function AdminPage() {
           variant="inset"
           active={tab}
           role={role}
+          theme={theme}
           counts={{ issues: openCount, suggestions: stopSuggestions.length, loadAlerts: activeAlerts }}
           onNavigate={(s) => setTab(s)}
           onLogout={logout}
