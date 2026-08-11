@@ -1208,7 +1208,7 @@ export default function AdminPage() {
           user={me ? { ...me, role } : null}
         />
         <SidebarInset className="bg-background">
-          <header className="sticky top-0 z-40 flex h-(--header-height) shrink-0 items-center gap-2 border-b px-4 md:px-6">
+          <header className="sticky top-0 z-40 flex h-(--header-height) shrink-0 items-center gap-2 border-b border-border bg-background px-4 md:px-6">
             <SidebarTrigger className="-ml-1 md:hidden" />
             <Badge
               variant="outline"

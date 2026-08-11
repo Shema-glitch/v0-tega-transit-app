@@ -96,6 +96,10 @@
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
+  /* Active nav item — a light teal brand tint over the sidebar surface, so
+     the current section reads as the BusGo Track teal instead of neutral gray.
+     Alpha-blended (color-mix) so one definition adapts to every theme. */
+  --sidebar-accent-tint: color-mix(in oklab, var(--brand) 15%, var(--sidebar));
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
@@ -139,6 +143,7 @@
   --sidebar-primary-foreground: var(--brand-foreground);
   --sidebar-accent: oklch(0.28 0.02 55);
   --sidebar-accent-foreground: oklch(0.93 0.012 80);
+  --sidebar-accent-tint: color-mix(in oklab, var(--brand) 15%, var(--sidebar));
   --sidebar-border: oklch(0.93 0.012 80 / 12%);
   --sidebar-ring: oklch(0.55 0.02 60);
 }
@@ -183,6 +188,7 @@
   --sidebar-primary-foreground: oklch(0.965 0.016 78);
   --sidebar-accent: oklch(0.925 0.017 78);
   --sidebar-accent-foreground: oklch(0.25 0.022 60);
+  --sidebar-accent-tint: color-mix(in oklab, var(--brand) 15%, var(--sidebar));
   --sidebar-border: oklch(0.89 0.02 78);
   --sidebar-ring: oklch(0.72 0.03 78);
 }

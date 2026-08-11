@@ -522,7 +522,7 @@ export function StopsPanel({
           Check the victim stops below, pick the survivor, preview what changes, then confirm. Merged stops redirect
           to the survivor everywhere — old links keep working.
         </p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <div className="mt-3 grid max-w-2xl gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <div>
             <label htmlFor="merge-survivor" className="mb-1 block text-xs font-semibold text-muted-foreground">
               Survivor stop
@@ -626,7 +626,7 @@ export function StopsPanel({
             }}
             placeholder={`Search ${stops.length} stops by name or id…`}
             aria-label="Search stops"
-            className="h-9 text-xs"
+            className="h-9 max-w-md text-xs"
           />
           <Select
             value={String(pageSize)}
