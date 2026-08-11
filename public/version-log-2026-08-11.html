@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BusGo Track — API Version Log · 2026-08-11</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0b;
+    --card: #131315;
+    --border: #26262a;
+    --text: #e4e4e7;
+    --dim: #9a9aa2;
+    --emerald: #34d399;
+    --emerald-dim: rgba(52, 211, 153, 0.12);
+    --amber: #fbbf24;
+    --red: #f87171;
+    --blue: #60a5fa;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.65;
+    padding: 32px 20px 64px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 28px; }
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--emerald); font-weight: 700;
+  }
+  h1 { font-size: 28px; line-height: 1.15; letter-spacing: -0.02em; margin: 6px 0 8px; }
+  .subtitle { color: var(--dim); margin: 0; }
+  h2 {
+    font-size: 15px; letter-spacing: -0.01em; margin: 36px 0 12px;
+    padding-left: 10px; border-left: 3px solid var(--emerald);
+  }
+  h3 { font-size: 13px; margin: 20px 0 8px; }
+  p { margin: 8px 0; }
+  .mono { font-family: var(--mono); font-size: 12.5px; }
+  code {
+    font-family: var(--mono); font-size: 12px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 5px;
+  }
+  pre {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto;
+    margin: 10px 0;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; margin: 12px 0;
+  }
+  .card h3 { margin-top: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; letter-spacing: 0.04em; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 5px; margin-right: 6px; vertical-align: 1px;
+  }
+  .badge-fe { background: rgba(96,165,250,0.15); color: var(--blue); }
+  .badge-be { background: var(--emerald-dim); color: var(--emerald); }
+  .badge-both { background: rgba(251,191,24,0.15); color: var(--amber); }
+  .badge-new { background: rgba(248,113,113,0.15); color: var(--red); }
+  .badge-action { background: rgba(248,113,113,0.2); color: #fca5a5; }
+  .ok { color: var(--emerald); font-weight: 600; }
+  .warn { color: var(--amber); font-weight: 600; }
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  .muted { color: var(--dim); }
+  a { color: var(--emerald); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--dim); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">BusGo Track · API · Version Log</div>
+  <h1>Admin console redesign &amp; polish batch</h1>
+  <p class="subtitle">2026-08-11 · backend repo <span class="mono">v0-tega-transit-app</span> · deployed on Render — <span class="mono">tega-transit-api.onrender.com</span></p>
+</header>
+
+<p>This batch is all <strong>console and design-token work</strong>: the admin dashboard got a real identity system, two themes, breadcrumbs, a settings panel, a new icon set, and a softened corner scale. <strong>No public API contract changed</strong> — every endpoint, cache header, rate limit, and SSE behavior from the <a href="/version-log-2026-08-09.html">08-09 scaling batch</a> is untouched. One database migration needs to run, and the frontend should pick up the new design tokens to stay in sync.</p>
+
+<div class="card">
+  <h3><span class="badge badge-action">ACTION REQUIRED</span>Run migration 0015</h3>
+  <p>Open Supabase → SQL Editor and run <span class="mono">supabase/migrations/0015_admin_profile.sql</span>. It adds a <span class="mono">display_name</span> column to <span class="mono">admin_emails</span> so the console's new <strong>Settings → Profile</strong> card can persist a display name. Until it runs, saving a name reports a graceful "could not reach the database" error instead of crashing — the rest of the console works fine.</p>
+</div>
+
+<h2>What shipped</h2>
+
+<div class="grid">
+  <div class="card">
+    <h3><span class="badge badge-be">CONSOLE</span>Identity &amp; settings</h3>
+    <p class="muted">Sidebar footer now shows who's signed in — avatar initial, email, and an <strong>Admin / Curator</strong> badge — above Log out. New <strong>Settings</strong> tab: a <strong>Profile</strong> card (change display name, shows in the sidebar instead of the raw email; read-only email, role, member-since) and an <strong>Appearance</strong> card (theme choice, synced with the header toggle). Breadcrumbs (<span class="mono">Console / Map &amp; Stops</span>) follow every section.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-be">CONSOLE</span>Two themes — dark + ivory</h3>
+    <p class="muted">Warm charcoal dark is the default; an <strong>ivory light mode</strong> is one click away. Until you choose, the console follows your OS preference (<span class="mono">prefers-color-scheme</span>) live. Choice persists in <span class="mono">localStorage</span> under <span class="mono">busgo-admin-theme</span>; the login page reads the same key, so the front door always matches.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-be">CONSOLE</span>Portal theme fix</h3>
+    <p class="muted">Dropdowns, menus, selects, and dialogs render on <span class="mono">document.body</span>, outside the theme wrapper — they used to flash <strong>white in dark mode</strong>. The theme class is now mirrored onto <span class="mono">&lt;html&gt;</span>, so every overlay inherits the console tokens in both themes.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-both">SHARED</span>Phosphor icons <span class="badge badge-new">NEW</span></h3>
+    <p class="muted">Every icon in the console, login page, status page, and the shadcn primitives moved from Lucide to <span class="mono">@phosphor-icons/react</span> at a consistent <span class="mono">regular</span> weight. <span class="mono">lucide-react</span> is gone from dependencies. Frontend: adopt Phosphor so both apps speak the same visual language.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-both">SHARED</span>Softer radius scale</h3>
+    <p class="muted">The base radius token moved <span class="mono">0.625rem → 0.75rem</span>: controls 8→9.6px, cards 14→16.8px. One token drives the whole scale, so badges, buttons, inputs, and panels stay in the same corner family (toward a squircle feel).</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-be">CONSOLE</span>Chrome cleanup</h3>
+    <p class="muted">Solid sticky header (was transparent), uniform 32px header controls, border-radius normalized (badges match buttons), width-capped forms so inputs don't stretch on ultrawide, per-panel stat cards, and the header's utility actions (Copy guide, Debug mode) consolidated into a kebab menu.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-be">CONSOLE</span>Sidebar structure</h3>
+    <p class="muted">Nav grouped: <strong>Overview → Map data → System → Administration</strong> (admin settings last, as admins expect). Footer reads <strong>Links → Account → Log out</strong>. The brand lockup is a static block — no button hover or focus ring. Active section wears a teal tint.</p>
+  </div>
+  <div class="card">
+    <h3><span class="badge badge-be">AUTH</span>Role hardening</h3>
+    <p class="muted">An admin row with a <span class="mono">NULL</span> role (seeded before migration 0014) now counts as <span class="mono">admin</span> instead of silently hiding the admin-only sidebar links. If the console ever looks short of links, check the identity badge first.</p>
+  </div>
+</div>
+
+<h2>For frontend developers</h2>
+
+<h3><span class="badge badge-fe">FRONTEND</span> 1. Nothing changed in the API</h3>
+<div class="card">
+  <p>All endpoints, query params, headers, cache semantics, and the SSE contract are identical to the 08-09 batch. If your app was working against <span class="mono">https://tega-transit-api.onrender.com/api</span>, it keeps working — no code changes needed. The only public-visible difference is cosmetic: the status page now uses the same Phosphor icons and corner radii as the console.</p>
+</div>
+
+<h3><span class="badge badge-fe">FRONTEND</span> 2. Design tokens to mirror</h3>
+<div class="card">
+  <table>
+    <tr><th>Token</th><th>Before</th><th>After</th></tr>
+    <tr><td>Base radius <span class="mono">--radius</span></td><td class="mono">0.625rem</td><td class="mono">0.75rem</td></tr>
+    <tr><td>Icon set</td><td class="mono">lucide-react</td><td class="mono">@phosphor-icons/react</td></tr>
+    <tr><td>Icon weight</td><td class="mono">2px stroke</td><td class="mono">regular</td></tr>
+    <tr><td>Theme key</td><td>—</td><td class="mono">busgo-admin-theme</td></tr>
+    <tr><td>Theme behavior</td><td>dark only</td><td>dark default · ivory light · follows OS until toggled</td></tr>
+  </table>
+  <p class="muted">If you build any admin-adjacent UI, use <span class="mono">npm i @phosphor-icons/react</span> (default <span class="mono">weight="regular"</span>, size via the <span class="mono">size</span> prop or <span class="mono">size-*</span> classes) and the same radius scale so the two repos stay visually one product.</p>
+</div>
+
+<h3><span class="badge badge-fe">FRONTEND</span> 3. Console login &amp; theme notes</h3>
+<div class="card">
+  <ul>
+    <li>Admin sign-in is <span class="mono">/goToAdminAuth</span> — the OTP email and magic link point at the Render URL (<span class="mono">ADMIN_PUBLIC_URL</span>), never localhost.</li>
+    <li>A light-mode OS now lands on the <strong>ivory</strong> theme automatically at <span class="mono">/admin</span> and <span class="mono">/goToAdminAuth</span> unless the user has toggled.</li>
+    <li>The session still expires after 15 idle minutes (8h cap) — the login page shows a live countdown.</li>
+  </ul>
+</div>
+
+<h2>Quick reference</h2>
+<table>
+  <tr><th>Thing</th><th>Where</th></tr>
+  <tr><td>Previous version log (08-09, scaling + observability)</td><td><a href="/version-log-2026-08-09.html">/version-log-2026-08-09.html</a></td></tr>
+  <tr><td>Migration to run</td><td class="mono">supabase/migrations/0015_admin_profile.sql</td></tr>
+  <tr><td>Design tokens</td><td class="mono">app/globals.css</span> · <a href="https://github.com/Shema-glitch/v0-tega-transit-app/blob/main/docs/DESIGN_TOKENS.md">docs/DESIGN_TOKENS.md</a></td></tr>
+  <tr><td>Base URL</td><td class="mono">https://tega-transit-api.onrender.com/api</td></tr>
+  <tr><td>Full API reference</td><td><a href="https://github.com/Shema-glitch/v0-tega-transit-app/blob/main/docs/API_DOCS.md">docs/API_DOCS.md</a></td></tr>
+</table>
+
+<footer>
+  BusGo Track API · generated 2026-08-11 · questions → the backend maintainer (this repo's Issues tab).
+</footer>
+
+</div>
+</body>
+</html>

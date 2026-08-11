@@ -1,11 +1,21 @@
 # Changelog
 
 > The detailed, frontend-facing changelog with consumption notes lives in the
-> **version log**: [`public/version-log-2026-08-09.html`](public/version-log-2026-08-09.html)
-> — it's also served live at `https://tega-transit-api.onrender.com/version-log-2026-08-09.html`
-> and embedded in the admin console's **Guide** tab. This file is the
-> one-line index of notable releases; the git log is the full record
-> (`git log --oneline`).
+> **version log**: [`public/version-log-2026-08-11.html`](public/version-log-2026-08-11.html)
+> — it's also served live at `https://tega-transit-api.onrender.com/version-log-2026-08-11.html`
+> and embedded in the admin console's **Guide** tab (earlier: [`version-log-2026-08-09.html`](public/version-log-2026-08-09.html)).
+> This file is the one-line index of notable releases; the git log is the full
+> record (`git log --oneline`).
+
+## 2026-08-11 — Admin console redesign & polish
+
+- Identity & settings: breadcrumbs, sidebar identity footer (email + Admin/Curator badge), Settings tab with **Profile** (display name via migration **0015**) and **Appearance** (Dark/Ivory) cards.
+- Two console themes — warm dark (default) + ivory light — following `prefers-color-scheme` until toggled; theme mirrored onto `<html>` so portaled menus/dialogs theme correctly.
+- Phosphor icon set replaces Lucide across the app (`@phosphor-icons/react`, consistent `regular` weight; `lucide-react` removed).
+- Radius scale softened: `--radius` 0.625rem → 0.75rem (controls 9.6px, cards 16.8px).
+- Chrome: solid sticky header, uniform 32px controls, normalized border radii, width-capped forms, per-panel stat cards, kebab menu for utility actions.
+- Sidebar: categories reordered (Administration last), footer Links → Account → Log out, static brand lockup, teal active tint; NULL role now counts as admin.
+- **Action:** run `supabase/migrations/0015_admin_profile.sql` in Supabase's SQL Editor for display-name saves to persist.
 
 ## 2026-08-09 — Scale batch
 

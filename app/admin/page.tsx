@@ -2022,8 +2022,8 @@ export default function AdminPage() {
                   />
                 ) : (
                   <iframe
-                    title="API Version Log 2026-08-09"
-                    src="/version-log-2026-08-09.html"
+                    title="API Version Log 2026-08-11"
+                    src="/version-log-2026-08-11.html"
                     sandbox="allow-scripts allow-same-origin"
                     className="h-[72vh] w-full border-0 bg-background"
                   />
@@ -2032,7 +2032,7 @@ export default function AdminPage() {
               {guideTab === 'version' && (
                 <p className="mt-3 text-xs text-muted-foreground">
                   What shipped in the latest batch and how the frontend should consume the API at scale. Also
-                  served at <span className="font-mono">/version-log-2026-08-09.html</span> for the frontend team.
+                  served at <span className="font-mono">/version-log-2026-08-11.html</span> for the frontend team.
                 </p>
               )}
             </section>
