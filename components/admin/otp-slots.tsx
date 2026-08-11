@@ -108,7 +108,7 @@ export function OtpSlots({
                     : 'border-input'
               } ${digit ? 'text-foreground' : 'text-muted-foreground/40'} bg-background`}
             >
-              <AnimatePresence mode="popLayout" initial={false}>
+              <AnimatePresence initial={false}>
                 {digit ? (
                   <motion.span
                     key={`${i}-${digit}`}

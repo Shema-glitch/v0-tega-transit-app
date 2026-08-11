@@ -498,10 +498,17 @@ export default function AdminPage() {
     const params = new URLSearchParams(window.location.search)
     if (params.get('welcome') === '1') {
       setShowWelcome(true)
-      welcomeShownAtRef.current = Date.now()
       window.history.replaceState({}, '', '/admin')
     }
   }, [])
+  // The floor timer can only start once the overlay is actually reachable —
+  // it can't render before authState === 'in' (the "Checking session…" card
+  // occupies the screen until then), so starting the clock any earlier would
+  // let that screen eat into the floor and defeat its whole purpose.
+  useEffect(() => {
+    if (!showWelcome || authState !== 'in' || welcomeShownAtRef.current !== null) return
+    welcomeShownAtRef.current = Date.now()
+  }, [showWelcome, authState])
   // Stays up until the real first data load finishes, with a minimum floor
   // so it's never just a flash on a fast connection.
   useEffect(() => {
@@ -1136,6 +1143,27 @@ export default function AdminPage() {
     const prev = localStorage.getItem(LAST_SEEN_KEY)
     lastSeenAtRef.current = prev ? Number(prev) : null
     localStorage.setItem(LAST_SEEN_KEY, String(Date.now()))
+  }, [authState])
+
+  // Resolve `me` as early as possible, independent of the main refreshAll
+  // polling cycle — it drives the welcome overlay's greeting name, and
+  // waiting on the full Promise.all batch in refreshAll meant `me` was still
+  // null for essentially the overlay's whole visible life. refreshAll keeps
+  // re-fetching this on every poll too; this is just a faster first read.
+  useEffect(() => {
+    if (authState !== 'in') return
+    let cancelled = false
+    fetch('/api/admin/me', { cache: 'no-store' })
+      .then((res) => res.json().catch(() => ({})))
+      .then((meData) => {
+        if (!cancelled && meData?.email) {
+          setMe({ email: meData.email, displayName: meData.displayName ?? null })
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [authState])
 
   useEffect(() => {

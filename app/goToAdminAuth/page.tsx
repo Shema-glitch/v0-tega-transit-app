@@ -108,6 +108,7 @@ export default function GoToAdminAuthPage() {
   // has focused the email field), the brand panel never animates again so
   // motion doesn't compete with someone actually filling in the form.
   const [hasInteracted, setHasInteracted] = useState(false)
+  const [emailFocused, setEmailFocused] = useState(false)
   // Gates every purely-decorative animation in this file (idle entrance,
   // focus scale) to skip entirely under prefers-reduced-motion; functional
   // transitions (step swap, error/success banners) stay but drop their
@@ -456,7 +457,7 @@ export default function GoToAdminAuthPage() {
                     Email
                   </label>
                   <motion.div
-                    whileFocus={reduceMotion ? undefined : { scale: 1.01 }}
+                    animate={{ scale: emailFocused && !reduceMotion ? 1.01 : 1 }}
                     transition={{ duration: 0.15 }}
                     className="relative"
                   >
@@ -470,7 +471,11 @@ export default function GoToAdminAuthPage() {
                         setConfirmFirst(false)
                         if (send.kind !== 'sending') setSend({ kind: 'idle' })
                       }}
-                      onFocus={() => setHasInteracted(true)}
+                      onFocus={() => {
+                        setHasInteracted(true)
+                        setEmailFocused(true)
+                      }}
+                      onBlur={() => setEmailFocused(false)}
                       placeholder="you@example.com"
                       className="h-11 pr-10 text-sm"
                       autoFocus

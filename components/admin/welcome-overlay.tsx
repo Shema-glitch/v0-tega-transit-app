@@ -30,12 +30,13 @@ export function WelcomeOverlay({ name }: { name: string }) {
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.02 }}
       transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
       className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-background text-foreground"
+      role="status"
     >
       <p className="text-2xl font-semibold tracking-tight">
         {timeOfDayGreeting()}, {name}
       </p>
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <CircleNotch className="size-4 animate-spin" />
+        <CircleNotch className="size-4 animate-spin" aria-hidden="true" />
         Loading up your console — one moment.
       </p>
     </motion.div>
