@@ -455,7 +455,11 @@ export default function GoToAdminAuthPage() {
                   <label htmlFor="admin-email" className="mb-2 block text-xs font-semibold">
                     Email
                   </label>
-                  <div className="relative">
+                  <motion.div
+                    whileFocus={reduceMotion ? undefined : { scale: 1.01 }}
+                    transition={{ duration: 0.15 }}
+                    className="relative"
+                  >
                     <Input
                       id="admin-email"
                       type="email"
@@ -472,31 +476,54 @@ export default function GoToAdminAuthPage() {
                       autoFocus
                     />
                     <Envelope className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                  </div>
+                  </motion.div>
 
-                  {confirmFirst && send.kind === 'sent' && (
-                    <div className="mt-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2.5">
-                      <p className="flex items-center gap-1 text-xs font-medium text-amber-300">
-                        <EnvelopeOpen className="size-3.5" /> One-time confirmation sent to {maskEmail(email)}
-                      </p>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                        This address is new — click the confirmation link in the email once (it lands you
-                        back on this sign-in page), then send the code again. After that, codes come
-                        straight to your inbox.
-                      </p>
-                    </div>
-                  )}
-                  {send.kind === 'sent' && !confirmFirst && (
-                    <p className="mt-2 flex items-center gap-1 text-xs font-medium text-success">
-                      <CheckCircle className="size-3.5" /> Code sent — check your inbox.
-                    </p>
-                  )}
-                  {sendError && (
-                    <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
-                      <Triangle className="mt-px size-3.5 shrink-0" />
-                      <span>{sendError.message}</span>
-                    </p>
-                  )}
+                  <AnimatePresence>
+                    {confirmFirst && send.kind === 'sent' && (
+                      <motion.div
+                        key="confirm-first"
+                        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                        className="mt-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2.5"
+                      >
+                        <p className="flex items-center gap-1 text-xs font-medium text-amber-300">
+                          <EnvelopeOpen className="size-3.5" /> One-time confirmation sent to {maskEmail(email)}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          This address is new — click the confirmation link in the email once (it lands you
+                          back on this sign-in page), then send the code again. After that, codes come
+                          straight to your inbox.
+                        </p>
+                      </motion.div>
+                    )}
+                    {send.kind === 'sent' && !confirmFirst && (
+                      <motion.p
+                        key="sent"
+                        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                        className="mt-2 flex items-center gap-1 text-xs font-medium text-success"
+                      >
+                        <CheckCircle className="size-3.5" /> Code sent — check your inbox.
+                      </motion.p>
+                    )}
+                    {sendError && (
+                      <motion.p
+                        key="send-error"
+                        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                        className="mt-2 flex items-start gap-1 text-xs text-destructive"
+                      >
+                        <Triangle className="mt-px size-3.5 shrink-0" />
+                        <span>{sendError.message}</span>
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
                   {send.kind === 'error' && send.hint && (
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{send.hint}</p>
                   )}
@@ -552,18 +579,34 @@ export default function GoToAdminAuthPage() {
                     invalid={!!verifyError}
                   />
 
-                  {verifyError && (
-                    <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
-                      <Triangle className="mt-px size-3.5 shrink-0" />
-                      <span>{verifyError.message}</span>
-                    </p>
-                  )}
-                  {send.kind === 'error' && sendError && (
-                    <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
-                      <Triangle className="mt-px size-3.5 shrink-0" />
-                      <span>{sendError.message}</span>
-                    </p>
-                  )}
+                  <AnimatePresence>
+                    {verifyError && (
+                      <motion.p
+                        key="verify-error"
+                        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                        className="mt-2 flex items-start gap-1 text-xs text-destructive"
+                      >
+                        <Triangle className="mt-px size-3.5 shrink-0" />
+                        <span>{verifyError.message}</span>
+                      </motion.p>
+                    )}
+                    {send.kind === 'error' && sendError && (
+                      <motion.p
+                        key="resend-error"
+                        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                        className="mt-2 flex items-start gap-1 text-xs text-destructive"
+                      >
+                        <Triangle className="mt-px size-3.5 shrink-0" />
+                        <span>{sendError.message}</span>
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
 
                   <div className="mt-4 grid grid-cols-[auto_1fr] gap-2">
                     <Button
