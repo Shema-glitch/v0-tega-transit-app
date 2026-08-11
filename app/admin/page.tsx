@@ -90,6 +90,7 @@ import { NotificationCenter, type AdminNotification } from '@/components/admin/n
 import LoadPanel from '@/components/admin/load-panel'
 import { SettingsPanel } from '@/components/admin/settings-panel'
 import { StopsPanel } from '@/components/admin/stops-panel'
+import { OtpSlots } from '@/components/admin/otp-slots'
 import {
   AppSidebar,
   NAV_GROUPS,
@@ -2203,18 +2204,16 @@ export default function AdminPage() {
               <label htmlFor="totp-challenge-code" className="mb-1.5 block text-xs font-semibold">
                 Authenticator code
               </label>
-              <Input
+              <OtpSlots
                 id="totp-challenge-code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
                 value={totpCode}
-                onChange={(e) => {
-                  setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                onChange={(v) => {
+                  setTotpCode(v.replace(/\D/g, '').slice(0, 6))
                   setTotpError(null)
                 }}
-                placeholder="000000"
-                className="h-11 text-center font-mono text-lg tracking-[0.45em]"
-                autoFocus
+                minSlots={6}
+                maxSlots={6}
+                invalid={!!totpError}
               />
               {totpError && (
                 <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">

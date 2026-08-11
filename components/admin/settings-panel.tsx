@@ -42,6 +42,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { OtpSlots } from '@/components/admin/otp-slots'
 
 interface TotpStatus {
   enabled: boolean
@@ -470,16 +471,17 @@ export function SettingsPanel({
                   ? 'Sensitive actions are unlocked for the remaining window.'
                   : 'Enter a fresh authenticator code to unlock sensitive actions for 5 minutes.'}
               </p>
-              <div className="mt-3 flex gap-2">
-                <Input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="000000"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="h-10 w-32 font-mono text-center text-sm tracking-[0.3em]"
-                />
-                <Button size="sm" onClick={confirmIdentity} disabled={busy || code.length !== 6} className="h-10 text-xs">
+              <div className="mt-3 flex items-center gap-2">
+                <div className="w-56">
+                  <OtpSlots
+                    id="totp-confirm-code"
+                    value={code}
+                    onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+                    minSlots={6}
+                    maxSlots={6}
+                  />
+                </div>
+                <Button size="sm" onClick={confirmIdentity} disabled={busy || code.length !== 6} className="h-12 text-xs">
                   {busy ? <CircleNotch className="size-3.5 animate-spin" /> : 'Confirm'}
                 </Button>
               </div>
@@ -495,21 +497,22 @@ export function SettingsPanel({
                 Requires a valid authenticator code — this is deliberate, so a compromised session
                 can&apos;t switch the second factor off.
               </p>
-              <div className="mt-3 flex gap-2">
-                <Input
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="000000"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="h-10 w-32 font-mono text-center text-sm tracking-[0.3em]"
-                />
+              <div className="mt-3 flex items-center gap-2">
+                <div className="w-56">
+                  <OtpSlots
+                    id="totp-disable-code"
+                    value={code}
+                    onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+                    minSlots={6}
+                    maxSlots={6}
+                  />
+                </div>
                 <Button
                   variant="destructive"
                   size="sm"
                   onClick={disable}
                   disabled={busy || code.length !== 6}
-                  className="h-10 text-xs"
+                  className="h-12 text-xs"
                 >
                   {busy ? <CircleNotch className="size-3.5 animate-spin" /> : 'Disable'}
                 </Button>
@@ -606,25 +609,23 @@ export function SettingsPanel({
                 )}
 
                 <div className="flex items-end gap-2">
-                  <div>
+                  <div className="w-56">
                     <label htmlFor="totp-activate-code" className="mb-1.5 block text-xs font-semibold">
                       Authenticator code
                     </label>
-                    <Input
+                    <OtpSlots
                       id="totp-activate-code"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      placeholder="000000"
                       value={code}
-                      onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="h-10 w-36 font-mono text-center text-sm tracking-[0.3em]"
+                      onChange={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+                      minSlots={6}
+                      maxSlots={6}
                     />
                   </div>
                   <Button
                     size="sm"
                     onClick={activate}
                     disabled={busy || code.length !== 6}
-                    className="h-10 text-xs"
+                    className="h-12 text-xs"
                   >
                     {busy ? <CircleNotch className="size-3.5 animate-spin" /> : 'Activate'}
                   </Button>

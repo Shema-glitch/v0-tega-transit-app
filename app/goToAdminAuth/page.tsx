@@ -19,7 +19,7 @@
  * (lib/api/auth-guard.ts).
  */
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import {
   ArrowLeft,
   Pulse,
@@ -35,73 +35,12 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
+import { OtpSlots } from '@/components/admin/otp-slots'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const RESEND_SECONDS = 45
 
 type Step = 'email' | 'code'
-
-/**
- * Segmented one-time-code entry. A single real <input> (invisible, spanning
- * the whole row) drives everything — keyboard, paste-from-email, and
- * autofill all work exactly as they did on the old plain input; only the
- * visual changes to per-digit slots. Supabase's code length is configurable
- * (6, 8, or 10 digits), so slot count grows with what's typed instead of
- * assuming a fixed length up front.
- */
-function OtpSlots({
-  id,
-  value,
-  onChange,
-  disabled,
-  invalid,
-}: {
-  id: string
-  value: string
-  onChange: (value: string) => void
-  disabled?: boolean
-  invalid?: boolean
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const slotCount = Math.max(6, Math.min(10, value.length))
-
-  return (
-    <div className="relative" onClick={() => inputRef.current?.focus()}>
-      <input
-        ref={inputRef}
-        id={id}
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        autoFocus
-        aria-label="One-time code"
-        className="absolute inset-0 h-full w-full cursor-default text-transparent caret-transparent outline-none selection:bg-transparent disabled:cursor-not-allowed"
-      />
-      <div className="flex gap-1.5" aria-hidden="true">
-        {Array.from({ length: slotCount }).map((_, i) => {
-          const digit = value[i]
-          const isActive = !disabled && i === value.length
-          return (
-            <div
-              key={i}
-              className={`flex h-12 min-w-0 flex-1 items-center justify-center rounded-[min(var(--radius-md),10px)] border font-mono text-lg font-semibold tabular-nums transition-colors ${
-                invalid
-                  ? 'border-destructive/50'
-                  : isActive
-                    ? 'border-brand ring-3 ring-brand/25'
-                    : 'border-input'
-              } ${digit ? 'text-foreground' : 'text-muted-foreground/40'} bg-background`}
-            >
-              {digit ?? (isActive ? <span className="status-breathe h-4 w-px bg-brand" /> : '·')}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
 type SendState =
   | { kind: 'idle' }
