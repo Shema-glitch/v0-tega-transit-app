@@ -381,7 +381,7 @@ function HeaderActionsMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="outline" size="sm" className="h-8 px-2" aria-label="More actions" />
+          <Button variant="outline" size="sm" className="h-9 w-9 px-0" aria-label="More actions" />
         }
       >
         <DotsThree className="size-4" />
@@ -533,6 +533,12 @@ export default function AdminPage() {
   const [adminsDbOk, setAdminsDbOk] = useState(true)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviting, setInviting] = useState(false)
+  // Per-row busy tracking so a fast double-click can't fire the same mutating
+  // request twice — each Set holds the id/email/endpoint currently in flight.
+  const [suggPending, setSuggPending] = useState<Map<number, 'approve' | 'reject'>>(new Map())
+  const [bugPending, setBugPending] = useState<Set<string>>(new Set())
+  const [adminPending, setAdminPending] = useState<Set<string>>(new Set())
+  const [endpointPending, setEndpointPending] = useState<Set<string>>(new Set())
 
   // Durability + audit trail (see lib/api/maintenance-store.ts / auth-log.ts)
   const [maintDurable, setMaintDurable] = useState(false)
@@ -859,16 +865,25 @@ export default function AdminPage() {
 
   const toggleCuratorRole = useCallback(
     async (email: string, currentRole: string) => {
-      const grant = currentRole !== 'curator'
-      const res = await totpAwareFetch(grant ? '/api/admin/curators' : `/api/admin/curators?email=${encodeURIComponent(email)}`, {
-        method: grant ? 'POST' : 'DELETE',
-        headers: grant ? { 'Content-Type': 'application/json' } : undefined,
-        body: grant ? JSON.stringify({ email }) : undefined,
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) pushToast(data?.error ?? 'Could not update the role', 'error')
-      else pushToast(grant ? `${email} is now a curator` : `${email} is back to full admin`)
-      refreshAll()
+      setAdminPending((prev) => new Set(prev).add(email))
+      try {
+        const grant = currentRole !== 'curator'
+        const res = await totpAwareFetch(grant ? '/api/admin/curators' : `/api/admin/curators?email=${encodeURIComponent(email)}`, {
+          method: grant ? 'POST' : 'DELETE',
+          headers: grant ? { 'Content-Type': 'application/json' } : undefined,
+          body: grant ? JSON.stringify({ email }) : undefined,
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) pushToast(data?.error ?? 'Could not update the role', 'error')
+        else pushToast(grant ? `${email} is now a curator` : `${email} is back to full admin`)
+        refreshAll()
+      } finally {
+        setAdminPending((prev) => {
+          const next = new Set(prev)
+          next.delete(email)
+          return next
+        })
+      }
     },
     [pushToast, refreshAll, totpAwareFetch]
   )
@@ -880,11 +895,20 @@ export default function AdminPage() {
         message:
           'They will no longer be able to sign in to this dashboard. Their Supabase auth account stays — only dashboard access is removed.',
         onConfirm: async () => {
-          const res = await totpAwareFetch(`/api/admin/admins?email=${encodeURIComponent(email)}`, { method: 'DELETE' })
-          const data = await res.json().catch(() => ({}))
-          if (!res.ok) pushToast(data?.error ?? 'Could not revoke that email', 'error')
-          else pushToast(`${email} revoked`)
-          refreshAll()
+          setAdminPending((prev) => new Set(prev).add(email))
+          try {
+            const res = await totpAwareFetch(`/api/admin/admins?email=${encodeURIComponent(email)}`, { method: 'DELETE' })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) pushToast(data?.error ?? 'Could not revoke that email', 'error')
+            else pushToast(`${email} revoked`)
+            refreshAll()
+          } finally {
+            setAdminPending((prev) => {
+              const next = new Set(prev)
+              next.delete(email)
+              return next
+            })
+          }
         },
       })
     },
@@ -892,18 +916,27 @@ export default function AdminPage() {
   )
 
   const resolveStopSuggestion = useCallback(async (id: number, decision: 'approve' | 'reject') => {
-    const res = await totpAwareFetch(`/api/admin/stop-suggestions/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      pushToast(data?.error ?? 'Could not update that suggestion', 'error')
-      return
+    setSuggPending((prev) => new Map(prev).set(id, decision))
+    try {
+      const res = await totpAwareFetch(`/api/admin/stop-suggestions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        pushToast(data?.error ?? 'Could not update that suggestion', 'error')
+        return
+      }
+      refreshAll()
+      pushToast(decision === 'approve' ? 'Suggestion approved — stop updated' : 'Suggestion rejected')
+    } finally {
+      setSuggPending((prev) => {
+        const next = new Map(prev)
+        next.delete(id)
+        return next
+      })
     }
-    refreshAll()
-    pushToast(decision === 'approve' ? 'Suggestion approved — stop updated' : 'Suggestion rejected')
   }, [pushToast, refreshAll, totpAwareFetch])
 
   const logout = useCallback(async () => {
@@ -945,31 +978,49 @@ export default function AdminPage() {
   }, [pushToast, refreshAll, source.bugs])
 
   const resolveBugReport = useCallback(async (id: string) => {
-    await fetch('/api/feedback', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    })
-    refreshAll()
-    pushToast('Bug report marked resolved')
+    setBugPending((prev) => new Set(prev).add(id))
+    try {
+      await fetch('/api/feedback', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      refreshAll()
+      pushToast('Bug report marked resolved')
+    } finally {
+      setBugPending((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
   }, [pushToast, refreshAll])
 
   // Enabling is the recovery path and stays instant; disabling goes through the
   // reason dialog so Cancel is always a no-op (the old window.prompt fallback
   // actually disabled the endpoint even when the user cancelled).
   const enableEndpoint = useCallback(async (ep: EndpointRegistryEntry) => {
-    const res = await totpAwareFetch('/api/admin/maintenance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feature: ep.id, reason: '', active: false }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      pushToast(data?.error ?? 'Failed to re-enable endpoint', 'error')
-      return
+    setEndpointPending((prev) => new Set(prev).add(ep.id))
+    try {
+      const res = await totpAwareFetch('/api/admin/maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feature: ep.id, reason: '', active: false }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        pushToast(data?.error ?? 'Failed to re-enable endpoint', 'error')
+        return
+      }
+      refreshAll()
+      pushToast(`Re-enabled ${ep.label}`)
+    } finally {
+      setEndpointPending((prev) => {
+        const next = new Set(prev)
+        next.delete(ep.id)
+        return next
+      })
     }
-    refreshAll()
-    pushToast(`Re-enabled ${ep.label}`)
   }, [pushToast, refreshAll, totpAwareFetch])
 
   const submitDisable = useCallback(async () => {
@@ -1268,7 +1319,7 @@ export default function AdminPage() {
                 }}
                 variant="outline"
                 size="sm"
-                className="h-8 w-8 px-0"
+                className="h-9 w-9 px-0"
                 aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                 title={theme === 'dark' ? 'Switch to the ivory light mode' : 'Switch back to dark mode'}
               >
@@ -1278,7 +1329,7 @@ export default function AdminPage() {
                 onClick={refreshAll}
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1 text-xs"
+                className="h-9 gap-1 text-xs"
                 aria-label="Refresh dashboard data"
               >
                 <ArrowsClockwise className="size-3.5" /> Refresh
@@ -1448,8 +1499,12 @@ export default function AdminPage() {
                                   onClick={item.onResolve}
                                   variant="outline"
                                   size="sm"
-                                  className={`h-8 text-xs ${STATUS_COLOR.good}`}
+                                  disabled={bugPending.has(item.id.slice(4))}
+                                  className={`h-9 text-xs ${STATUS_COLOR.good}`}
                                 >
+                                  {bugPending.has(item.id.slice(4)) ? (
+                                    <CircleNotch className="size-3.5 animate-spin" />
+                                  ) : null}
                                   Mark resolved
                                 </Button>
                               )}
@@ -1461,7 +1516,7 @@ export default function AdminPage() {
                                   }}
                                   variant="ghost"
                                   size="sm"
-                                  className="h-8 gap-1 text-xs"
+                                  className="h-9 gap-1 text-xs"
                                   title="Copy error details"
                                 >
                                   <Copy className="size-3.5" /> Copy
@@ -1601,6 +1656,7 @@ export default function AdminPage() {
                           <span className="-m-2 flex shrink-0 items-center rounded-full p-2">
                             <Switch
                               checked={!disabled}
+                              disabled={endpointPending.has(ep.id)}
                               onCheckedChange={() => {
                                 if (disabled) {
                                   enableEndpoint(ep)
@@ -1684,20 +1740,30 @@ export default function AdminPage() {
                           onClick={() => resolveStopSuggestion(s.id, 'approve')}
                           variant="outline"
                           size="sm"
+                          disabled={suggPending.has(s.id)}
                           className={`h-9 gap-1.5 text-xs ${STATUS_COLOR.good}`}
                           title="Apply this change to the live map (same write the stop editor uses)"
                         >
-                          <CheckCircle className="size-3.5" />
+                          {suggPending.get(s.id) === 'approve' ? (
+                            <CircleNotch className="size-3.5 animate-spin" />
+                          ) : (
+                            <CheckCircle className="size-3.5" />
+                          )}
                           Approve
                         </Button>
                         <Button
                           onClick={() => resolveStopSuggestion(s.id, 'reject')}
                           variant="outline"
                           size="sm"
+                          disabled={suggPending.has(s.id)}
                           className={`h-9 gap-1.5 text-xs ${STATUS_COLOR.err}`}
                           title="Drop this suggestion without touching the map"
                         >
-                          <X className="size-3.5" />
+                          {suggPending.get(s.id) === 'reject' ? (
+                            <CircleNotch className="size-3.5 animate-spin" />
+                          ) : (
+                            <X className="size-3.5" />
+                          )}
                           Reject
                         </Button>
                       </div>
@@ -1711,11 +1777,11 @@ export default function AdminPage() {
                   <span className="text-xs text-muted-foreground">
                     {stopSuggestions.length.toLocaleString()} suggestion{stopSuggestions.length === 1 ? '' : 's'} total
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 px-2 text-xs"
+                      className="h-9 px-3 text-xs"
                       onClick={() => setSuggPage(safeSuggPage - 1)}
                       disabled={safeSuggPage <= 1}
                     >
@@ -1727,7 +1793,7 @@ export default function AdminPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 px-2 text-xs"
+                      className="h-9 px-3 text-xs"
                       onClick={() => setSuggPage(safeSuggPage + 1)}
                       disabled={safeSuggPage >= suggPageCount}
                     >
@@ -1880,7 +1946,7 @@ export default function AdminPage() {
                                   onClick={() => setActivityEmail(a.email)}
                                   variant="outline"
                                   size="sm"
-                                  className="h-8 text-xs"
+                                  className="h-9 text-xs"
                                 >
                                   Activity
                                 </Button>
@@ -1890,16 +1956,20 @@ export default function AdminPage() {
                                       onClick={() => toggleCuratorRole(a.email, a.role)}
                                       variant="outline"
                                       size="sm"
-                                      className="h-8 text-xs"
+                                      disabled={adminPending.has(a.email)}
+                                      className="h-9 gap-1.5 text-xs"
                                     >
+                                      {adminPending.has(a.email) && <CircleNotch className="size-3.5 animate-spin" />}
                                       {a.role === 'curator' ? 'Make admin' : 'Make curator'}
                                     </Button>
                                     <Button
                                       onClick={() => revokeAdmin(a.email)}
                                       variant="outline"
                                       size="sm"
-                                      className={`h-8 text-xs ${STATUS_COLOR.err}`}
+                                      disabled={adminPending.has(a.email)}
+                                      className={`h-9 gap-1.5 text-xs ${STATUS_COLOR.err}`}
                                     >
+                                      {adminPending.has(a.email) && <CircleNotch className="size-3.5 animate-spin" />}
                                       Revoke
                                     </Button>
                                   </>

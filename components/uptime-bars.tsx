@@ -25,9 +25,9 @@ function dayStatus(b: UptimeDay): 'ok' | 'degraded' | 'down' | null {
 }
 
 const BAR_CLASS: Record<'ok' | 'degraded' | 'down', string> = {
-  ok: 'bg-green-600/80 dark:bg-green-500/80',
-  degraded: 'bg-amber-500/80',
-  down: 'bg-red-600/80 dark:bg-red-500/80',
+  ok: 'bg-success/80',
+  degraded: 'bg-warning/80',
+  down: 'bg-danger/80',
 }
 
 const STATUS_LABEL: Record<'ok' | 'degraded' | 'down', string> = {

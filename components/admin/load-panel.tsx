@@ -105,7 +105,7 @@ function LatencySparkline({ points }: { points?: LatencyHistoryPoint[] }) {
   const series = points ?? []
   const hasData = series.some((p) => p.count > 0)
   if (!hasData) {
-    return <p className="text-xs text-muted-foreground/70">no latency data</p>
+    return <p className="text-xs text-muted-foreground">no latency data</p>
   }
   return (
     <div className="h-10 w-36">
@@ -178,7 +178,7 @@ function SummaryTile({
       <div className="min-w-0">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <p className={`font-mono text-lg leading-tight tabular-nums tracking-tight ${toneCls}`}>{value}</p>
-        {sub ? <p className="mt-0.5 truncate text-xs text-muted-foreground/80">{sub}</p> : null}
+        {sub ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{sub}</p> : null}
       </div>
     </div>
   )
@@ -362,7 +362,7 @@ export default function LoadPanel() {
                   <TableRow>
                     <TableCell colSpan={6} className="py-10 text-center">
                       <p className="text-sm font-semibold text-muted-foreground">No traffic in this window</p>
-                      <p className="mx-auto mt-1 max-w-[45ch] text-xs text-muted-foreground/80">
+                      <p className="mx-auto mt-1 max-w-[45ch] text-xs text-muted-foreground">
                         Requests will appear here as riders hit the API. The read-only probe sweep counts too.
                       </p>
                     </TableCell>
@@ -380,7 +380,10 @@ export default function LoadPanel() {
                         <TableCell className="font-mono text-xs tabular-nums">{fmt(g.requests)}</TableCell>
                         {/* Status mini-bar — 2xx / 4xx / 5xx proportional */}
                         <TableCell>
-                          <div className="flex h-1.5 min-w-24 max-w-56 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="flex h-1.5 min-w-24 max-w-56 overflow-hidden rounded-full bg-muted"
+                            title={`${fmt(g.status2xx + g.status3xx)} 2xx/3xx · ${fmt(g.status4xx)} 4xx · ${fmt(g.status5xx)} 5xx`}
+                          >
                             <div
                               className="h-full bg-success/80 transition-[width]"
                               style={{ width: `${pct(g.status2xx + g.status3xx)}%` }}
@@ -394,6 +397,9 @@ export default function LoadPanel() {
                               style={{ width: `${pct(g.status5xx)}%` }}
                             />
                           </div>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {fmt(g.status4xx)} 4xx · {fmt(g.status5xx)} 5xx
+                          </p>
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
                           {g.p50Ms}/{g.p95Ms} ms
@@ -457,7 +463,7 @@ export default function LoadPanel() {
             </Card>
           ) : null}
 
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground/80">
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
             <ArrowsClockwise className="size-3" />
             Live — refreshes every 10 s while this section is open.
           </p>

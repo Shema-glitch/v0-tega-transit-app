@@ -504,7 +504,7 @@ export function StopsPanel({
                   {c.stops.length > 3 ? ` +${c.stops.length - 3}` : ''}
                 </span>
                 <span className="font-mono text-xs text-muted-foreground">{Math.round(c.maxSpanMeters)} m</span>
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => applyCluster(c)}>
+                <Button size="sm" variant="outline" className="h-9 text-xs" onClick={() => applyCluster(c)}>
                   Use
                 </Button>
               </div>
@@ -695,7 +695,7 @@ export function StopsPanel({
               size="sm"
               variant="outline"
               onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-              className="h-7 w-7 px-0"
+              className="h-9 w-9 px-0"
               aria-label={`Sort ${sortDir === 'asc' ? 'descending' : 'ascending'}`}
             >
               {sortDir === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
@@ -709,12 +709,12 @@ export function StopsPanel({
             <span className="font-mono text-xs font-semibold text-brand">{selected.size} selected</span>
             <span className="text-xs text-muted-foreground">merge victims — active stops only</span>
             <div className="ml-auto flex items-center gap-2">
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={clearSelection} disabled={busy}>
+              <Button size="sm" variant="outline" className="h-9 text-xs" onClick={clearSelection} disabled={busy}>
                 Clear
               </Button>
               <Button
                 size="sm"
-                className="h-7 text-xs"
+                className="h-9 text-xs"
                 onClick={() => {
                   if (survivorId) void previewMerge()
                   else document.getElementById('merge-tool')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -814,9 +814,9 @@ export function StopsPanel({
                     </p>
                     <p className="truncate font-mono text-xs text-muted-foreground">{s.id}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-2">
                     {s.status === 'active' && (
-                      <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => openEdit(s)} disabled={busy}>
+                      <Button size="sm" variant="ghost" className="h-9 gap-1 px-2 text-xs" onClick={() => openEdit(s)} disabled={busy}>
                         <PencilSimple className="size-3" /> Edit
                       </Button>
                     )}
@@ -824,7 +824,7 @@ export function StopsPanel({
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 gap-1 px-2 text-xs text-warning hover:opacity-80"
+                        className="h-9 gap-1 px-2 text-xs text-warning hover:opacity-80"
                         onClick={() => hide(s.id, s.name)}
                         disabled={busy}
                       >
@@ -835,7 +835,7 @@ export function StopsPanel({
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 gap-1 px-2 text-xs text-brand hover:text-brand"
+                        className="h-9 gap-1 px-2 text-xs text-brand hover:text-brand"
                         onClick={() => restore(s.id, s.name)}
                         disabled={busy}
                       >
@@ -854,11 +854,11 @@ export function StopsPanel({
                 <span className="text-xs text-muted-foreground">
                   {sorted.length.toLocaleString()} stop{sorted.length === 1 ? '' : 's'} total
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 px-2 text-xs"
+                    className="h-9 px-3 text-xs"
                     onClick={() => setPage(safePage - 1)}
                     disabled={safePage <= 1}
                   >
@@ -870,7 +870,7 @@ export function StopsPanel({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 px-2 text-xs"
+                    className="h-9 px-3 text-xs"
                     onClick={() => setPage(safePage + 1)}
                     disabled={safePage >= pageCount}
                   >
@@ -905,7 +905,7 @@ export function StopsPanel({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs"
+                  className="h-9 text-xs"
                   onClick={() => undo(m.id)}
                   disabled={busy}
                 >

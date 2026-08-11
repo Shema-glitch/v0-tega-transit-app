@@ -319,5 +319,10 @@
     .admin-grain {
       animation: none;
     }
+    /* Loading spinners stay functional (they're the only signal a request is
+       in flight) but slow way down so the spin itself isn't the trigger. */
+    .animate-spin {
+      animation-duration: 2.5s;
+    }
   }
 }
