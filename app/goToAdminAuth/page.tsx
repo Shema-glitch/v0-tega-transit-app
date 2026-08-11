@@ -20,7 +20,6 @@
  */
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowLeft,
@@ -439,180 +438,193 @@ export default function GoToAdminAuthPage() {
               </p>
             </div>
 
-            {step === 'email' ? (
-              <form
-                className="rise-in mt-6"
-                style={{ '--rise-index': 1 } as CSSProperties}
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  requestCode()
-                }}
-              >
-                <label htmlFor="admin-email" className="mb-2 block text-xs font-semibold">
-                  Email
-                </label>
-                <div className="relative">
-                  <Input
-                    id="admin-email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value)
-                      setConfirmFirst(false)
-                      if (send.kind !== 'sending') setSend({ kind: 'idle' })
-                    }}
-                    onFocus={() => setHasInteracted(true)}
-                    placeholder="you@example.com"
-                    className="h-11 pr-10 text-sm"
-                    autoFocus
-                  />
-                  <Envelope className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                </div>
-
-                {confirmFirst && send.kind === 'sent' && (
-                  <div className="mt-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2.5">
-                    <p className="flex items-center gap-1 text-xs font-medium text-amber-300">
-                      <EnvelopeOpen className="size-3.5" /> One-time confirmation sent to {maskEmail(email)}
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                      This address is new — click the confirmation link in the email once (it lands you
-                      back on this sign-in page), then send the code again. After that, codes come
-                      straight to your inbox.
-                    </p>
-                  </div>
-                )}
-                {send.kind === 'sent' && !confirmFirst && (
-                  <p className="mt-2 flex items-center gap-1 text-xs font-medium text-success">
-                    <CheckCircle className="size-3.5" /> Code sent — check your inbox.
-                  </p>
-                )}
-                {sendError && (
-                  <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
-                    <Triangle className="mt-px size-3.5 shrink-0" />
-                    <span>{sendError.message}</span>
-                  </p>
-                )}
-                {send.kind === 'error' && send.hint && (
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{send.hint}</p>
-                )}
-
-                <Button
-                  type="submit"
-                  disabled={send.kind === 'sending' || !email.trim()}
-                  className="mt-4 h-11 w-full justify-center text-sm"
+            <AnimatePresence mode="wait">
+              {step === 'email' ? (
+                <motion.form
+                  key="email-step"
+                  initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -12 }}
+                  transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                  className="mt-6"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    requestCode()
+                  }}
                 >
-                  {send.kind === 'sending' ? (
-                    <>
-                      <CircleNotch className="size-4 animate-spin" /> Sending…
-                    </>
-                  ) : (
-                    'Send code'
+                  <label htmlFor="admin-email" className="mb-2 block text-xs font-semibold">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="admin-email"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                        setConfirmFirst(false)
+                        if (send.kind !== 'sending') setSend({ kind: 'idle' })
+                      }}
+                      onFocus={() => setHasInteracted(true)}
+                      placeholder="you@example.com"
+                      className="h-11 pr-10 text-sm"
+                      autoFocus
+                    />
+                    <Envelope className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+
+                  {confirmFirst && send.kind === 'sent' && (
+                    <div className="mt-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2.5">
+                      <p className="flex items-center gap-1 text-xs font-medium text-amber-300">
+                        <EnvelopeOpen className="size-3.5" /> One-time confirmation sent to {maskEmail(email)}
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        This address is new — click the confirmation link in the email once (it lands you
+                        back on this sign-in page), then send the code again. After that, codes come
+                        straight to your inbox.
+                      </p>
+                    </div>
                   )}
-                </Button>
+                  {send.kind === 'sent' && !confirmFirst && (
+                    <p className="mt-2 flex items-center gap-1 text-xs font-medium text-success">
+                      <CheckCircle className="size-3.5" /> Code sent — check your inbox.
+                    </p>
+                  )}
+                  {sendError && (
+                    <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
+                      <Triangle className="mt-px size-3.5 shrink-0" />
+                      <span>{sendError.message}</span>
+                    </p>
+                  )}
+                  {send.kind === 'error' && send.hint && (
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{send.hint}</p>
+                  )}
 
-                <p className="mt-6 flex justify-center">
-                  <a
-                    href="/"
-                    className="group inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
-                    Back to the public status page
-                  </a>
-                </p>
-              </form>
-            ) : (
-              <div className="rise-in mt-6" style={{ '--rise-index': 1 } as CSSProperties}>
-                {send.kind === 'sent' && (
-                  <p className="mb-2 flex items-center gap-1 text-xs font-medium text-success">
-                    <CheckCircle className="size-3.5" /> Code sent to {maskEmail(email)} — check your
-                    inbox.
-                  </p>
-                )}
-
-                <label htmlFor="admin-code" className="mb-2 block text-xs font-semibold">
-                  One-time code
-                </label>
-                <OtpSlots
-                  id="admin-code"
-                  value={code}
-                  onChange={onCodeChange}
-                  disabled={verify.kind === 'verifying'}
-                  invalid={!!verifyError}
-                />
-
-                {verifyError && (
-                  <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
-                    <Triangle className="mt-px size-3.5 shrink-0" />
-                    <span>{verifyError.message}</span>
-                  </p>
-                )}
-                {send.kind === 'error' && sendError && (
-                  <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
-                    <Triangle className="mt-px size-3.5 shrink-0" />
-                    <span>{sendError.message}</span>
-                  </p>
-                )}
-
-                <div className="mt-4 grid grid-cols-[auto_1fr] gap-2">
                   <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setStep('email')
-                      setVerify({ kind: 'idle' })
-                      setCode('')
-                    }}
-                    disabled={busy}
-                    className="h-11 px-3 text-xs"
+                    type="submit"
+                    disabled={send.kind === 'sending' || !email.trim()}
+                    className="mt-4 h-11 w-full justify-center text-sm"
                   >
-                    <ArrowLeft className="size-3.5" /> Back
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => verifyCode()}
-                    disabled={verify.kind === 'verifying' || !/^\d{6,10}$/.test(code)}
-                    className="h-11 text-sm"
-                  >
-                    {verify.kind === 'verifying' ? (
+                    {send.kind === 'sending' ? (
                       <>
-                        <CircleNotch className="size-4 animate-spin" /> Signing in…
+                        <CircleNotch className="size-4 animate-spin" /> Sending…
                       </>
                     ) : (
-                      'Sign in'
+                      'Send code'
                     )}
                   </Button>
-                </div>
 
-                <div className="mt-4 flex items-center justify-between text-xs">
-                  <button
-                    type="button"
-                    onClick={requestCode}
-                    disabled={!resendEnabled}
-                    className="font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    {send.kind === 'sending'
-                      ? 'Sending…'
-                      : resendIn > 0
-                        ? `Resend code in ${fmtCountdown(resendIn)}`
-                        : 'Resend code'}
-                  </button>
-                  <a
-                    href="/"
-                    className="font-medium text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    public status page
-                  </a>
-                </div>
+                  <p className="mt-6 flex justify-center">
+                    <a
+                      href="/"
+                      className="group inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
+                      Back to the public status page
+                    </a>
+                  </p>
+                </motion.form>
+              ) : (
+                <motion.div
+                  key="code-step"
+                  initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 12 }}
+                  transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                  className="mt-6"
+                >
+                  {send.kind === 'sent' && (
+                    <p className="mb-2 flex items-center gap-1 text-xs font-medium text-success">
+                      <CheckCircle className="size-3.5" /> Code sent to {maskEmail(email)} — check your
+                      inbox.
+                    </p>
+                  )}
 
-                <Alert className="mt-4 border-muted/40 bg-muted/20">
-                  <AlertDescription className="text-xs text-muted-foreground">
-                    No email? Check spam, wait a minute, then resend. You can also click the link in
-                    the email instead of typing the code.
-                  </AlertDescription>
-                </Alert>
-              </div>
-            )}
+                  <label htmlFor="admin-code" className="mb-2 block text-xs font-semibold">
+                    One-time code
+                  </label>
+                  <OtpSlots
+                    id="admin-code"
+                    value={code}
+                    onChange={onCodeChange}
+                    disabled={verify.kind === 'verifying'}
+                    invalid={!!verifyError}
+                  />
+
+                  {verifyError && (
+                    <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
+                      <Triangle className="mt-px size-3.5 shrink-0" />
+                      <span>{verifyError.message}</span>
+                    </p>
+                  )}
+                  {send.kind === 'error' && sendError && (
+                    <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
+                      <Triangle className="mt-px size-3.5 shrink-0" />
+                      <span>{sendError.message}</span>
+                    </p>
+                  )}
+
+                  <div className="mt-4 grid grid-cols-[auto_1fr] gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setStep('email')
+                        setVerify({ kind: 'idle' })
+                        setCode('')
+                      }}
+                      disabled={busy}
+                      className="h-11 px-3 text-xs"
+                    >
+                      <ArrowLeft className="size-3.5" /> Back
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => verifyCode()}
+                      disabled={verify.kind === 'verifying' || !/^\d{6,10}$/.test(code)}
+                      className="h-11 text-sm"
+                    >
+                      {verify.kind === 'verifying' ? (
+                        <>
+                          <CircleNotch className="size-4 animate-spin" /> Signing in…
+                        </>
+                      ) : (
+                        'Sign in'
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      onClick={requestCode}
+                      disabled={!resendEnabled}
+                      className="font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      {send.kind === 'sending'
+                        ? 'Sending…'
+                        : resendIn > 0
+                          ? `Resend code in ${fmtCountdown(resendIn)}`
+                          : 'Resend code'}
+                    </button>
+                    <a
+                      href="/"
+                      className="font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      public status page
+                    </a>
+                  </div>
+
+                  <Alert className="mt-4 border-muted/40 bg-muted/20">
+                    <AlertDescription className="text-xs text-muted-foreground">
+                      No email? Check spam, wait a minute, then resend. You can also click the link in
+                      the email instead of typing the code.
+                    </AlertDescription>
+                  </Alert>
+                </motion.div>
+              )}
+            </AnimatePresence>
               </>
             )}
           </div>
