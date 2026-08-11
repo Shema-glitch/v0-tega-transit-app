@@ -7,10 +7,21 @@
     2. Subject (paste into the Subject field):
          Your BusGo admin sign-in code
     3. Paste the <body> contents below into the "Email body" editor
-       (keep the {{ .Token }}, {{ .ConfirmationURL }}, {{ .SiteURL }} and
-       {{ .Email }} placeholders exactly as written — Supabase swaps them).
+       (keep the {{ .Token }}, {{ .SiteURL }} and {{ .Email }} placeholders
+       exactly as written — Supabase swaps them).
     4. In Supabase → Authentication → URL Configuration, set Site URL to
-       https://tega-transit-api.onrender.com so the logo and redirect resolve.
+       https://tega-transit-api.onrender.com so the logo resolves.
+
+  IMPORTANT — do NOT use {{ .ConfirmationURL }} for the link:
+    {{ .ConfirmationURL }} points at Supabase's own hosted
+    /auth/v1/verify endpoint, which verifies the token itself and then
+    redirects back with the session as a URL *fragment*
+    (#access_token=...) — fragments never reach the server, so
+    app/api/auth/callback/route.ts sees no token_hash/type/code at all
+    and shows "That magic link is incomplete." This template instead
+    links straight at our own callback with {{ .TokenHash }} and
+    {{ .Type }} as query params, which verifyOtp() on the server can
+    actually read. Keep the link exactly as written below.
 
   Design notes: light theme (Gmail/Outlook-safe), single emerald accent on a
   neutral base, monospace code with wide tracking, pill CTA. No emojis.
@@ -195,7 +206,7 @@
                   <tr>
                     <td align="center">
                       <a
-                        href="{{ .ConfirmationURL }}"
+                        href="{{ .SiteURL }}/api/auth/callback?token_hash={{ .TokenHash }}&type={{ .Type }}"
                         style="
                           display: inline-block;
                           background-color: #047857;
@@ -245,7 +256,7 @@
                 </p>
                 <p style="margin: 6px 0 0; font-size: 13px; line-height: 1.5">
                   <a
-                    href="{{ .ConfirmationURL }}"
+                    href="{{ .SiteURL }}/api/auth/callback?token_hash={{ .TokenHash }}&type={{ .Type }}"
                     style="
                       color: #047857;
                       text-decoration: none;
@@ -255,7 +266,7 @@
                         monospace;
                       font-size: 12px;
                     "
-                    >{{ .ConfirmationURL }}</a
+                    >{{ .SiteURL }}/api/auth/callback?token_hash={{ .TokenHash }}&type={{ .Type }}</a
                   >
                 </p>
 

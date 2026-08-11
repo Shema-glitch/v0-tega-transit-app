@@ -15,6 +15,33 @@
 
 import { useRef } from 'react'
 
+/**
+ * Picks the OTP code out of pasted clipboard text instead of blindly
+ * concatenating every digit in it. Two cases:
+ *   - The whole clipboard is just digits ("482735") — trust it if its length
+ *     is actually a valid code length. This covers the common case (a
+ *     password manager or SMS autofill hands over just the code).
+ *   - The clipboard has other content (someone selected a whole email body,
+ *     "Your code is 482735, expires in 10 min") — look for digit runs
+ *     bounded by non-digit characters, and only trust it if EXACTLY ONE run
+ *     is a valid code length. A phone number plus a code in the same paste
+ *     is genuinely ambiguous, so we bail out rather than guess wrong; the
+ *     caller's existing strip-and-truncate onChange still runs as a fallback.
+ */
+function extractOtpFromPaste(text: string, minSlots: number, maxSlots: number): string | null {
+  const validLengths =
+    minSlots === maxSlots ? [minSlots] : [6, 8, 10].filter((n) => n >= minSlots && n <= maxSlots)
+
+  const trimmed = text.trim()
+  if (/^\d+$/.test(trimmed) && validLengths.includes(trimmed.length)) {
+    return trimmed
+  }
+
+  const runs = text.match(/\d+/g) ?? []
+  const candidates = runs.filter((r) => validLengths.includes(r.length))
+  return candidates.length === 1 ? candidates[0] : null
+}
+
 export function OtpSlots({
   id,
   value,
@@ -45,6 +72,15 @@ export function OtpSlots({
         autoComplete="one-time-code"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onPaste={(e) => {
+          const candidate = extractOtpFromPaste(e.clipboardData.getData('text'), minSlots, maxSlots)
+          if (candidate) {
+            e.preventDefault()
+            onChange(candidate)
+          }
+          // No confident candidate — let the native paste through; the
+          // caller's own onChange already strips non-digits and truncates.
+        }}
         disabled={disabled}
         autoFocus
         aria-label="One-time code"
