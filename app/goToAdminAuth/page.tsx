@@ -20,6 +20,8 @@
  */
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowLeft,
   Pulse,
@@ -103,6 +105,20 @@ export default function GoToAdminAuthPage() {
   }, [theme])
 
   const [step, setStep] = useState<Step>('email')
+  // Drives the brand-panel entrance sequence below — once true (the visitor
+  // has focused the email field), the brand panel never animates again so
+  // motion doesn't compete with someone actually filling in the form.
+  const [hasInteracted, setHasInteracted] = useState(false)
+  // Gates every purely-decorative animation in this file (idle entrance,
+  // focus scale) to skip entirely under prefers-reduced-motion; functional
+  // transitions (step swap, error/success banners) stay but drop their
+  // slide offset to opacity-only — see how each is used below.
+  const reduceMotion = useReducedMotion()
+
+  useEffect(() => {
+    if (step === 'code') setHasInteracted(true)
+  }, [step])
+
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [send, setSend] = useState<SendState>({ kind: 'idle' })
@@ -299,26 +315,40 @@ export default function GoToAdminAuthPage() {
           </div>
 
           <div className="relative max-w-md">
-            <h1 className="text-4xl font-semibold tracking-tight text-balance xl:text-5xl">
+            <motion.h1
+              initial={hasInteracted || reduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+              className="text-4xl font-semibold tracking-tight text-balance xl:text-5xl"
+            >
               The control room for BusGo Track.
-            </h1>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            </motion.h1>
+            <motion.p
+              initial={hasInteracted || reduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay: 0.06, ease: [0.23, 1, 0.32, 1] }}
+              className="mt-2 text-sm leading-relaxed text-muted-foreground"
+            >
               Flip endpoints off, triage incidents, and review stop suggestions — gated behind a code
               sent to your inbox.
-            </p>
+            </motion.p>
             <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2">
-                <Pulse className="size-4 shrink-0 text-brand/90" />
-                Live health checks on every API route
-              </li>
-              <li className="flex items-center gap-2">
-                <ShieldCheck className="size-4 shrink-0 text-brand/90" />
-                Signed-in sessions only — no shared secrets in the browser
-              </li>
-              <li className="flex items-center gap-2">
-                <MapPin className="size-4 shrink-0 text-brand/90" />
-                Approve stop-suggestion edits for the Kigali network
-              </li>
+              {[
+                { icon: Pulse, text: 'Live health checks on every API route' },
+                { icon: ShieldCheck, text: 'Signed-in sessions only — no shared secrets in the browser' },
+                { icon: MapPin, text: 'Approve stop-suggestion edits for the Kigali network' },
+              ].map(({ icon: Icon, text }, i) => (
+                <motion.li
+                  key={text}
+                  initial={hasInteracted || reduceMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.28, delay: 0.16 + i * 0.06, ease: [0.23, 1, 0.32, 1] }}
+                  className="flex items-center gap-2"
+                >
+                  <Icon className="size-4 shrink-0 text-brand/90" />
+                  {text}
+                </motion.li>
+              ))}
             </ul>
           </div>
 
@@ -432,6 +462,7 @@ export default function GoToAdminAuthPage() {
                       setConfirmFirst(false)
                       if (send.kind !== 'sending') setSend({ kind: 'idle' })
                     }}
+                    onFocus={() => setHasInteracted(true)}
                     placeholder="you@example.com"
                     className="h-11 pr-10 text-sm"
                     autoFocus
