@@ -318,7 +318,7 @@ export default function GoToAdminAuthPage() {
             <motion.h1
               initial={hasInteracted || reduceMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
               className="text-4xl font-semibold tracking-tight text-balance xl:text-5xl"
             >
               The control room for BusGo Track.
@@ -326,7 +326,7 @@ export default function GoToAdminAuthPage() {
             <motion.p
               initial={hasInteracted || reduceMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, delay: 0.06, ease: [0.23, 1, 0.32, 1] }}
+              transition={{ duration: 0.28, delay: 0.06, ease: [0.23, 1, 0.32, 1] }}
               className="mt-2 text-sm leading-relaxed text-muted-foreground"
             >
               Flip endpoints off, triage incidents, and review stop suggestions — gated behind a code
