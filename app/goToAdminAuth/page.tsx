@@ -265,7 +265,7 @@ export default function GoToAdminAuthPage() {
         setVerify({ kind: 'error', message: data?.error ?? 'Invalid or expired code.' })
         return
       }
-      window.location.replace('/admin')
+      window.location.replace('/admin?welcome=1')
     } catch {
       setVerify({ kind: 'error', message: 'Could not reach the API. Check your connection and try again.' })
     }
