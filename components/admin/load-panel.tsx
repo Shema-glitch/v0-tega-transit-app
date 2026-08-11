@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Activity, Database, Gauge, Radio, RefreshCw, ShieldAlert, Timer } from 'lucide-react'
+import { ArrowsClockwise, Database, Gauge, Pulse, Radio, ShieldWarning, Timer } from '@phosphor-icons/react'
 import { Line, LineChart, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -242,7 +242,7 @@ export default function LoadPanel() {
                 a.severity === 'critical' ? 'text-danger' : 'text-warning'
               }`}
             >
-              <ShieldAlert className="size-4 shrink-0" />
+              <ShieldWarning className="size-4 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold">Load alert — {alertLabel(a)}</p>
                 <p className="text-xs opacity-80">
@@ -280,7 +280,7 @@ export default function LoadPanel() {
               redis {redis?.connected ? `shared${redis?.pubsub?.attached ? ' · pub/sub' : ''}` : 'memory-only'}
             </Badge>
             <Badge variant="outline" className="gap-1.5 font-mono text-xs tabular-nums text-muted-foreground">
-              <Activity className="size-3" />
+              <Pulse className="size-3" />
               up {fmtUptime(metrics.uptimeSeconds)}
             </Badge>
           </>
@@ -322,7 +322,7 @@ export default function LoadPanel() {
                 sub={`avg ${totals!.avgMs} ms`}
               />
               <SummaryTile
-                icon={<ShieldAlert className="size-4" />}
+                icon={<ShieldWarning className="size-4" />}
                 label="Rate-limited (429)"
                 value={fmt(totals!.rateLimited)}
                 sub={`${fmt(totals!.status4xx)} 4xx · ${fmt(totals!.status5xx)} 5xx`}
@@ -434,7 +434,7 @@ export default function LoadPanel() {
                     <TableRow key={`${a.kind}-${a.at}-${i}`}>
                       <TableCell>
                         {a.state === 'triggered' ? (
-                          <ShieldAlert
+                          <ShieldWarning
                             className={`size-3.5 ${
                               a.severity === 'critical' ? 'text-danger' : 'text-warning'
                             }`}
@@ -458,7 +458,7 @@ export default function LoadPanel() {
           ) : null}
 
           <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground/80">
-            <RefreshCw className="size-3" />
+            <ArrowsClockwise className="size-3" />
             Live — refreshes every 10 s while this section is open.
           </p>
         </>

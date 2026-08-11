@@ -26,26 +26,26 @@ import {
   useSyncExternalStore,
 } from 'react'
 import {
-  AlertTriangle,
+  ArrowsClockwise,
   Bug,
-  CheckCircle2,
+  CheckCircle,
+  CircleNotch,
   Copy,
   Database,
-  KeyRound,
-  Loader2,
+  DotsThree,
+  Key,
   MapPin,
   Moon,
-  MoreHorizontal,
-  RefreshCw,
+  Scroll,
+  ShareNetwork,
+  ShieldWarning,
   Sun,
-  ScrollText,
-  ShieldAlert,
-  Share2,
-  TriangleAlert,
+  Triangle,
   UserPlus,
+  WarningCircle,
   Wrench,
   X,
-} from 'lucide-react'
+} from '@phosphor-icons/react'
 import { ENDPOINT_REGISTRY, type EndpointRegistryEntry } from '@/lib/api/endpoint-registry'
 import { Button } from '@/components/ui/button'
 import {
@@ -384,11 +384,11 @@ function HeaderActionsMenu() {
           <Button variant="outline" size="sm" className="h-8 px-2" aria-label="More actions" />
         }
       >
-        <MoreHorizontal className="size-4" />
+        <DotsThree className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuItem onClick={copyGuide} title={COMMUNITY_GUIDE_URL} className="gap-2">
-          <Share2 className="size-4" />
+          <ShareNetwork className="size-4" />
           {copied ? 'Copied!' : 'Copy community guide link'}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -1140,7 +1140,7 @@ export default function AdminPage() {
   const statsByTab: Record<string, StatDef[]> = {
     issues: [
       {
-        icon: <AlertTriangle className="size-3.5" />,
+        icon: <Triangle className="size-3.5" />,
         label: 'Open issues',
         pulse: openCount > 0,
         valueClass: openCount > 0 ? STATUS_COLOR.warn : STATUS_COLOR.good,
@@ -1154,7 +1154,7 @@ export default function AdminPage() {
     ],
     endpoints: [
       {
-        icon: <ShieldAlert className="size-3.5" />,
+        icon: <ShieldWarning className="size-3.5" />,
         label: 'Endpoints disabled',
         pulse: disabledCount > 0,
         valueClass: disabledCount > 0 ? STATUS_COLOR.warn : undefined,
@@ -1281,7 +1281,7 @@ export default function AdminPage() {
                 className="h-8 gap-1 text-xs"
                 aria-label="Refresh dashboard data"
               >
-                <RefreshCw className="size-3.5" /> Refresh
+                <ArrowsClockwise className="size-3.5" /> Refresh
               </Button>
               <HeaderActionsMenu />
             </div>
@@ -1290,7 +1290,7 @@ export default function AdminPage() {
       <main className="@container/main flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
         {idleWarning && (
           <Alert className="mb-4 border-warning/40 bg-warning/10">
-            <AlertTriangle className="size-4 text-warning" />
+            <Triangle className="size-4 text-warning" />
             <AlertTitle>Session expires soon</AlertTitle>
             <AlertDescription>
               No activity for 14 minutes — you&apos;ll be signed out in{' '}
@@ -1364,7 +1364,7 @@ export default function AdminPage() {
               {!loading && filteredIssues.length === 0 && isAllClear && (
                 <div className="flex flex-col items-center gap-3 py-20 text-center">
                   <span className="inline-flex size-12 items-center justify-center rounded-full border border-success/20 bg-success/10">
-                    <CheckCircle2 className={`size-6 ${STATUS_COLOR.good}`} />
+                    <CheckCircle className={`size-6 ${STATUS_COLOR.good}`} />
                   </span>
                   <p className="text-sm font-semibold tracking-tight">All clear</p>
                   <p className="max-w-[38ch] text-xs leading-relaxed text-muted-foreground">
@@ -1487,7 +1487,7 @@ export default function AdminPage() {
             <section>
               {showRestartNudge && (
                 <Alert className="mb-4 border-warning/40 bg-warning/10">
-                  <AlertTriangle className="size-4 text-warning" />
+                  <Triangle className="size-4 text-warning" />
                   <AlertTitle>Process restarted recently</AlertTitle>
                   <AlertDescription>
                     This process started <TimeAgo ts={processStartedAt!} />.
@@ -1513,9 +1513,9 @@ export default function AdminPage() {
                     className="h-9 gap-1.5 bg-brand text-xs font-semibold text-brand-foreground shadow-brand transition-[transform,background-color] hover:bg-brand active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
                   >
                     {checksRunning ? (
-                      <Loader2 className="size-3.5 animate-spin" />
+                      <CircleNotch className="size-3.5 animate-spin" />
                     ) : (
-                      <RefreshCw className="size-3.5" />
+                      <ArrowsClockwise className="size-3.5" />
                     )}
                     {checksRunning ? 'Checking…' : 'Re-run all checks'}
                   </Button>
@@ -1544,7 +1544,7 @@ export default function AdminPage() {
                 {maintDurable ? (
                   <Database className="size-4 shrink-0" />
                 ) : (
-                  <AlertTriangle className="size-4 shrink-0" />
+                  <Triangle className="size-4 shrink-0" />
                 )}
                 {maintDurable ? (
                   <span>
@@ -1565,7 +1565,7 @@ export default function AdminPage() {
 
               {disabledCount === 0 && (
                 <div className="mb-4 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
-                  <CheckCircle2 className="size-4 shrink-0" />
+                  <CheckCircle className="size-4 shrink-0" />
                   All {ENDPOINT_REGISTRY.length} endpoints are live.
                 </div>
               )}
@@ -1648,7 +1648,7 @@ export default function AdminPage() {
               </p>
               {!loading && stopSuggestions.length === 0 && (
                 <div className="flex flex-col items-center gap-2 py-16 text-center">
-                  <CheckCircle2 className={`size-10 ${STATUS_COLOR.good}`} />
+                  <CheckCircle className={`size-10 ${STATUS_COLOR.good}`} />
                   <p className="text-sm font-semibold">Queue is empty</p>
                   <p className="text-xs text-muted-foreground">No pending stop suggestions right now.</p>
                 </div>
@@ -1687,7 +1687,7 @@ export default function AdminPage() {
                           className={`h-9 gap-1.5 text-xs ${STATUS_COLOR.good}`}
                           title="Apply this change to the live map (same write the stop editor uses)"
                         >
-                          <CheckCircle2 className="size-3.5" />
+                          <CheckCircle className="size-3.5" />
                           Approve
                         </Button>
                         <Button
@@ -1771,7 +1771,7 @@ export default function AdminPage() {
                     className="h-11 gap-1.5 text-sm"
                   >
                     {inviting ? (
-                      <Loader2 className="size-4 animate-spin" />
+                      <CircleNotch className="size-4 animate-spin" />
                     ) : (
                       <UserPlus className="size-4" />
                     )}
@@ -1788,7 +1788,7 @@ export default function AdminPage() {
 
               {totpSummary.known > 0 ? (
                 <p className="mb-2 text-xs text-muted-foreground">
-                  <KeyRound className="mr-1 inline size-3" />
+                  <Key className="mr-1 inline size-3" />
                   2FA: {totpSummary.enabled} of {totpSummary.known} admins enrolled
                 </p>
               ) : null}
@@ -1848,7 +1848,7 @@ export default function AdminPage() {
                               {a.totp ? (
                                 a.totp.enabled ? (
                                   <Badge className="gap-1 border-transparent bg-success/10 font-semibold text-success">
-                                    <KeyRound className="size-3" />
+                                    <Key className="size-3" />
                                     on
                                   </Badge>
                                 ) : (
@@ -1957,7 +1957,7 @@ export default function AdminPage() {
                         <TableRow key={`${ev.at}-${i}`}>
                           <TableCell>
                             {ev.ok ? (
-                              <CheckCircle2 className="size-4 text-success" />
+                              <CheckCircle className="size-4 text-success" />
                             ) : (
                               <X className="size-4 text-destructive" />
                             )}
@@ -2097,7 +2097,7 @@ export default function AdminPage() {
           <DialogBackdrop />
           <DialogPopup>
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <KeyRound className="size-4 text-brand" />
+              <Key className="size-4 text-brand" />
               Authenticator code required
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
@@ -2123,7 +2123,7 @@ export default function AdminPage() {
               />
               {totpError && (
                 <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
-                  <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                  <WarningCircle className="mt-px size-3.5 shrink-0" />
                   {totpError}
                 </p>
               )}
@@ -2149,7 +2149,7 @@ export default function AdminPage() {
                 disabled={totpVerifying || totpCode.length !== 6}
                 className="h-9 text-xs"
               >
-                {totpVerifying ? <Loader2 className="size-3.5 animate-spin" /> : 'Confirm code'}
+                {totpVerifying ? <CircleNotch className="size-3.5 animate-spin" /> : 'Confirm code'}
               </Button>
             </div>
           </DialogPopup>
@@ -2192,7 +2192,7 @@ export default function AdminPage() {
         <SheetContent side="right" className="w-[min(92vw,28rem)] gap-0 sm:max-w-md">
           <SheetHeader className="border-b">
             <SheetTitle className="flex items-center gap-2 text-base font-semibold">
-              <ScrollText className="size-4 text-muted-foreground" />
+              <Scroll className="size-4 text-muted-foreground" />
               Recent activity
             </SheetTitle>
             <SheetDescription className="break-all font-mono text-xs">{activityEmail}</SheetDescription>
@@ -2206,7 +2206,7 @@ export default function AdminPage() {
               activityEvents.map((ev, i) => (
                 <div key={`${ev.at}-${i}`} className="flex items-start gap-2.5 rounded-lg px-2 py-2 hover:bg-muted/40">
                   {ev.ok ? (
-                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
+                    <CheckCircle className="mt-0.5 size-3.5 shrink-0 text-success" />
                   ) : (
                     <X className="mt-0.5 size-3.5 shrink-0 text-destructive" />
                   )}

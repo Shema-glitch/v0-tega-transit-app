@@ -20,24 +20,24 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { toDataURL } from 'qrcode'
 import {
-  CalendarDays,
-  CheckCircle2,
+  ArrowsClockwise,
+  Calendar,
+  CheckCircle,
+  CircleNotch,
   Copy,
-  KeyRound,
-  Loader2,
-  Mail,
+  Envelope,
+  FloppyDisk,
+  Key,
   Moon,
   Palette,
-  RefreshCw,
-  Save,
-  ScanLine,
+  Scan,
   ShieldCheck,
-  ShieldOff,
-  Smartphone,
+  ShieldSlash,
+  DeviceMobile,
   Sun,
-  TriangleAlert,
-  UserRound,
-} from 'lucide-react'
+  Triangle,
+  User,
+} from '@phosphor-icons/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -320,7 +320,7 @@ export function SettingsPanel({
           authenticator that protects the destructive surface.
         </p>
         <Button variant="outline" size="sm" onClick={refresh} className="h-9 gap-1.5 text-xs">
-          <RefreshCw className="size-3.5" /> Refresh
+          <ArrowsClockwise className="size-3.5" /> Refresh
         </Button>
       </div>
 
@@ -329,7 +329,7 @@ export function SettingsPanel({
         <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
           <div>
             <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-              <UserRound className="size-4 text-brand" />
+              <User className="size-4 text-brand" />
               Profile
             </CardTitle>
             <CardDescription className="mt-1 text-xs">
@@ -363,13 +363,13 @@ export function SettingsPanel({
             <p className="mt-1 text-xs text-muted-foreground">Leave empty to show your email instead.</p>
             {saveError && (
               <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
-                <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                <Triangle className="mt-px size-3.5 shrink-0" />
                 {saveError}
               </p>
             )}
             <div className="mt-3 flex items-center gap-2">
               <Button onClick={saveProfile} disabled={saving} className="h-9 gap-1.5 text-xs">
-                {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                {saving ? <CircleNotch className="size-3.5 animate-spin" /> : <FloppyDisk className="size-3.5" />}
                 Save
               </Button>
               {saved && <span className="text-xs font-medium text-success">Saved</span>}
@@ -378,14 +378,14 @@ export function SettingsPanel({
           <div className="space-y-3">
             <div className="rounded-xl border border-border bg-muted/30 p-3">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                <Mail className="size-3.5 text-brand" />
+                <Envelope className="size-3.5 text-brand" />
                 Email
               </p>
               <p className="mt-1 font-mono text-xs break-all">{user?.email ?? '—'}</p>
             </div>
             <div className="rounded-xl border border-border bg-muted/30 p-3">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                <CalendarDays className="size-3.5 text-brand" />
+                <Calendar className="size-3.5 text-brand" />
                 Member since
               </p>
               <p className="mt-1 text-xs">{createdAt ? fmtDate(new Date(createdAt).getTime()) : '—'}</p>
@@ -443,11 +443,11 @@ export function SettingsPanel({
           </div>
           {enabled ? (
             <Badge className="gap-1.5 bg-brand/15 font-semibold text-brand">
-              <CheckCircle2 className="size-3" /> TOTP active
+              <CheckCircle className="size-3" /> TOTP active
             </Badge>
           ) : (
             <Badge className="gap-1.5 bg-muted font-semibold text-muted-foreground">
-              <ShieldOff className="size-3" /> Not set up
+              <ShieldSlash className="size-3" /> Not set up
             </Badge>
           )}
         </CardHeader>
@@ -457,7 +457,7 @@ export function SettingsPanel({
             {/* Confirm identity — primes the 5-minute sensitive-op grace */}
             <div className="rise-in rounded-xl border border-border bg-card p-4" style={{ '--rise-index': 0 } as CSSProperties}>
               <p className="flex items-center gap-2 text-xs font-semibold">
-                <Smartphone className="size-3.5 text-brand" />
+                <DeviceMobile className="size-3.5 text-brand" />
                 Confirm identity
                 {graceLeft > 0 && (
                   <span className="ml-auto font-mono text-xs tabular-nums text-brand">
@@ -480,7 +480,7 @@ export function SettingsPanel({
                   className="h-10 w-32 font-mono text-center text-sm tracking-[0.3em]"
                 />
                 <Button size="sm" onClick={confirmIdentity} disabled={busy || code.length !== 6} className="h-10 text-xs">
-                  {busy ? <Loader2 className="size-3.5 animate-spin" /> : 'Confirm'}
+                  {busy ? <CircleNotch className="size-3.5 animate-spin" /> : 'Confirm'}
                 </Button>
               </div>
             </div>
@@ -488,7 +488,7 @@ export function SettingsPanel({
             {/* Disable — requires a valid code, so a hijacker can't turn it off */}
             <div className="rise-in rounded-xl border border-border bg-card p-4" style={{ '--rise-index': 1 } as CSSProperties}>
               <p className="flex items-center gap-2 text-xs font-semibold text-destructive">
-                <ShieldOff className="size-3.5" />
+                <ShieldSlash className="size-3.5" />
                 Disable two-factor
               </p>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -511,7 +511,7 @@ export function SettingsPanel({
                   disabled={busy || code.length !== 6}
                   className="h-10 text-xs"
                 >
-                  {busy ? <Loader2 className="size-3.5 animate-spin" /> : 'Disable'}
+                  {busy ? <CircleNotch className="size-3.5 animate-spin" /> : 'Disable'}
                 </Button>
               </div>
             </div>
@@ -527,7 +527,7 @@ export function SettingsPanel({
                   the second factor a hijacker who reads your OTP emails still can&apos;t produce.
                 </p>
                 <Button onClick={beginEnroll} disabled={busy} className="gap-2 text-xs">
-                  {busy ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+                  {busy ? <CircleNotch className="size-4 animate-spin" /> : <Key className="size-4" />}
                   Set up authenticator
                 </Button>
               </div>
@@ -547,18 +547,18 @@ export function SettingsPanel({
                       />
                     ) : qrFailed ? (
                       <div className="flex size-[216px] flex-col items-center justify-center gap-2 text-center">
-                        <TriangleAlert className="size-5 text-warning" />
+                        <Triangle className="size-5 text-warning" />
                         <p className="max-w-[24ch] text-xs text-muted-foreground">
                           Couldn&apos;t render the QR — use the setup key below instead.
                         </p>
                       </div>
                     ) : (
                       <div className="flex size-[216px] items-center justify-center">
-                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                        <CircleNotch className="size-5 animate-spin text-muted-foreground" />
                       </div>
                     )}
                     <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                      <ScanLine className="size-3.5 text-brand" /> Scan with Google Authenticator
+                      <Scan className="size-3.5 text-brand" /> Scan with Google Authenticator
                     </p>
                   </div>
 
@@ -585,7 +585,7 @@ export function SettingsPanel({
                           Setup key
                         </p>
                         <Button variant="outline" size="sm" onClick={copySecret} className="h-7 gap-1.5 px-2 text-xs">
-                          {copied ? <CheckCircle2 className="size-3 text-brand" /> : <Copy className="size-3" />}
+                          {copied ? <CheckCircle className="size-3 text-brand" /> : <Copy className="size-3" />}
                           {copied ? 'Copied' : 'Copy'}
                         </Button>
                       </div>
@@ -600,7 +600,7 @@ export function SettingsPanel({
 
                 {error && (
                   <p className="flex items-start gap-1.5 text-xs text-destructive">
-                    <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                    <Triangle className="mt-px size-3.5 shrink-0" />
                     {error}
                   </p>
                 )}
@@ -626,7 +626,7 @@ export function SettingsPanel({
                     disabled={busy || code.length !== 6}
                     className="h-10 text-xs"
                   >
-                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : 'Activate'}
+                    {busy ? <CircleNotch className="size-3.5 animate-spin" /> : 'Activate'}
                   </Button>
                 </div>
               </div>

@@ -19,23 +19,23 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
+  ArrowCounterClockwise,
   ArrowDown,
   ArrowUp,
+  ArrowsClockwise,
   Check,
-  CheckCircle2,
+  CheckCircle,
+  CircleNotch,
   GitMerge,
-  Loader2,
+  MagnifyingGlass,
   MapPin,
-  Pencil,
-  RefreshCw,
-  RotateCcw,
-  ScanSearch,
-  Search,
-  ShieldOff,
+  PencilSimple,
+  Scan,
+  ShieldSlash,
   Terminal,
-  TriangleAlert,
+  Triangle,
   X,
-} from 'lucide-react'
+} from '@phosphor-icons/react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -477,11 +477,11 @@ export function StopsPanel({
           <span className="font-semibold text-brand">{counts.hubs}</span> hubs
         </p>
         <Button variant="outline" size="sm" onClick={detect} disabled={detecting} className="h-9 gap-1.5 text-xs">
-          {detecting ? <Loader2 className="size-3.5 animate-spin" /> : <ScanSearch className="size-3.5" />}
+          {detecting ? <CircleNotch className="size-3.5 animate-spin" /> : <Scan className="size-3.5" />}
           Detect duplicates
         </Button>
         <Button variant="outline" size="sm" onClick={refresh} disabled={loading} className="h-9 gap-1.5 text-xs">
-          <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          <ArrowsClockwise className={`size-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </Button>
       </div>
 
@@ -489,7 +489,7 @@ export function StopsPanel({
       {duplicates && duplicates.length > 0 && (
         <Card className="p-4">
           <p className="flex items-center gap-2 text-xs font-semibold">
-            <ScanSearch className="size-3.5 text-brand" /> Suggested merges
+            <Scan className="size-3.5 text-brand" /> Suggested merges
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {duplicates.length} candidate cluster{duplicates.length === 1 ? '' : 's'} within 60 m. “Use” loads the
@@ -567,7 +567,7 @@ export function StopsPanel({
               disabled={busy || !survivorId || selected.size === 0}
               className="h-10 text-xs"
             >
-              {busy ? <Loader2 className="size-3.5 animate-spin" /> : 'Preview'}
+              {busy ? <CircleNotch className="size-3.5 animate-spin" /> : 'Preview'}
             </Button>
             <Button
               size="sm"
@@ -589,7 +589,7 @@ export function StopsPanel({
 
         {preview && !preview.ok && (
           <p className="mt-3 flex items-start gap-1.5 text-xs text-destructive">
-            <TriangleAlert className="mt-px size-3.5 shrink-0" />
+            <Triangle className="mt-px size-3.5 shrink-0" />
             {preview.error}
           </p>
         )}
@@ -607,7 +607,7 @@ export function StopsPanel({
                 : 'This is exactly what will change. Confirm to commit.'}
             </p>
             <Button size="sm" onClick={confirmMerge} disabled={busy} className="mt-2 h-8 text-xs">
-              {busy ? <Loader2 className="size-3.5 animate-spin" /> : 'Confirm merge'}
+              {busy ? <CircleNotch className="size-3.5 animate-spin" /> : 'Confirm merge'}
             </Button>
           </div>
         )}
@@ -617,7 +617,7 @@ export function StopsPanel({
       <Card className="overflow-hidden p-0">
         {/* Search + rows-per-page */}
         <div className="flex items-center gap-2 border-b border-border p-3">
-          <Search className="size-4 shrink-0 text-muted-foreground" />
+          <MagnifyingGlass className="size-4 shrink-0 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => {
@@ -817,7 +817,7 @@ export function StopsPanel({
                   <div className="flex shrink-0 items-center gap-1">
                     {s.status === 'active' && (
                       <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => openEdit(s)} disabled={busy}>
-                        <Pencil className="size-3" /> Edit
+                        <PencilSimple className="size-3" /> Edit
                       </Button>
                     )}
                     {isAdmin && s.status === 'active' && (
@@ -828,7 +828,7 @@ export function StopsPanel({
                         onClick={() => hide(s.id, s.name)}
                         disabled={busy}
                       >
-                        <ShieldOff className="size-3" /> Hide
+                        <ShieldSlash className="size-3" /> Hide
                       </Button>
                     )}
                     {isAdmin && s.status !== 'active' && (
@@ -839,7 +839,7 @@ export function StopsPanel({
                         onClick={() => restore(s.id, s.name)}
                         disabled={busy}
                       >
-                        <RotateCcw className="size-3" /> Restore
+                        <ArrowCounterClockwise className="size-3" /> Restore
                       </Button>
                     )}
                   </div>
@@ -886,7 +886,7 @@ export function StopsPanel({
       {/* Recent merges (undo + curator audit) */}
       <Card className="p-4">
         <p className="flex items-center gap-2 text-xs font-semibold">
-          <RotateCcw className="size-3.5 text-muted-foreground" /> Recent merges
+          <ArrowCounterClockwise className="size-3.5 text-muted-foreground" /> Recent merges
         </p>
         {merges.length === 0 ? (
           <p className="mt-2 text-xs text-muted-foreground">No merges yet — this is the undo + audit trail.</p>
@@ -976,7 +976,7 @@ export function StopsPanel({
                 Cancel
               </Button>
               <Button size="sm" onClick={saveEdit} disabled={busy} className="h-9 text-xs">
-                {busy ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />} Save
+                {busy ? <CircleNotch className="size-3.5 animate-spin" /> : <CheckCircle className="size-3.5" />} Save
               </Button>
             </div>
           </div>

@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { RefreshCw, RotateCw, Zap } from 'lucide-react'
+import { ArrowClockwise, ArrowsClockwise, Lightning } from '@phosphor-icons/react'
 import {
   CommandDialog,
   CommandEmpty,
@@ -90,7 +90,7 @@ export function CommandPalette({
             value="actions:re-run all checks"
             onSelect={run(onRunChecks)}
           >
-            <RefreshCw />
+            <ArrowsClockwise />
             <span>Re-run all checks</span>
             <CommandShortcut>endpoints</CommandShortcut>
           </CommandItem>
@@ -98,7 +98,7 @@ export function CommandPalette({
             value="actions:start live sse monitor"
             onSelect={run(onStartSse)}
           >
-            <Zap />
+            <Lightning />
             <span>Start live SSE monitor</span>
             <CommandShortcut>endpoints</CommandShortcut>
           </CommandItem>
@@ -106,7 +106,7 @@ export function CommandPalette({
             value="actions:refresh dashboard"
             onSelect={run(onRefresh)}
           >
-            <RotateCw />
+            <ArrowClockwise />
             <span>Refresh dashboard</span>
           </CommandItem>
         </CommandGroup>

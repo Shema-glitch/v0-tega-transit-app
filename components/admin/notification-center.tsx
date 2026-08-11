@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Bell, Bug, CheckCheck, CircleDot, Gauge } from 'lucide-react'
+import { Bell, Bug, Checks, DotOutline, Gauge } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -36,7 +36,7 @@ export interface AdminNotification {
 
 const KIND_ICON = {
   issue: Bug,
-  suggestion: CircleDot,
+  suggestion: DotOutline,
   alert: Gauge,
 } as const
 
@@ -112,7 +112,7 @@ export function NotificationCenter({
                   onClick={onMarkAllRead}
                   className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <CheckCheck className="size-3" /> Mark all read
+                  <Checks className="size-3" /> Mark all read
                 </button>
               )}
             </div>

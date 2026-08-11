@@ -13,18 +13,18 @@
  */
 
 import {
-  Activity,
+  ArrowSquareOut,
+  Pulse,
   BookOpen,
   Bug,
-  CircleDot,
-  ExternalLink,
+  DotOutline,
   Gauge,
-  LogOut,
+  Gear,
   MapPin,
-  ScrollText,
-  Settings,
+  Scroll,
   ShieldCheck,
-} from 'lucide-react'
+  SignOut,
+} from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/badge'
 import {
   Sidebar,
@@ -74,7 +74,7 @@ export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'Overview',
     items: [
-      { id: 'endpoints', label: 'Endpoints', icon: Activity, adminOnly: true },
+      { id: 'endpoints', label: 'Endpoints', icon: Pulse, adminOnly: true },
       { id: 'load', label: 'Load', icon: Gauge, dot: 'loadAlerts', adminOnly: true },
     ],
   },
@@ -82,7 +82,7 @@ export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
     label: 'Map data',
     items: [
       { id: 'stops', label: 'Map & Stops', icon: MapPin },
-      { id: 'suggestions', label: 'Suggestions', icon: CircleDot, badge: 'suggestions' },
+      { id: 'suggestions', label: 'Suggestions', icon: DotOutline, badge: 'suggestions' },
     ],
   },
   {
@@ -96,8 +96,8 @@ export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
     label: 'Administration',
     items: [
       { id: 'admins', label: 'People', icon: ShieldCheck, adminOnly: true },
-      { id: 'settings', label: 'Settings', icon: Settings },
-      { id: 'audit', label: 'Audit', icon: ScrollText },
+      { id: 'settings', label: 'Settings', icon: Gear },
+      { id: 'audit', label: 'Audit', icon: Scroll },
     ],
   },
 ]
@@ -191,7 +191,7 @@ export function AppSidebar({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton render={<a href="/" />} tooltip="Public status page">
-                <ExternalLink />
+                <ArrowSquareOut />
                 <span>Public status page</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -224,7 +224,7 @@ export function AppSidebar({
         <SidebarMenu className="p-1">
           <SidebarMenuItem>
             <SidebarMenuButton onClick={onLogout} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
-              <LogOut />
+              <SignOut />
               <span>Log out</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

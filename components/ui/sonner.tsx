@@ -2,7 +2,13 @@
 
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import {
+  CheckCircle as CircleCheckIcon,
+  CircleNotch as Loader2Icon,
+  Info as InfoIcon,
+  Triangle as TriangleAlertIcon,
+  XCircle as OctagonXIcon,
+} from "@phosphor-icons/react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()

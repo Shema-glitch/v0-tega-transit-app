@@ -21,18 +21,18 @@
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import {
-  Activity,
   ArrowLeft,
-  CheckCircle2,
-  KeyRound,
-  Loader2,
-  Mail,
-  MailCheck,
+  Pulse,
+  CheckCircle,
+  CircleNotch,
+  Envelope,
+  EnvelopeOpen,
+  Key,
   MapPin,
   ShieldCheck,
-  TriangleAlert,
+  Triangle,
   X,
-} from 'lucide-react'
+} from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
@@ -308,7 +308,7 @@ export default function GoToAdminAuthPage() {
             </p>
             <ul className="mt-8 space-y-3.5 text-sm text-muted-foreground">
               <li className="flex items-center gap-3">
-                <Activity className="size-4 shrink-0 text-brand/90" />
+                <Pulse className="size-4 shrink-0 text-brand/90" />
                 Live health checks on every API route
               </li>
               <li className="flex items-center gap-3">
@@ -385,7 +385,7 @@ export default function GoToAdminAuthPage() {
                     click, arrives as ?error=… and renders here (dismissible). */}
                 {notice && (
                   <Alert className="mb-4 border-destructive/40 bg-destructive/10">
-                    <TriangleAlert className="size-4 text-destructive" />
+                    <Triangle className="size-4 text-destructive" />
                     <AlertDescription className="pr-6 text-xs">{notice}</AlertDescription>
                     <AlertAction>
                       <button
@@ -436,13 +436,13 @@ export default function GoToAdminAuthPage() {
                     className="h-11 pr-10 text-sm"
                     autoFocus
                   />
-                  <Mail className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Envelope className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
 
                 {confirmFirst && send.kind === 'sent' && (
                   <div className="mt-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2.5">
                     <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
-                      <MailCheck className="size-3.5" /> One-time confirmation sent to {maskEmail(email)}
+                      <EnvelopeOpen className="size-3.5" /> One-time confirmation sent to {maskEmail(email)}
                     </p>
                     <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                       This address is new — click the confirmation link in the email once (it lands you
@@ -453,12 +453,12 @@ export default function GoToAdminAuthPage() {
                 )}
                 {send.kind === 'sent' && !confirmFirst && (
                   <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-success">
-                    <CheckCircle2 className="size-3.5" /> Code sent — check your inbox.
+                    <CheckCircle className="size-3.5" /> Code sent — check your inbox.
                   </p>
                 )}
                 {sendError && (
                   <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
-                    <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                    <Triangle className="mt-px size-3.5 shrink-0" />
                     <span>{sendError.message}</span>
                   </p>
                 )}
@@ -473,7 +473,7 @@ export default function GoToAdminAuthPage() {
                 >
                   {send.kind === 'sending' ? (
                     <>
-                      <Loader2 className="size-4 animate-spin" /> Sending…
+                      <CircleNotch className="size-4 animate-spin" /> Sending…
                     </>
                   ) : (
                     'Send code'
@@ -494,7 +494,7 @@ export default function GoToAdminAuthPage() {
               <div className="rise-in mt-7" style={{ '--rise-index': 1 } as CSSProperties}>
                 {send.kind === 'sent' && (
                   <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-success">
-                    <CheckCircle2 className="size-3.5" /> Code sent to {maskEmail(email)} — check your
+                    <CheckCircle className="size-3.5" /> Code sent to {maskEmail(email)} — check your
                     inbox.
                   </p>
                 )}
@@ -513,18 +513,18 @@ export default function GoToAdminAuthPage() {
                     className="h-12 pr-10 text-center font-mono text-lg tracking-[0.45em]"
                     autoFocus
                   />
-                  <KeyRound className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Key className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
 
                 {verifyError && (
                   <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
-                    <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                    <Triangle className="mt-px size-3.5 shrink-0" />
                     <span>{verifyError.message}</span>
                   </p>
                 )}
                 {send.kind === 'error' && sendError && (
                   <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive">
-                    <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                    <Triangle className="mt-px size-3.5 shrink-0" />
                     <span>{sendError.message}</span>
                   </p>
                 )}
@@ -551,7 +551,7 @@ export default function GoToAdminAuthPage() {
                   >
                     {verify.kind === 'verifying' ? (
                       <>
-                        <Loader2 className="size-4 animate-spin" /> Signing in…
+                        <CircleNotch className="size-4 animate-spin" /> Signing in…
                       </>
                     ) : (
                       'Sign in'

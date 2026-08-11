@@ -21,7 +21,7 @@ import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { AlertTriangle } from 'lucide-react'
+import { Triangle } from '@phosphor-icons/react'
 import UptimeBars, { type UptimeDay } from '@/components/uptime-bars'
 
 interface UptimeEndpoint {
@@ -146,7 +146,7 @@ export default function StatusPage() {
         </p>
         {maintenance.length > 0 && (
           <Alert className="mt-3 border-amber-500/40 bg-amber-500/10">
-            <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+            <Triangle className="size-4 text-amber-600 dark:text-amber-400" />
             <AlertTitle>Some services are temporarily unavailable</AlertTitle>
             <AlertDescription>
               We are carrying out maintenance right now and expect things back to normal shortly.
