@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       return redirectToLogin(url, 'Auth is not configured on the server yet.')
     }
     AuthLog.record({ action: 'magic-link-login', email, ip, ok: true })
-    const res = NextResponse.redirect(new URL('/admin', publicBaseUrl(url.origin)))
+    const res = NextResponse.redirect(new URL('/admin?welcome=1', publicBaseUrl(url.origin)))
     res.headers.set('Set-Cookie', cookie)
     return res
   } catch (err) {

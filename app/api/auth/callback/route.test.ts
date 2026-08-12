@@ -46,7 +46,7 @@ describe('GET /api/auth/callback', () => {
       req('http://localhost:3000/api/auth/callback?token_hash=tok123&type=magiclink')
     )
     expect(res.status).toBe(307)
-    expect(res.headers.get('location')).toBe('http://localhost:3000/admin')
+    expect(res.headers.get('location')).toBe('http://localhost:3000/admin?welcome=1')
     expect(res.headers.get('set-cookie')).toContain('admin_session=abc123')
     expect(verifyOtp).toHaveBeenCalledWith({ token_hash: 'tok123', type: 'magiclink' })
   })

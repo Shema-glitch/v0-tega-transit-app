@@ -25,6 +25,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
+import { AnimatePresence } from 'motion/react'
 import {
   ArrowsClockwise,
   Bug,
@@ -89,6 +90,7 @@ import { CommandPalette } from '@/components/admin/command-palette'
 import { NotificationCenter, type AdminNotification } from '@/components/admin/notification-center'
 import LoadPanel from '@/components/admin/load-panel'
 import { SettingsPanel } from '@/components/admin/settings-panel'
+import { WelcomeOverlay } from '@/components/admin/welcome-overlay'
 import { StopsPanel } from '@/components/admin/stops-panel'
 import { OtpSlots } from '@/components/admin/otp-slots'
 import {
@@ -139,6 +141,9 @@ const RECENT_RESTART_MS = 10 * 60 * 1000
 // server independently enforces the same window (lib/api/admin-auth.ts).
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000
 const IDLE_WARN_MS = 14 * 60 * 1000
+// Floor time the post-login welcome overlay stays up, so it never flashes
+// instantly on a fast connection even if the first data fetch is quick.
+const WELCOME_MIN_MS = 800
 const LAST_SEEN_KEY = 'admin-last-seen'
 // Console theme — dark is the deliberate default ("checking in at 11pm
 // mid-incident" tool); the ivory light mode is the daytime option.
@@ -483,6 +488,36 @@ export default function AdminPage() {
   // signal for notification seeding — it's tracked but no longer shown in the
   // header (the per-second "updated Xs ago" text was the P1 clutter).
   const [loading, setLoading] = useState(true)
+  // Post-login welcome overlay — shown once, only right after a fresh sign-in
+  // (both the typed-code and magic-link paths redirect here with ?welcome=1).
+  // A plain refresh of an already-active session has no ?welcome= param, so
+  // it skips straight to the dashboard.
+  const [showWelcome, setShowWelcome] = useState(false)
+  const welcomeShownAtRef = useRef<number | null>(null)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('welcome') === '1') {
+      setShowWelcome(true)
+      window.history.replaceState({}, '', '/admin')
+    }
+  }, [])
+  // The floor timer can only start once the overlay is actually reachable —
+  // it can't render before authState === 'in' (the "Checking session…" card
+  // occupies the screen until then), so starting the clock any earlier would
+  // let that screen eat into the floor and defeat its whole purpose.
+  useEffect(() => {
+    if (!showWelcome || authState !== 'in' || welcomeShownAtRef.current !== null) return
+    welcomeShownAtRef.current = Date.now()
+  }, [showWelcome, authState])
+  // Stays up until the real first data load finishes, with a minimum floor
+  // so it's never just a flash on a fast connection.
+  useEffect(() => {
+    if (!showWelcome || loading) return
+    const elapsed = Date.now() - (welcomeShownAtRef.current ?? Date.now())
+    const remaining = Math.max(0, WELCOME_MIN_MS - elapsed)
+    const t = setTimeout(() => setShowWelcome(false), remaining)
+    return () => clearTimeout(t)
+  }, [showWelcome, loading])
   const [lastUpdated, setLastUpdated] = useState<number | null>(null)
   const [pollFailed, setPollFailed] = useState(false)
 
@@ -1110,6 +1145,27 @@ export default function AdminPage() {
     localStorage.setItem(LAST_SEEN_KEY, String(Date.now()))
   }, [authState])
 
+  // Resolve `me` as early as possible, independent of the main refreshAll
+  // polling cycle — it drives the welcome overlay's greeting name, and
+  // waiting on the full Promise.all batch in refreshAll meant `me` was still
+  // null for essentially the overlay's whole visible life. refreshAll keeps
+  // re-fetching this on every poll too; this is just a faster first read.
+  useEffect(() => {
+    if (authState !== 'in') return
+    let cancelled = false
+    fetch('/api/admin/me', { cache: 'no-store' })
+      .then((res) => res.json().catch(() => ({})))
+      .then((meData) => {
+        if (!cancelled && meData?.email) {
+          setMe({ email: meData.email, displayName: meData.displayName ?? null })
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [authState])
+
   useEffect(() => {
     if (authState !== 'in') return
     refreshAll()
@@ -1274,6 +1330,11 @@ export default function AdminPage() {
       <div aria-hidden className="admin-grain" />
       {/* shadcn Sonner toasts — follows the console theme, bottom-right like the old stack. */}
       <Toaster theme={theme} position="bottom-right" richColors />
+      <AnimatePresence>
+        {showWelcome && (
+          <WelcomeOverlay name={me?.displayName || me?.email?.split('@')[0] || 'there'} />
+        )}
+      </AnimatePresence>
 
       {/* shadcn dashboard-01 shell: sidebar nav + inset content. The sections
           that were top tabs now live in the sidebar (see components/app-sidebar.tsx)
