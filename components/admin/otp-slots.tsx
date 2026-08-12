@@ -14,6 +14,7 @@
  */
 
 import { useRef } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 
 /**
  * Picks the OTP code out of pasted clipboard text instead of blindly
@@ -62,9 +63,15 @@ export function OtpSlots({
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const slotCount = Math.max(minSlots, Math.min(maxSlots, value.length))
+  const reduceMotion = useReducedMotion()
 
   return (
-    <div className="relative" onClick={() => inputRef.current?.focus()}>
+    <motion.div
+      className="relative"
+      onClick={() => inputRef.current?.focus()}
+      animate={invalid && !reduceMotion ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
+      transition={{ duration: 0.3 }}
+    >
       <input
         ref={inputRef}
         id={id}
@@ -101,11 +108,26 @@ export function OtpSlots({
                     : 'border-input'
               } ${digit ? 'text-foreground' : 'text-muted-foreground/40'} bg-background`}
             >
-              {digit ?? (isActive ? <span className="status-breathe h-4 w-px bg-brand" /> : '·')}
+              <AnimatePresence initial={false}>
+                {digit ? (
+                  <motion.span
+                    key={`${i}-${digit}`}
+                    initial={reduceMotion ? false : { opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.12 }}
+                  >
+                    {digit}
+                  </motion.span>
+                ) : isActive ? (
+                  <span key="caret" className="status-breathe h-4 w-px bg-brand" />
+                ) : (
+                  <span key="empty">·</span>
+                )}
+              </AnimatePresence>
             </div>
           )
         })}
       </div>
-    </div>
+    </motion.div>
   )
 }
