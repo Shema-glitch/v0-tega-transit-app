@@ -91,6 +91,13 @@ function alertLabel(a: LoadAlert): string {
   return `${name} at ${fmt(a.value)} (threshold ${fmt(a.threshold)})`
 }
 
+/** Display-only: normalize dot-notation RPC-style names (`stops.arrivals`) to a path style matching the REST routes (`/stops/arrivals`). */
+function formatRoutePath(path: string): string {
+  if (path.startsWith('/')) return path
+  if (path.includes('.')) return `/${path.split('.').join('/')}`
+  return path
+}
+
 function fmtUptime(sec: number): string {
   const h = Math.floor(sec / 3600)
   const m = Math.floor((sec % 3600) / 60)
@@ -105,7 +112,7 @@ function LatencySparkline({ points }: { points?: LatencyHistoryPoint[] }) {
   const series = points ?? []
   const hasData = series.some((p) => p.count > 0)
   if (!hasData) {
-    return <p className="text-xs text-muted-foreground">no latency data</p>
+    return <span className="text-xs text-muted-foreground">—</span>
   }
   return (
     <div className="h-10 w-36">
@@ -159,12 +166,14 @@ function SummaryTile({
   value,
   sub,
   tone = 'default',
+  wrapSub = false,
 }: {
   icon: React.ReactNode
   label: string
   value: React.ReactNode
   sub?: string
   tone?: 'default' | 'warn' | 'good'
+  wrapSub?: boolean
 }) {
   const toneCls =
     tone === 'warn'
@@ -175,10 +184,14 @@ function SummaryTile({
   return (
     <div className="flex items-start gap-3 px-4 py-3">
       <span className="mt-0.5 text-muted-foreground">{icon}</span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <p className={`font-mono text-lg leading-tight tabular-nums tracking-tight ${toneCls}`}>{value}</p>
-        {sub ? <p className="mt-1 truncate text-xs text-muted-foreground">{sub}</p> : null}
+        {sub ? (
+          <p className={`mt-1 text-xs text-muted-foreground ${wrapSub ? 'whitespace-normal break-words' : 'truncate'}`}>
+            {sub}
+          </p>
+        ) : null}
       </div>
     </div>
   )
@@ -223,6 +236,7 @@ export default function LoadPanel() {
   const sse = metrics?.sse
   const redis = metrics?.redis
   const alerts = metrics?.alerts
+  const hasAny429 = metrics?.groups.some((g) => g.rateLimited > 0) ?? false
 
   return (
     <section>
@@ -340,6 +354,7 @@ export default function LoadPanel() {
                 value={`${Math.round((cache!.hitRate || 0) * 100)}%`}
                 sub={`${fmt(cache!.hits)} mem · ${fmt(cache!.redisHits)} redis · ${fmt(cache!.misses)} misses · ${cache!.entries} keys`}
                 tone={cache!.hitRate > 0.5 ? 'good' : 'default'}
+                wrapSub
               />
             </div>
           </Card>
@@ -354,13 +369,13 @@ export default function LoadPanel() {
                   <TableHead className="w-[30%]">Status mix</TableHead>
                   <TableHead className="text-right">Latency p50 / p95</TableHead>
                   <TableHead>30-min trend</TableHead>
-                  <TableHead className="text-right">429</TableHead>
+                  {hasAny429 ? <TableHead className="text-right">429</TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {metrics.groups.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center">
+                    <TableCell colSpan={hasAny429 ? 6 : 5} className="py-10 text-center">
                       <p className="text-sm font-semibold text-muted-foreground">No traffic in this window</p>
                       <p className="mx-auto mt-1 max-w-[45ch] text-xs text-muted-foreground">
                         Requests will appear here as riders hit the API. The read-only probe sweep counts too.
@@ -374,7 +389,7 @@ export default function LoadPanel() {
                     return (
                       <TableRow key={g.group}>
                         <TableCell>
-                          <p className="truncate font-mono text-xs tabular-nums">{g.group}</p>
+                          <p className="truncate font-mono text-xs tabular-nums">{formatRoutePath(g.group)}</p>
                           <p className="text-xs text-muted-foreground">{g.requestsPerMin} req/min</p>
                         </TableCell>
                         <TableCell className="font-mono text-xs tabular-nums">{fmt(g.requests)}</TableCell>
@@ -407,15 +422,17 @@ export default function LoadPanel() {
                         <TableCell>
                           <LatencySparkline points={g.history} />
                         </TableCell>
-                        <TableCell className="text-right">
-                          {g.rateLimited > 0 ? (
-                            <Badge className="border-transparent bg-warning/10 font-mono text-xs tabular-nums text-warning">
-                              {g.rateLimited}×
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
+                        {hasAny429 ? (
+                          <TableCell className="text-right">
+                            {g.rateLimited > 0 ? (
+                              <Badge className="border-transparent bg-warning/10 font-mono text-xs tabular-nums text-warning">
+                                {g.rateLimited}×
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     )
                   })

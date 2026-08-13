@@ -28,13 +28,10 @@ import {
   Envelope,
   FloppyDisk,
   Key,
-  Moon,
-  Palette,
   Scan,
   ShieldCheck,
   ShieldSlash,
   DeviceMobile,
-  Sun,
   Triangle,
   User,
 } from '@phosphor-icons/react'
@@ -68,14 +65,10 @@ function fmtGrace(totalSec: number): string {
 export function SettingsPanel({
   onNotify,
   user,
-  theme,
-  onThemeChange,
 }: {
   onNotify: (message: string, kind?: 'success' | 'error') => void
   /** Signed-in identity from the dashboard — instant fallback for the profile. */
   user?: { email: string; displayName: string | null; role: 'admin' | 'curator' | null } | null
-  theme: 'dark' | 'light'
-  onThemeChange: (theme: 'dark' | 'light') => void
 }) {
   const [status, setStatus] = useState<TotpStatus | null>(null)
   const [step, setStep] = useState<Step>('idle')
@@ -317,8 +310,8 @@ export function SettingsPanel({
     <section className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="mr-auto text-xs text-muted-foreground">
-          Account and security settings for this console — profile, appearance, and the two-factor
-          authenticator that protects the destructive surface.
+          Account and security settings for this console — profile and the two-factor authenticator
+          that protects the destructive surface.
         </p>
         <Button variant="outline" size="sm" onClick={refresh} className="h-9 gap-1 text-xs">
           <ArrowsClockwise className="size-3.5" /> Refresh
@@ -345,84 +338,55 @@ export function SettingsPanel({
             </Badge>
           )}
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label htmlFor="profile-name" className="mb-2 block text-xs font-semibold">
-              Display name
-            </label>
-            <Input
-              id="profile-name"
-              value={nameDraft}
-              onChange={(e) => {
-                setNameDraft(e.target.value)
-                setSaved(false)
-              }}
-              placeholder={user?.email ?? 'Your name'}
-              maxLength={48}
-              className="h-10 text-xs"
-            />
-            <p className="mt-1 text-xs text-muted-foreground">Leave empty to show your email instead.</p>
-            {saveError && (
-              <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
-                <Triangle className="mt-px size-3.5 shrink-0" />
-                {saveError}
-              </p>
-            )}
-            <div className="mt-4 flex items-center gap-2">
-              <Button onClick={saveProfile} disabled={saving} className="h-9 gap-1 text-xs">
-                {saving ? <CircleNotch className="size-3.5 animate-spin" /> : <FloppyDisk className="size-3.5" />}
-                Save
-              </Button>
-              {saved && <span className="text-xs font-medium text-success">Saved</span>}
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 items-start md:grid-cols-2">
+            <div>
+              <label htmlFor="profile-name" className="mb-2 block text-xs font-semibold">
+                Display name
+              </label>
+              <Input
+                id="profile-name"
+                value={nameDraft}
+                onChange={(e) => {
+                  setNameDraft(e.target.value)
+                  setSaved(false)
+                }}
+                placeholder={user?.email ?? 'Your name'}
+                maxLength={48}
+                className="h-10 text-xs"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Leave empty to show your email instead.</p>
+              {saveError && (
+                <p className="mt-2 flex items-start gap-1 text-xs text-destructive">
+                  <Triangle className="mt-px size-3.5 shrink-0" />
+                  {saveError}
+                </p>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-border bg-muted/30 p-3">
+                <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                  <Envelope className="size-3.5 text-brand" />
+                  Email
+                </p>
+                <p className="mt-1 font-mono text-xs break-all">{user?.email ?? '—'}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-muted/30 p-3">
+                <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                  <Calendar className="size-3.5 text-brand" />
+                  Member since
+                </p>
+                <p className="mt-1 text-xs">{createdAt ? fmtDate(new Date(createdAt).getTime()) : '—'}</p>
+              </div>
             </div>
           </div>
-          <div className="space-y-3">
-            <div className="rounded-2xl border border-border bg-muted/30 p-3">
-              <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-                <Envelope className="size-3.5 text-brand" />
-                Email
-              </p>
-              <p className="mt-1 font-mono text-xs break-all">{user?.email ?? '—'}</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-muted/30 p-3">
-              <p className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-                <Calendar className="size-3.5 text-brand" />
-                Member since
-              </p>
-              <p className="mt-1 text-xs">{createdAt ? fmtDate(new Date(createdAt).getTime()) : '—'}</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={saveProfile} disabled={saving} className="h-9 gap-1 text-xs">
+              {saving ? <CircleNotch className="size-3.5 animate-spin" /> : <FloppyDisk className="size-3.5" />}
+              Save
+            </Button>
+            {saved && <span className="text-xs font-medium text-success">Saved</span>}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* ─── Appearance ─────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-              <Palette className="size-4 text-brand" />
-              Appearance
-            </CardTitle>
-            <CardDescription className="mt-1 text-xs">
-              Console theme — the same choice as the header toggle, in one place.
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="flex items-center gap-2">
-          <Button
-            variant={theme === 'dark' ? 'default' : 'outline'}
-            onClick={() => onThemeChange('dark')}
-            className="h-9 gap-1 text-xs"
-          >
-            <Moon className="size-3.5" /> Dark
-          </Button>
-          <Button
-            variant={theme === 'light' ? 'default' : 'outline'}
-            onClick={() => onThemeChange('light')}
-            className="h-9 gap-1 text-xs"
-          >
-            <Sun className="size-3.5" /> Ivory
-          </Button>
         </CardContent>
       </Card>
 
@@ -454,9 +418,12 @@ export function SettingsPanel({
         </CardHeader>
 
         {enabled && (
-          <CardContent className="grid gap-4 md:grid-cols-2">
+          <CardContent className="grid items-stretch gap-4 md:grid-cols-2">
             {/* Confirm identity — primes the 5-minute sensitive-op grace */}
-            <div className="rise-in rounded-2xl border border-border bg-card p-4" style={{ '--rise-index': 0 } as CSSProperties}>
+            <div
+              className="rise-in flex h-full flex-col rounded-2xl border border-border bg-card p-4"
+              style={{ '--rise-index': 0 } as CSSProperties}
+            >
               <p className="flex items-center gap-2 text-xs font-semibold">
                 <DeviceMobile className="size-3.5 text-brand" />
                 Confirm identity
@@ -471,7 +438,7 @@ export function SettingsPanel({
                   ? 'Sensitive actions are unlocked for the remaining window.'
                   : 'Enter a fresh authenticator code to unlock sensitive actions for 5 minutes.'}
               </p>
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-auto flex items-center gap-2 pt-4">
                 <div className="w-56">
                   <OtpSlots
                     id="totp-confirm-code"
@@ -488,7 +455,10 @@ export function SettingsPanel({
             </div>
 
             {/* Disable — requires a valid code, so a hijacker can't turn it off */}
-            <div className="rise-in rounded-2xl border border-border bg-card p-4" style={{ '--rise-index': 1 } as CSSProperties}>
+            <div
+              className="rise-in flex h-full flex-col rounded-2xl border border-border bg-card p-4"
+              style={{ '--rise-index': 1 } as CSSProperties}
+            >
               <p className="flex items-center gap-2 text-xs font-semibold text-destructive">
                 <ShieldSlash className="size-3.5" />
                 Disable two-factor
@@ -497,7 +467,7 @@ export function SettingsPanel({
                 Requires a valid authenticator code — this is deliberate, so a compromised session
                 can&apos;t switch the second factor off.
               </p>
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-auto flex items-center gap-2 pt-4">
                 <div className="w-56">
                   <OtpSlots
                     id="totp-disable-code"

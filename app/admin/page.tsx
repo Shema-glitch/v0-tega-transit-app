@@ -57,6 +57,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
@@ -461,6 +462,10 @@ export default function AdminPage() {
   const sseRef = useRef<SseMonitorHandle>(null)
   const [issueFilter, setIssueFilter] = useState<'all' | 'errors' | 'bugs' | 'open'>('open')
   const [query, setQuery] = useState('')
+  // Audit log filters — client-side, over the already-loaded events array.
+  const [auditStatusFilter, setAuditStatusFilter] = useState<'all' | 'ok' | 'failed'>('all')
+  const [auditActionFilter, setAuditActionFilter] = useState('all')
+  const [auditIpQuery, setAuditIpQuery] = useState('')
   // Suggestions pagination — the queue can grow past a screenful.
   const [suggPage, setSuggPage] = useState(1)
   // Reference docs — one iframe, tabbed, instead of two stacked 75vh frames.
@@ -1248,6 +1253,22 @@ export default function AdminPage() {
     return list
   }, [issues, issueFilter, query])
 
+  const auditActions = useMemo(
+    () => Array.from(new Set(authLog.map((ev) => ev.action))).sort(),
+    [authLog]
+  )
+  const filteredAuthLog = useMemo(() => {
+    let list = authLog
+    if (auditStatusFilter === 'ok') list = list.filter((ev) => ev.ok)
+    else if (auditStatusFilter === 'failed') list = list.filter((ev) => !ev.ok)
+    if (auditActionFilter !== 'all') list = list.filter((ev) => ev.action === auditActionFilter)
+    if (auditIpQuery.trim()) {
+      const q = auditIpQuery.trim().toLowerCase()
+      list = list.filter((ev) => ev.ip.toLowerCase().includes(q))
+    }
+    return list
+  }, [authLog, auditStatusFilter, auditActionFilter, auditIpQuery])
+
   const openCount = issues.filter((i) => !i.resolved).length
   const disabledIds = new Set(maintenance.map((f) => f.feature))
   const disabledCount = ENDPOINT_REGISTRY.filter((e) => disabledIds.has(e.id)).length
@@ -1491,12 +1512,24 @@ export default function AdminPage() {
                     </button>
                   )}
                 </div>
-                <Button onClick={clearErrors} variant="destructive" size="sm" className="h-11 text-xs">
-                  Clear errors
-                </Button>
-                <Button onClick={clearBugReports} variant="destructive" size="sm" className="h-11 text-xs">
-                  Clear bug reports
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button variant="outline" size="sm" className="h-11 gap-1 text-xs" />
+                    }
+                  >
+                    <DotsThree className="size-4" weight="bold" />
+                    More actions
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem variant="destructive" onClick={clearErrors}>
+                      Clear errors
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onClick={clearBugReports}>
+                      Clear bug reports
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {!loading && filteredIssues.length === 0 && isAllClear && (
@@ -1559,7 +1592,13 @@ export default function AdminPage() {
                                 </Badge>
                               )}
                             </div>
-                            <div className="mt-1 text-xs whitespace-pre-wrap">{item.detail}</div>
+                            {item.kind === 'error' ? (
+                              <pre className="mt-1 max-h-48 overflow-y-auto rounded-lg bg-muted/50 p-2 font-mono text-xs whitespace-pre-wrap">
+                                {item.detail}
+                              </pre>
+                            ) : (
+                              <div className="mt-1 text-xs whitespace-pre-wrap">{item.detail}</div>
+                            )}
                             {item.meta && (
                               <div className="text-xs text-muted-foreground">
                                 from: <PageUrlLink url={item.meta} />
@@ -1670,47 +1709,52 @@ export default function AdminPage() {
                 </p>
               </Card>
 
-              <p className="mb-4 text-xs text-muted-foreground">
-                Disabling an endpoint here makes it actually return 503 to callers immediately — see docs/ADMIN_DASHBOARD_PRD.md.
-                Meta endpoints (health, status, errors, feedback, admin/*) aren&apos;t listed — you can&apos;t disable the tools that turn things back on.
-              </p>
+              <Card className="mb-4 gap-1 p-4">
+                <h3 className="text-xs font-semibold tracking-tight">Disabling an endpoint</h3>
+                <p className="text-xs text-muted-foreground">
+                  Makes it actually return 503 to callers immediately — see docs/ADMIN_DASHBOARD_PRD.md.
+                  Meta endpoints (health, status, errors, feedback, admin/*) aren&apos;t listed — you can&apos;t disable the tools that turn things back on.
+                </p>
+              </Card>
 
-              {/* Durability — are these toggles going to survive the next deploy? */}
-              <div
-                className={`mb-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
-                  maintDurable
-                    ? 'border-border bg-muted/30 text-muted-foreground'
-                    : 'border-warning/30 bg-warning/10 text-warning'
-                }`}
-              >
-                {maintDurable ? (
-                  <Database className="size-4 shrink-0" />
-                ) : (
-                  <Triangle className="size-4 shrink-0" />
-                )}
-                {maintDurable ? (
-                  <span>
-                    Flags persist in Supabase — a restart won&apos;t re-enable endpoints.
-                    {maintLastHydratedAt ? (
-                      <>
-                        {' '}Synced <TimeAgo ts={maintLastHydratedAt} />.
-                      </>
-                    ) : null}
-                  </span>
-                ) : (
-                  <span>
-                    In-memory only — flags won&apos;t survive a restart. Check the Supabase migration
-                    (0010) and the service-role key.
-                  </span>
+              <div className="mb-4 flex flex-col gap-3">
+                {/* Durability — are these toggles going to survive the next deploy? */}
+                <Card
+                  className={`flex-row items-center gap-2 p-3 text-xs ${
+                    maintDurable
+                      ? 'text-muted-foreground'
+                      : 'border-warning/30 bg-warning/10 text-warning'
+                  }`}
+                >
+                  {maintDurable ? (
+                    <Database className="size-4 shrink-0" />
+                  ) : (
+                    <Triangle className="size-4 shrink-0" />
+                  )}
+                  {maintDurable ? (
+                    <span>
+                      Flags persist in Supabase — a restart won&apos;t re-enable endpoints.
+                      {maintLastHydratedAt ? (
+                        <>
+                          {' '}Synced <TimeAgo ts={maintLastHydratedAt} />.
+                        </>
+                      ) : null}
+                    </span>
+                  ) : (
+                    <span>
+                      In-memory only — flags won&apos;t survive a restart. Check the Supabase migration
+                      (0010) and the service-role key.
+                    </span>
+                  )}
+                </Card>
+
+                {disabledCount === 0 && (
+                  <Card className="flex-row items-center gap-2 border-success/30 bg-success/10 p-3 text-xs text-success">
+                    <CheckCircle className="size-4 shrink-0" />
+                    All {ENDPOINT_REGISTRY.length} endpoints are live.
+                  </Card>
                 )}
               </div>
-
-              {disabledCount === 0 && (
-                <div className="mb-4 flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
-                  <CheckCircle className="size-4 shrink-0" />
-                  All {ENDPOINT_REGISTRY.length} endpoints are live.
-                </div>
-              )}
               {Object.entries(
                 ENDPOINT_REGISTRY.reduce<Record<string, typeof ENDPOINT_REGISTRY>>((acc, ep) => {
                   (acc[ep.group] ??= []).push(ep)
@@ -1729,13 +1773,19 @@ export default function AdminPage() {
                     <h3 className="text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase">{group}</h3>
                   </div>
                   <Card className="overflow-hidden gap-0 py-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2">
                     {endpoints.map((ep, i) => {
                       const flag = maintenance.find((f) => f.feature === ep.id)
                       const disabled = !!flag
+                      // Bottom border on every row except the last — and, at the
+                      // md:grid-cols-2 breakpoint, except the whole last *pair* of
+                      // items, so the final visual row doesn't end up half-bordered.
+                      const lastRowStart =
+                        endpoints.length % 2 === 0 ? endpoints.length - 2 : endpoints.length - 1
                       return (
                         <div
                           key={ep.id}
-                          className={`row-hover flex items-center gap-3 px-4 py-3 ${i < endpoints.length - 1 ? 'border-b border-border' : ''}`}
+                          className={`row-hover flex items-center gap-3 border-border px-4 py-3 md:odd:border-r ${i < endpoints.length - 1 ? 'border-b' : ''} ${i >= lastRowStart ? 'md:border-b-0' : ''}`}
                         >
                           {/* The visible switch stays small, but the tap target is
                               padded to the 44x44 minimum via the wrapping span so
@@ -1754,6 +1804,9 @@ export default function AdminPage() {
                               }}
                               className="data-checked:bg-success data-unchecked:bg-destructive"
                             />
+                          </span>
+                          <span className={`w-14 shrink-0 text-xs font-medium ${disabled ? 'text-destructive' : 'text-success'}`}>
+                            {disabled ? 'Disabled' : 'Enabled'}
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
@@ -1776,6 +1829,7 @@ export default function AdminPage() {
                         </div>
                       )
                     })}
+                    </div>
                   </Card>
                 </div>
                 )
@@ -1785,16 +1839,19 @@ export default function AdminPage() {
 
         {tab === 'suggestions' && (
             <section>
-              <p className="mb-4 text-xs text-muted-foreground">
-                Rider-submitted stop corrections. Nothing here has touched the live map yet — approving replays the
-                same write the debug/admin stop editor uses; rejecting just drops it.
-              </p>
+              <Card className="mb-4 gap-1 p-4">
+                <h3 className="text-xs font-semibold tracking-tight">Stop suggestions</h3>
+                <p className="text-xs text-muted-foreground">
+                  Rider-submitted stop corrections. Nothing here has touched the live map yet — approving replays the
+                  same write the debug/admin stop editor uses; rejecting just drops it.
+                </p>
+              </Card>
               {!loading && stopSuggestions.length === 0 && (
-                <div className="flex flex-col items-center gap-2 py-16 text-center">
+                <Card className="flex max-h-64 flex-col items-center justify-center gap-2 py-16 text-center">
                   <CheckCircle className={`size-10 ${STATUS_COLOR.good}`} />
                   <p className="text-sm font-semibold">Queue is empty</p>
                   <p className="text-xs text-muted-foreground">No pending stop suggestions right now.</p>
-                </div>
+                </Card>
               )}
               <div className="space-y-2">
                 {suggVisible.map((s) => (
@@ -1940,10 +1997,15 @@ export default function AdminPage() {
               </Card>
 
               {totpSummary.known > 0 ? (
-                <p className="mb-2 text-xs text-muted-foreground">
-                  <Key className="mr-1 inline size-3" />
-                  2FA: {totpSummary.enabled} of {totpSummary.known} admins enrolled
-                </p>
+                <Card className="mt-4 mb-4 overflow-hidden gap-0 py-0 sm:max-w-xs">
+                  <StatPanel
+                    icon={<Key className="size-3.5" />}
+                    label="2FA enrolled"
+                    value={`${totpSummary.enabled} / ${totpSummary.known}`}
+                    valueClass={totpSummary.enabled < totpSummary.known ? STATUS_COLOR.warn : STATUS_COLOR.good}
+                    pulse={totpSummary.enabled < totpSummary.known}
+                  />
+                </Card>
               ) : null}
 
               <Card className="mt-2 overflow-hidden p-0">
@@ -1979,7 +2041,7 @@ export default function AdminPage() {
                           <TableRow key={a.email}>
                             <TableCell>
                               <div className="font-mono text-xs font-semibold">{a.email}</div>
-                              <div className="text-xs text-muted-foreground">
+                              <div className="text-xs font-normal text-muted-foreground">
                                 {a.source === 'supabase' ? (
                                   <>
                                     invited by {a.invitedBy ?? 'unknown'}
@@ -2075,11 +2137,8 @@ export default function AdminPage() {
 
         {tab === 'audit' && (
             <section>
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-                  Sign-in events (magic-link requests, code verifications, logins). Written to the Supabase{" "}
-                  <span className="font-mono">auth_log</span> table so a restart never loses the trail.
-                </p>
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold tracking-tight">Audit log</h3>
                 <Badge
                   className={`font-semibold ${
                     authLogSource === 'supabase' ? STATUS_BADGE.accent : STATUS_BADGE.dim
@@ -2088,6 +2147,10 @@ export default function AdminPage() {
                   {authLogSource === 'supabase' ? 'durable · supabase' : 'in-memory only'}
                 </Badge>
               </div>
+              <p className="mb-4 text-xs text-muted-foreground">
+                Sign-in events (magic-link requests, code verifications, logins). Written to the Supabase{" "}
+                <span className="font-mono">auth_log</span> table so a restart never loses the trail.
+              </p>
 
               {authLog.length === 0 ? (
                 <Card className="p-8 text-center">
@@ -2098,41 +2161,111 @@ export default function AdminPage() {
                   </p>
                 </Card>
               ) : (
-                <Card className="overflow-hidden p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Action</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>IP</TableHead>
-                        <TableHead className="text-right">When</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {authLog.map((ev, i) => (
-                        <TableRow key={`${ev.at}-${i}`}>
-                          <TableCell>
-                            {ev.ok ? (
-                              <CheckCircle className="size-4 text-success" />
-                            ) : (
-                              <X className="size-4 text-destructive" />
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-xs font-semibold">{ev.action}</div>
-                            {ev.detail && <div className="text-xs text-muted-foreground">{ev.detail}</div>}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">{ev.email ?? '—'}</TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">{ev.ip}</TableCell>
-                          <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
-                            <TimeAgo ts={ev.at} />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Card>
+                <>
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <Select value={auditStatusFilter} onValueChange={(v) => setAuditStatusFilter(v as typeof auditStatusFilter)}>
+                      <SelectTrigger size="sm" className="text-xs">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="ok">Success</SelectItem>
+                        <SelectItem value="failed">Failed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={auditActionFilter} onValueChange={(v) => setAuditActionFilter(v ?? 'all')}>
+                      <SelectTrigger size="sm" className="text-xs">
+                        <SelectValue placeholder="Action" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All actions</SelectItem>
+                        {auditActions.map((a) => (
+                          <SelectItem key={a} value={a}>{a}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={auditIpQuery}
+                      onChange={(e) => setAuditIpQuery(e.target.value)}
+                      placeholder="Filter by IP…"
+                      aria-label="Filter by IP"
+                      className="h-8 w-40 text-xs"
+                    />
+                    {(auditStatusFilter !== 'all' || auditActionFilter !== 'all' || auditIpQuery.trim()) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => {
+                          setAuditStatusFilter('all')
+                          setAuditActionFilter('all')
+                          setAuditIpQuery('')
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {filteredAuthLog.length.toLocaleString()} of {authLog.length.toLocaleString()} events
+                    </span>
+                  </div>
+
+                  <Card className="overflow-hidden p-0">
+                    <div className="max-h-[32rem] overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 z-10 bg-card">
+                          <TableRow>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Action</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>IP</TableHead>
+                            <TableHead className="text-right">When</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAuthLog.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="py-8 text-center text-xs text-muted-foreground">
+                                No events match these filters.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredAuthLog.map((ev, i) => (
+                              <TableRow key={`${ev.at}-${i}`}>
+                                <TableCell className="py-3 align-top">
+                                  {ev.ok ? (
+                                    <CheckCircle className="size-4 text-success" />
+                                  ) : (
+                                    <X className="size-4 text-destructive" />
+                                  )}
+                                </TableCell>
+                                <TableCell className="py-3 align-top">
+                                  <div className="text-xs font-semibold">{ev.action}</div>
+                                  {ev.detail && (
+                                    !ev.ok ? (
+                                      <span className="mt-1 inline-block rounded-md bg-destructive/10 px-1.5 py-0.5 font-mono text-xs text-destructive">
+                                        {ev.detail}
+                                      </span>
+                                    ) : (
+                                      <div className="mt-1 text-xs text-muted-foreground">{ev.detail}</div>
+                                    )
+                                  )}
+                                </TableCell>
+                                <TableCell className="py-3 align-top font-mono text-xs text-muted-foreground">
+                                  {ev.email ?? 'N/A'}
+                                </TableCell>
+                                <TableCell className="py-3 align-top font-mono text-xs text-muted-foreground">{ev.ip}</TableCell>
+                                <TableCell className="py-3 text-right align-top text-xs tabular-nums text-muted-foreground">
+                                  <TimeAgo ts={ev.at} />
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </Card>
+                </>
               )}
             </section>
           )}
@@ -2140,15 +2273,7 @@ export default function AdminPage() {
         {tab === 'load' && <LoadPanel />}
 
         {tab === 'settings' && (
-          <SettingsPanel
-            onNotify={pushToast}
-            user={me ? { ...me, role } : null}
-            theme={theme}
-            onThemeChange={(next) => {
-              setTheme(next)
-              localStorage.setItem(THEME_KEY, next)
-            }}
-          />
+          <SettingsPanel onNotify={pushToast} user={me ? { ...me, role } : null} />
         )}
 
         {tab === 'stops' && <StopsPanel role={role ?? 'curator'} onNotify={pushToast} onTotpFetch={totpAwareFetch} />}

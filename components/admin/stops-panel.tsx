@@ -519,7 +519,7 @@ export function StopsPanel({
           <GitMerge className="size-3.5 text-brand" /> Merge stops
         </p>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          Check the victim stops below, pick the survivor, preview what changes, then confirm. Merged stops redirect
+          Check the source stops below, pick the survivor, preview what changes, then confirm. Merged stops redirect
           to the survivor everywhere — old links keep working.
         </p>
         <div className="mt-4 grid max-w-2xl gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
@@ -596,14 +596,14 @@ export function StopsPanel({
         {preview?.ok && (
           <div className="rise-in mt-4 rounded-lg border border-brand/20 bg-brand/10 px-3 py-2.5">
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-brand">
-              <span className="font-mono tabular-nums">{preview.victims?.length ?? 0} victims</span>
+              <span className="font-mono tabular-nums">{preview.victims?.length ?? 0} source stops</span>
               <span className="font-mono tabular-nums">{preview.affectedStopTimes ?? 0} stop_times</span>
               <span className="font-mono tabular-nums">{preview.pendingSuggestions ?? 0} pending suggestions</span>
               <span className="font-mono tabular-nums">{preview.collisionsSkipped ?? 0} collisions</span>
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {preview.affectedStopTimes === 0 && preview.pendingSuggestions === 0
-                ? 'Nothing references these victims — the merge only cleans up the stop list.'
+                ? 'Nothing references these source stops — the merge only cleans up the stop list.'
                 : 'This is exactly what will change. Confirm to commit.'}
             </p>
             <Button size="sm" onClick={confirmMerge} disabled={busy} className="mt-2 h-8 text-xs">
@@ -703,11 +703,15 @@ export function StopsPanel({
           </div>
         </div>
 
-        {/* Bulk bar — appears the moment anything is selected */}
+        {/* Floating bulk-action toolbar — appears the moment anything is selected.
+            The wrapper centers within the content pane (not the full viewport) by
+            padding past the sidebar's width on md+, where it occupies real layout
+            space; on mobile the sidebar is an offcanvas overlay so no offset is needed. */}
         {selected.size > 0 && (
-          <div className="rise-in flex flex-wrap items-center gap-2 border-b border-brand/20 bg-brand/5 px-3 py-2">
+          <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 md:pl-(--sidebar-width)">
+          <Card className="rise-in flex w-full max-w-lg flex-wrap items-center gap-2 px-4 py-2.5 shadow-lg">
             <span className="font-mono text-xs font-semibold text-brand">{selected.size} selected</span>
-            <span className="text-xs text-muted-foreground">merge victims — active stops only</span>
+            <span className="text-xs text-muted-foreground">source stops — active stops only</span>
             <div className="ml-auto flex items-center gap-2">
               <Button size="sm" variant="outline" className="h-9 text-xs" onClick={clearSelection} disabled={busy}>
                 Clear
@@ -724,6 +728,7 @@ export function StopsPanel({
                 {survivorId ? 'Preview merge' : 'Choose survivor'}
               </Button>
             </div>
+          </Card>
           </div>
         )}
 
@@ -787,14 +792,14 @@ export function StopsPanel({
               return (
                 <div
                   key={s.id}
-                  className="rise-in flex flex-wrap items-center gap-2 px-3 py-2.5 pl-4"
+                  className="rise-in flex flex-wrap items-center gap-2 px-3 py-2.5"
                   style={{ '--rise-index': Math.min(idx, 8) } as CSSProperties}
                 >
                   <Checkbox
                     checked={isVictim}
                     onCheckedChange={() => toggleSelected(s.id)}
                     disabled={s.status !== 'active' || busy}
-                    aria-label={`Select ${s.name} as a merge victim`}
+                    aria-label={`Select ${s.name} as a source stop to merge`}
                     className="shrink-0"
                   />
                   <Badge className={`w-16 shrink-0 justify-center font-mono text-xs ${STATUS_BADGE[s.status]}`}>

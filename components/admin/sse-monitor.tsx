@@ -15,6 +15,7 @@
  */
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { Lightning, Stop, Syringe } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 
@@ -189,11 +190,13 @@ const SseMonitor = forwardRef<SseMonitorHandle>(function SseMonitor(_, ref) {
         size="sm"
         className={sse.running ? 'h-9 gap-1 text-xs text-destructive border-destructive/40 hover:bg-destructive/10' : 'h-9 gap-1 text-xs'}
       >
-        {sse.running ? '■ Stop SSE stream' : '⚡ Start live SSE monitor'}
+        {sse.running ? <Stop className="size-3.5" /> : <Lightning className="size-3.5" />}
+        {sse.running ? 'Stop SSE stream' : 'Start live SSE monitor'}
       </Button>
       {sse.running && (
         <Button onClick={injectTestData} disabled={injecting} variant="outline" size="sm" className="h-9 gap-1 text-xs">
-          {injecting ? 'injecting…' : '💉 Inject test ping + incident'}
+          <Syringe className="size-3.5" />
+          {injecting ? 'injecting…' : 'Inject test ping + incident'}
         </Button>
       )}
       {sse.state !== 'idle' && (
