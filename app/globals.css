@@ -172,8 +172,8 @@
   --accent: oklch(0.925 0.017 78);
   --accent-foreground: oklch(0.28 0.025 60);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.89 0.02 78);
-  --input: oklch(0.88 0.02 78);
+  --border: oklch(0.82 0.025 78);
+  --input: oklch(0.8 0.025 78);
   --ring: oklch(0.45 0.03 60);
   --brand: oklch(0.5 0.11 177); /* deep teal — brand text/links + button fill on ivory */
   --brand-foreground: oklch(0.965 0.016 78); /* ivory text on the deep teal fill */
@@ -185,14 +185,18 @@
   --chart-3: oklch(0.371 0 0);
   --chart-4: oklch(0.269 0 0);
   --chart-5: oklch(0.145 0 0);
-  --sidebar: oklch(0.955 0.015 78);
+  /* Deliberately darker than --background (0.965) — the "inset" sidebar
+     layout has no border between the sidebar/header backdrop and the
+     floating content pane, only this color gap, so it needs to actually
+     read as a different tone or the whole shell looks like one flat slab. */
+  --sidebar: oklch(0.92 0.02 78);
   --sidebar-foreground: oklch(0.25 0.022 60);
   --sidebar-primary: oklch(0.25 0.022 60);
   --sidebar-primary-foreground: oklch(0.965 0.016 78);
-  --sidebar-accent: oklch(0.925 0.017 78);
+  --sidebar-accent: oklch(0.885 0.022 78);
   --sidebar-accent-foreground: oklch(0.25 0.022 60);
   --sidebar-accent-tint: color-mix(in oklab, var(--brand) 15%, var(--sidebar));
-  --sidebar-border: oklch(0.89 0.02 78);
+  --sidebar-border: oklch(0.82 0.025 78);
   --sidebar-ring: oklch(0.72 0.03 78);
 }
 
