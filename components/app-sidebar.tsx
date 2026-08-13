@@ -202,21 +202,25 @@ export function AppSidebar({
         {user && (
           <SidebarGroup>
             <SidebarGroupLabel>Account</SidebarGroupLabel>
-            <div className="flex items-center gap-2 px-3 py-1">
+            <div className="flex items-start gap-2 px-3 py-1" title={user.email}>
               <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand">
                 {(user.displayName || user.email).trim().charAt(0).toUpperCase() || '?'}
               </span>
               <div className="min-w-0 flex-1 leading-tight">
-                <p className="truncate text-xs font-semibold">{user.displayName || user.email}</p>
-                {user.displayName && <p className="truncate text-xs text-muted-foreground">{user.email}</p>}
+                <div className="flex items-start justify-between gap-1.5">
+                  <p className="break-words text-xs font-semibold">{user.displayName || user.email}</p>
+                  {user.role && (
+                    <Badge
+                      className={`shrink-0 font-semibold ${user.role === 'admin' ? 'bg-brand/15 text-brand' : 'bg-warning/10 text-warning'}`}
+                    >
+                      {user.role === 'admin' ? 'Admin' : 'Curator'}
+                    </Badge>
+                  )}
+                </div>
+                {user.displayName && (
+                  <p className="mt-0.5 break-words text-xs text-muted-foreground">{user.email}</p>
+                )}
               </div>
-              {user.role && (
-                <Badge
-                  className={`shrink-0 font-semibold ${user.role === 'admin' ? 'bg-brand/15 text-brand' : 'bg-warning/10 text-warning'}`}
-                >
-                  {user.role === 'admin' ? 'Admin' : 'Curator'}
-                </Badge>
-              )}
             </div>
           </SidebarGroup>
         )}

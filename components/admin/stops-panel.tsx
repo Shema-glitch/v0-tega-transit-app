@@ -928,7 +928,7 @@ export function StopsPanel({
             if (e.target === e.currentTarget && !busy) setEditTarget(null)
           }}
         >
-          <div className="rise-in w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-lg">
+          <div className="rise-in w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-lg">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold tracking-tight">Edit stop</p>
               <button

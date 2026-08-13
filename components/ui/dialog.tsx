@@ -49,7 +49,7 @@ function DialogPopup({ className, ...props }: DialogPrimitive.Popup.Props) {
     <DialogPrimitive.Popup
       data-slot="dialog-popup"
       className={cn(
-        "fixed top-1/2 left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-3xl border border-border bg-card p-6 text-card-foreground shadow-xl sm:max-w-md",
+        "fixed top-1/2 left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-xl sm:max-w-md",
         // Enter/exit from scale(0.95)+opacity 0 — never scale(0) (emil-design-eng).
         // Modals keep transform-origin center (they're not anchored to a trigger).
         "data-[starting-style]:translate-x-[-50%] data-[starting-style]:translate-y-[-50%] data-[starting-style]:scale-95 data-[starting-style]:opacity-0 data-[starting-style]:transition-[transform,opacity,scale,translate]",
